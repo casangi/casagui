@@ -15,3 +15,17 @@ Developers can build and run casadesk with:
 1.  `bash$ npm start`
 
 A few standard `npm` packages (`enchannel-zmq-backend`, `jmp`, `jupyter-paths`, `kernelspecs`, and `spawnteract`) are included directly instead of through installed packages to allow for upgrading to the latest `zeromq.js` distribution in the future.
+
+Currently, it is assumed that you have a working `python3` interpreter in your path that has the `ipykernel` package installed. This package can be installed with:
+```
+bash$ pip install ipykernel
+```
+You can check to make sure the Jupyter kernel is available with:
+```
+bash$ python3 -m ipykernel_launcher --help
+```
+Any Python packages you want to use must be installed too. In particular:
+```
+bash$ pip install plotly==4.14.3
+```
+Finally, a good way to test your kernel is by installing the [nteract desktop app](https://nteract.io/). Some experimentation may be required. This was the case with installing Python with [macports](https://www.macports.org/) and then getting the [nteract desktop app](https://nteract.io/) to use Python from there.
