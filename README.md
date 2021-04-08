@@ -14,4 +14,4 @@ Developers can build and run casadesk with:
 1.  `bash$ popd
 1.  `bash$ npm start`
 
-A few standard `npm` packages (`enchannel-zmq-backend`, `jmp`, `jupyter-paths`, `kernelspecs`, and `spawnteract`] are included directly instead of through installed packages to allow for upgrading to the latest `zeromq.js` distribution in the future.
+A few standard `npm` packages (`enchannel-zmq-backend`, `jmp`, `jupyter-paths`, `kernelspecs`, and `spawnteract`) are included directly instead of through installed packages to allow for upgrading to the latest `zeromq.js` distribution in the future.
