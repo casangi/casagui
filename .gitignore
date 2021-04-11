@@ -87,3 +87,15 @@ typings/
 
 # Electron-Forge
 out/
+
+# tsc compile dir
+dist/
+
+# emacs backup
+*~
+
+# python
+__pycache__/
+
+# test data
+test/ic2233_1.ms/

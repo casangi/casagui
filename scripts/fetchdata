@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+
+from os.path import realpath, join, dirname, exists;
+from urllib.request import urlopen
+import tarfile as tar
+import ssl
+
+ic2233 = ( "ic2233_1_ms.tar.xz", "ic2233_1.ms" )
+
+url_root = "https://casa.nrao.edu/download/devel/casadesk/%s"
+
+test_dir = realpath(join( dirname(dirname(__file__)), "test" ))
+
+ssl_context = ssl._create_unverified_context( )
+
+if not exists(join(test_dir,ic2233[1])):
+    print("fetching data...")
+    stream = urlopen(url_root % ic2233[0], context=ssl_context, timeout=400)
+    tarfile = tar.open(fileobj=stream, mode="r|xz")
+    tarfile.extractall(test_dir)
