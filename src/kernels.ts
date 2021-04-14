@@ -395,6 +395,60 @@ extends EventEmitter
         }
     }
 
+    // TODO: factor commonalities out of call( ) and shutdown( )
+    async shutdown( ): Promise<any> {
+        if (!this.has_ensured_running) {
+            await this.ensure_running();
+        }
+        // Do a paranoid double check anyways...
+        if (this.channel == null || this._state == "closed") {
+            throw Error("not running, so can't call");
+        }
+        const outgoing = message({msg_type: "shutdown_request", username: this.channel?.header.username, session: this.channel?.header.session}, {restart: false})
+        this.channel?.channel.next(outgoing)
+        // Wait for the response that has the right msg_id.
+        let the_mesg = new Array<any>( )
+        const wait_for_response = (cb: any) => {
+            const f = (incoming: any) => {
+                if (incoming.parent_header.msg_id === outgoing.header.msg_id) {
+                    debug("kernels","call( ) received target shell message:",incoming)
+                    this.removeListener("shell", f);
+                    this.removeListener("iopub", g);
+                    this.removeListener("closed", h);
+                    incoming = deep_copy(incoming.content);
+                    if (len(incoming.metadata) === 0) {
+                        delete incoming.metadata;
+                    }
+                    the_mesg.push({channel: "shell", content: incoming});
+                    cb();
+                } else {
+                    debug("kernels","call( ) received some other shell message:",incoming)
+                }
+            };
+            const g = (incoming: any) => {
+                if (incoming.parent_header.msg_id === outgoing.header.msg_id) {
+                    debug("kernels","call( ) received target iopub message:",incoming)
+                    incoming = deep_copy(incoming.content)
+                    the_mesg.push({channel: "iopub", content: incoming})
+                } else {
+                    debug("kernels","call( ) received some other iopub message:",incoming)
+                }
+            };
+            const h = () => {
+                debug("kernels","call( ) received close message")
+                this.removeListener("shell", f);
+                this.removeListener("iopub", g);
+                this.removeListener("closed", h);
+                cb("closed");
+            };
+            this.on("shell", f);
+            this.on("iopub", g);
+            this.on("closed", h);
+        };
+        await callback(wait_for_response);
+        return the_mesg;
+    }
+
     async call(msg_type: MessageType, content?: any): Promise<any> {
         debug("kernels",`calling kernel: ${msg_type}`)
         if (!this.has_ensured_running) {
