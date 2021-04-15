@@ -218,7 +218,7 @@ extends EventEmitter
         this._set_state("closed");
     }
 
-    async spawn(spawn_opts?: any): Promise<void> {
+    async spawn(spawn_opts?: any): Promise<any> {
         if (this._state === "closed") {
             // game over!
             throw Error("closed");
@@ -265,6 +265,9 @@ extends EventEmitter
             this._set_state("off");
             throw err;
         }
+        return { identity: this._kernel.kernid,
+                 config: this._kernel.config,
+                 header: this._kernel.header }
     }
     private async finish_spawn(): Promise<void> {
         debug("kernels","now finishing spawn of kernel...")
