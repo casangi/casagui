@@ -30,6 +30,7 @@ export async function kerneldesc( name: string, location: KernelLocation, debug=
     function desc( kv: any ) {
         return { name: kv.name,
                  files: kv.files,
+                 kernid: uuidv4( ),
                  header: { session: uuidv4( ), username: username },
                  resource_dir: kv.resource_dir ?? kv.resources_dir,
                  display_name: kv.spec.display_name,
@@ -75,8 +76,8 @@ export async function launch( desc: any, cwd: string = ".") {
                       spawn: ChildProcess;
                       connectionFile: string } ) => {
                           // session is the CASA GUI identifier (independent of where/how kernel is started)
-                          return { header: desc.header, location: desc.location, config: cfg.config,
-                                   spawn: cfg.spawn, file: cfg.connectionFile, initialdir: cwd     }
+                          return { kernid: desc.kernid, header: desc.header, location: desc.location,
+                                   config: cfg.config, spawn: cfg.spawn, file: cfg.connectionFile, initialdir: cwd }
                       } )
 }
 
