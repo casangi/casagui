@@ -3,15 +3,12 @@ import React, { useState, useEffect } from "react"
 import * as ReactDOM from "react-dom"
 import PropTypes from 'prop-types';
 import { parse } from 'node-html-parser';
-
+import { ipcRenderer } from 'electron';
 import { JupyterKernel, message_type } from "./kernels";
 
 var root = path.dirname(path.resolve(__dirname))
 
 var kernel: JupyterKernel = new JupyterKernel( )
-window.onbeforeunload = (e: any) => {
-    kernel.shutdown( )
-}
 
 function splitScripts( output: any[] ): {html: string, scripts: string[]} {
     let html = ''
@@ -69,4 +66,8 @@ plotants("${mspath.path}",logpos=${coord === 'polar' ? 'True' : 'False'}).show( 
            </div>
 }
 
-ReactDOM.render(<PlotAnts/>,document.getElementById("app"))
+ipcRenderer.once('kernel-spec', (ev,spec) => {
+    kernel.attach(spec).then( spec => {
+        ReactDOM.render(<PlotAnts/>,document.getElementById("app"))
+    } )
+} )

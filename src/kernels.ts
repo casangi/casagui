@@ -30,7 +30,7 @@ export async function kerneldesc( name: string, location: KernelLocation, debug=
     function desc( kv: any ) {
         return { name: kv.name,
                  files: kv.files,
-                 kernid: uuidv4( ),
+                 identity: uuidv4( ),
                  header: { session: uuidv4( ), username: username },
                  resource_dir: kv.resource_dir ?? kv.resources_dir,
                  display_name: kv.spec.display_name,
@@ -76,7 +76,7 @@ export async function launch( desc: any, cwd: string = ".") {
                       spawn: ChildProcess;
                       connectionFile: string } ) => {
                           // session is the CASA GUI identifier (independent of where/how kernel is started)
-                          return { kernid: desc.kernid, header: desc.header, location: desc.location,
+                          return { identity: desc.identity, header: desc.header, location: desc.location,
                                    config: cfg.config, spawn: cfg.spawn, file: cfg.connectionFile, initialdir: cwd }
                       } )
 }
@@ -84,12 +84,12 @@ export async function launch( desc: any, cwd: string = ".") {
 
 // accepts launch info (basic info about the running kernel)
 // returns a kernel handle (which includes the channels necessary for sending messages to the kernel)
-export async function channels( launch_info: { config: any; kernid: any; header: any; location: any;
+export async function channels( launch_info: { config: any; identity: any; header: any; location: any;
                                                spawn:any; file: string; initialdir: string } ) {
     // create one channel which can multiplex all of the channels
-    return createMainChannel( launch_info.config, "", launch_info.kernid, launch_info.header, jmp ).then(
+    return createMainChannel( launch_info.config, "", launch_info.identity, launch_info.header, jmp ).then(
            (channels: {[key: string]: any}) => {
-                   return { kernid: launch_info.kernid,
+                   return { identity: launch_info.identity,
                             location: launch_info.location,
                             header: launch_info.header,
                             ipc: "zeromq",
@@ -218,6 +218,76 @@ extends EventEmitter
         this._set_state("closed");
     }
 
+    // TODO: factor out commonalities between attach/spawn/finish_spawn
+    async attach(connection_info: any): Promise<any> {
+        if (this._state === "closed") {
+            // game over!
+            throw Error("closed");
+        }
+        if (["running", "starting"].includes(this._state)) {
+            // Already spawned, so no need to do it again.
+            return;
+        }
+        this._set_state("spawning");
+        this._kernel = connection_info
+        debug("kernels","attaching to kernel");
+        debug("kernels","attach description:", this._kernel)
+        console.log("BEFORE CREATION OF CHANNELS")
+        this.channel = await channels(this._kernel)
+        console.log("AFTER CREATION OF CHANNELS")
+        debug("kernels","channel description:", this.channel)
+        this.channel?.channel.subscribe((mesg: any) => {
+            switch (mesg.channel) {
+            case "shell":
+                debug("kernels","received shell message:",mesg)
+                this.emit("shell", mesg);
+                break;
+            case "stdin":
+                this.emit("stdin", mesg);
+                debug("kernels","received stdin message:",mesg)
+                break;
+            case "iopub":
+                if (mesg.content != null && mesg.content.execution_state != null) {
+                    this.emit("execution_state", mesg.content.execution_state);
+                }
+
+                if ( (mesg.content != null ? mesg.content.comm_id : undefined) !== undefined ) {
+                    // A comm message, which gets handled directly.
+                    //this.process_comm_message_from_kernel(mesg);
+                    //this.process_comm_message_from_kernel(mesg);
+                    debug("kernels", "comm message", mesg)
+                    break;
+                }
+                //if ( this._actions != null &&
+                //     this._actions.capture_output_message(mesg)
+                //   ) {
+                //    // captured an output message -- do not process further
+                //    break;
+                //}
+
+                debug("kernels", "iopub message received", mesg)
+                this.emit("iopub", mesg);
+                break;
+            }
+        });
+
+        // so we can start sending code execution to the kernel, etc.
+        this._set_state("starting");
+
+        if (this._state === "closed") {
+            throw Error("closed");
+        }
+
+        // We have now received an iopub or shell message from the kernel,
+        // so kernel has started running.
+        debug("kernels", "start_running");
+        this._set_state("running");
+
+        return { identity: this._kernel.identity,
+                 config: this._kernel.config,
+                 header: this._kernel.header }
+    }
+
     async spawn(spawn_opts?: any): Promise<any> {
         if (this._state === "closed") {
             // game over!
@@ -265,7 +335,7 @@ extends EventEmitter
             this._set_state("off");
             throw err;
         }
-        return { identity: this._kernel.kernid,
+        return { identity: this._kernel.identity,
                  config: this._kernel.config,
                  header: this._kernel.header }
     }
@@ -345,9 +415,11 @@ extends EventEmitter
             debug("kernel",`spawned kernel terminated with exit code ${exit_code} (signal=${signal}); stderr=${this.stderr}`)
 
             if (signal != null) {
-                this.emit("error",`Kernel last terminated by signal ${signal}.${this.stderr}`)
+                //this.emit("error",`Kernel last terminated by signal ${signal}.${this.stderr}`)
+                console.log(`Kernel exited with signal ${signal}`)
             } else if (exit_code != null) {
-                this.emit("error",`Kernel last exited with code ${exit_code}.${this.stderr}`)
+                //this.emit("error",`Kernel last exited with code ${exit_code}.${this.stderr}`)
+                console.log(`Kernel exited with code ${exit_code}.`)
             }
             this.close();
         });
@@ -399,58 +471,12 @@ extends EventEmitter
         }
     }
 
-    // TODO: factor commonalities out of call( ) and shutdown( )
     async shutdown( ): Promise<any> {
-        if (!this.has_ensured_running) {
-            await this.ensure_running();
-        }
-        // Do a paranoid double check anyways...
-        if (this.channel == null || this._state == "closed") {
-            throw Error("not running, so can't call");
-        }
-        const outgoing = message({msg_type: "shutdown_request", username: this.channel?.header.username, session: this.channel?.header.session}, {restart: false})
-        this.channel?.channel.next(outgoing)
-        // Wait for the response that has the right msg_id.
-        let the_mesg = new Array<any>( )
-        const wait_for_response = (cb: any) => {
-            const f = (incoming: any) => {
-                if (incoming.parent_header.msg_id === outgoing.header.msg_id) {
-                    debug("kernels","call( ) received target shell message:",incoming)
-                    this.removeListener("shell", f);
-                    this.removeListener("iopub", g);
-                    this.removeListener("closed", h);
-                    incoming = deep_copy(incoming.content);
-                    if (len(incoming.metadata) === 0) {
-                        delete incoming.metadata;
-                    }
-                    the_mesg.push({channel: "shell", content: incoming});
-                    cb();
-                } else {
-                    debug("kernels","call( ) received some other shell message:",incoming)
-                }
-            };
-            const g = (incoming: any) => {
-                if (incoming.parent_header.msg_id === outgoing.header.msg_id) {
-                    debug("kernels","call( ) received target iopub message:",incoming)
-                    incoming = deep_copy(incoming.content)
-                    the_mesg.push({channel: "iopub", content: incoming})
-                } else {
-                    debug("kernels","call( ) received some other iopub message:",incoming)
-                }
-            };
-            const h = () => {
-                debug("kernels","call( ) received close message")
-                this.removeListener("shell", f);
-                this.removeListener("iopub", g);
-                this.removeListener("closed", h);
-                cb("closed");
-            };
-            this.on("shell", f);
-            this.on("iopub", g);
-            this.on("closed", h);
-        };
-        await callback(wait_for_response);
-        return the_mesg;
+        return await this.call( "shutdown_request",
+                                { silent: false, restart: false } ).then( result => {
+                                    this._set_state('closed')
+                                    return result
+                                } )
     }
 
     async call(msg_type: MessageType, content?: any): Promise<any> {
