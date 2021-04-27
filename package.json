@@ -4,10 +4,11 @@
   "description": "CASA GUI Desktop",
   "main": "dist/index.js",
   "scripts": {
-    "start": "npm run build && scripts/fetchdata && electron .",
+    "start": "npm run build && npm run copy && scripts/fetchdata && electron .",
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "copy": "copyfiles -u 1 \"./src/**/*.{css,html}\" \"./dist/\""
   },
   "keywords": [],
   "author": {
@@ -20,6 +21,7 @@
     "@types/react": "^17.0.3",
     "@types/react-dom": "^17.0.3",
     "@types/uuid": "^8.3.0",
+    "copyfiles": "^2.4.1",
     "electron": "^12.0.2",
     "node-gyp": "^8.0.0",
     "ts-node": "^9.1.1",

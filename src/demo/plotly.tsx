@@ -4,9 +4,9 @@ import * as ReactDOM from "react-dom"
 import PropTypes from 'prop-types';
 import { parse } from 'node-html-parser';
 import { ipcRenderer } from 'electron';
-import { JupyterKernel, message_type } from "./kernels";
+import { JupyterKernel, message_type } from "../kernels";
 
-var root = path.dirname(path.resolve(__dirname))
+var root = path.dirname(path.dirname(path.resolve(__dirname)))
 
 var kernel: JupyterKernel = new JupyterKernel( )
 
@@ -47,6 +47,7 @@ plotants("${mspath.path}",logpos=${coord === 'polar' ? 'True' : 'False'}).show( 
             let result = await kernel.call( "execute_request" as message_type,
                                             { silent: false,
                                               code } ).then(splitScripts)
+            console.info(result)
             setHtml(result.html)
             setScripts(result.scripts)
         }
@@ -66,8 +67,13 @@ plotants("${mspath.path}",logpos=${coord === 'polar' ? 'True' : 'False'}).show( 
            </div>
 }
 
-ipcRenderer.once('kernel-spec', (ev,spec) => {
+ipcRenderer.send('kernel-request', { name: 'plotants' })
+ipcRenderer.once('kernel-reply', (ev,spec) => {
+    console.info("received kernel info",spec)
     kernel.attach(spec).then( spec => {
         ReactDOM.render(<PlotAnts/>,document.getElementById("app"))
     } )
+    window.onbeforeunload = (e: any) => {
+        ipcRenderer.send('kernel-release', { session: spec.header.session } )
+    }
 } )
