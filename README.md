@@ -18,7 +18,8 @@ A few standard `npm` packages (`enchannel-zmq-backend`, `jmp`, `jupyter-paths`, 
 
 Currently, it is assumed that you have a working `python3` interpreter in your path that has the `ipykernel` package installed. This package can be installed with:
 ```
-bash$ pip install ipykernel
+bash$ python -m pip install ipykernel
+bash$ python -m ipykernel install --user
 ```
 You can check to make sure the Jupyter kernel is available with:
 ```
