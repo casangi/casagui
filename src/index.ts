@@ -2,16 +2,14 @@ import { app, BrowserWindow, globalShortcut, Menu, MenuItem, ipcMain } from "ele
 import { JupyterKernel } from "./kernels";
 const { v4: uuidv4 } = require('uuid');
 import * as path from 'path';
-
-interface Dictionary {
-    [key: string]: any
-}
+import { Dictionary } from "./utils";
 
 // These windows variables need to be cleaned up and managed instead of
 // being global variables, but for now...
 // ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 let placeholderWindow: any
 let plotlyDemo: any
+let bokehDemo: any
 // ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 
 let kernelSpec: Promise<any>
@@ -108,6 +106,22 @@ function setupDevAndDemo( devmenu: Menu ) {
             plotlyDemo.loadFile(`./dist/demo/plotly.html`)
         }
     }))
+    devmenu.append(new MenuItem({
+        label: 'Bokeh Demo',
+        click: ( ) => {
+            bokehDemo = new BrowserWindow({
+                width: 800,
+                height: 600,
+                webPreferences: {
+                    nodeIntegration: true, // this line is very important as it allows us to use `require` syntax in our html file.
+                    contextIsolation: false,
+                },
+            })
+
+            bokehDemo.loadFile(`./dist/demo/bokeh.html`)
+        }
+    }))
+
 }
 function initializeApp() {
 
