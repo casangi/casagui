@@ -1,6 +1,10 @@
 import { cloneDeep } from "lodash";
 export const deep_copy = cloneDeep;
 
+export interface Dictionary {
+  [key: string]: any
+}
+
 // returns the number of keys of an object, e.g., {a:5, b:7, d:'hello'} --> 3
 export function len(obj: object | undefined | null): number {
   if (obj == null) {

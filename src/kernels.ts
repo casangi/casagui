@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const awaiting = require("awaiting");
 const callback = awaiting.callback;
 const { reuseInFlight } = require("async-await-utils/hof");
-import { len, deep_copy, debug } from "./utils";
+import { len, deep_copy, debug, Dictionary } from "./utils";
 
 import { ChildProcess } from "child_process";
 const { findAll } = require("../src/kernel-specs");
@@ -16,6 +16,12 @@ const jmp = require("../src/jmp");
 
 export { MessageType as message_type } from "@nteract/messaging";
 
+export const MimeTypes: Dictionary = {
+    'text/html': 'html',
+    'application/vnd.holoviews_load.v0+json': 'json',
+    'application/javascript': 'javascript'
+}
+
 export enum KernelLocation {
     // Future kernel locations: Remote (cluster), AWS, etc.
     Local = "kernel/location/local"
@@ -26,6 +32,49 @@ export enum KernelStatus {
 }
 const username = process.env.LOGNAME || process.env.USER || process.env.LNAME || process.env.USERNAME;
 
+function typify( incoming: Dictionary ): Dictionary {
+    for (const k in MimeTypes) {
+        if ( incoming.data !== undefined &&
+             incoming.data[k] !== undefined ) {
+            if ( incoming.type !== undefined ) {
+                incoming.type.push(MimeTypes[k])
+            } else {
+                incoming.type = [MimeTypes[k]]
+            }
+        }
+    }
+    if ( incoming.execution_state !== undefined ) {
+        if ( incoming.type !== undefined ) {
+            incoming.type.push('state')
+        } else {
+            incoming.type = ["state"]
+        }
+    } else if ( incoming.code !== undefined ) {
+        if ( incoming.type !== undefined ) {
+            incoming.type.push('code')
+        } else {
+            incoming.type = ["code"]
+        }
+    }else if ( incoming.status !== undefined ) {
+        if ( incoming.type !== undefined ) {
+            incoming.type.push('status')
+        } else {
+            incoming.type = ['status']
+        }
+    }
+
+    if ( incoming.type === undefined) {
+        incoming.type = ['unknown']
+    } else {
+        if ( incoming.type.includes('json') &&
+             incoming.type.includes('javascript') &&
+             incoming.data['application/vnd.holoviews_load.v0+json'] ==
+             incoming.data['application/javascript'] ) {
+            incoming.type = incoming.type.filter((x: string) => x != 'json')
+        }
+    }
+    return incoming
+}
 export async function kerneldesc( name: string, location: KernelLocation, debug=false ): Promise<any> {
     function desc( kv: any ) {
         return { name: kv.name,
@@ -510,7 +559,7 @@ extends EventEmitter
                     if (len(incoming.metadata) === 0) {
                         delete incoming.metadata;
                     }
-                    the_mesg.push({channel: "shell", content: incoming});
+                    the_mesg.push({channel: "shell", content: typify(incoming)});
                     cb();
                 } else {
                     debug("kernels","call( ) received some other shell message:",incoming)
@@ -520,7 +569,7 @@ extends EventEmitter
                 if (incoming.parent_header.msg_id === outgoing.header.msg_id) {
                     debug("kernels","call( ) received target iopub message:",incoming)
                     incoming = deep_copy(incoming.content)
-                    the_mesg.push({channel: "iopub", content: incoming})
+                    the_mesg.push({channel: "iopub", content: typify(incoming)})
                 } else {
                     debug("kernels","call( ) received some other iopub message:",incoming)
                 }
