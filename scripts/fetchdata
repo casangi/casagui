@@ -7,7 +7,7 @@ import ssl
 
 ic2233 = ( "ic2233_1_ms.tar.xz", "ic2233_1.ms" )
 
-url_root = "https://casa.nrao.edu/download/devel/casadesk/%s"
+url_root = "https://casa.nrao.edu/download/devel/casagui/%s"
 
 test_dir = realpath(join( dirname(dirname(__file__)), "test" ))
 

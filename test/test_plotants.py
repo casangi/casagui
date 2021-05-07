@@ -1,6 +1,6 @@
 
 import os 
-from casadesk import plotants
+from casagui import plotants
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
 msname = 'ic2233_1.ms'

@@ -1,10 +1,10 @@
 {
-  "name": "casadesk",
+  "name": "casagui",
   "version": "1.0.0",
   "description": "CASA GUI Desktop",
   "main": "dist/index.js",
   "scripts": {
-    "start": "npm run build && npm run copy && scripts/fetchdata && electron .",
+    "start": "npm run build && npm run copy && scripts/fetchdata && electron --no-sandbox .",
     "build": "tsc --build",
     "clean": "tsc --build --clean",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -30,7 +30,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/casangi/casadesk"
+    "url": "https://github.com/casangi/casagui"
   },
   "dependencies": {
     "@nteract/messaging": "^7.0.17",

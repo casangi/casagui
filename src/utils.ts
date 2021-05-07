@@ -14,7 +14,7 @@ export function len(obj: object | undefined | null): number {
 }
 
 export function debug( category: string, mesg: string, ...args: any[] ): void {
-//    console.info(`----[${category}]------------------------------------------------------------------------------------------`)
-//    args.forEach(arg => console.info(arg))
-//    console.trace(mesg)
+    console.info(`----[${category}]------------------------------------------------------------------------------------------`)
+    args.forEach(arg => console.info(arg))
+    console.trace(mesg)
 }
