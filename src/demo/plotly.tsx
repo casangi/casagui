@@ -42,7 +42,7 @@ function PlotAnts( ) {
 
     useEffect(( ) => {
         const fetchData = async ( ) => {
-            let code = `from casadesk import plotants
+            let code = `from casagui import plotants
 plotants("${mspath.path}",logpos=${coord === 'polar' ? 'True' : 'False'}).show( )`
             let result = await kernel.call( "execute_request" as message_type,
                                             { silent: false,

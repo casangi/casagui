@@ -55,7 +55,7 @@ function Bokeh01( ) {
 
     useEffect(( ) => {
         const createPlot = async ( ) => {
-            let code = `from casadesk.trybokeh import bokehdemo01
+            let code = `from casagui.trybokeh import bokehdemo01
 bokehdemo01( )`
 
             let result = await kernel.call( "execute_request" as message_type,
