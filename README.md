@@ -30,3 +30,7 @@ Any Python packages you want to use must be installed too. In particular:
 bash$ pip install plotly==4.14.3
 ```
 Finally, a good way to test your kernel is by installing the [nteract desktop app](https://nteract.io/). Some experimentation may be required. This was the case with installing Python with [macports](https://www.macports.org/) and then getting the [nteract desktop app](https://nteract.io/) to use Python from there.
+
+## Developement Notes
+
+1. [coordinate labeling with casatools](docs/image-tool-labels.md)
