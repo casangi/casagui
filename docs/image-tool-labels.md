@@ -20,7 +20,7 @@ On 2021-05-23 09:46, Darrell Schiebel wrote:
 > 
 > thanks very much,
 > Darrell
-
+<pre>
 Hi Darrell
 Something like this will get you the RA's for the bottom row of pixels 
 (bear in mind that, in general, all pixels in a given column will have 
@@ -62,3 +62,4 @@ print(ra_arr)
 You can do similar things for dec and freq by changing the principal 
 axis used to 1 and 2, respectively, and manipulating the quantities a 
 bit differently to get the desired output formats.
+</pre>
