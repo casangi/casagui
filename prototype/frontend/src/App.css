@@ -1,0 +1,112 @@
+html,body
+{
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow:hidden;
+    font-size: medium;
+    font-family: Roboto, Arial, sans-serif;
+    background-color:#282c34;
+}
+#container  {
+    left:1px;
+    top:1px;
+    right:1px;
+    bottom:1px;
+    position:absolute;
+    display:flex;
+    overflow:hidden;
+    background-color:#282c34;
+}
+.panel {
+  position: absolute;
+  resize: "none";  
+  height:100%;
+  width:100%;
+  display:flex;
+  flex-direction: column;
+  justify-content:center;
+  align-items:center;
+  background-color: #2d2f33;    
+}
+
+.panel-row {
+    position: absolute;
+    resize: "none";  
+    display:flex;
+    flex-direction: row;
+    justify-content:center;
+    align-items:center;
+    background-color: #2d2f33;    
+  }
+
+.canvas {
+    background-color: #2d2f33;
+    min-height: 100%;
+    min-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+  }
+::-webkit-scrollbar { width: 8px; height: 8px;}
+::-webkit-scrollbar-button {  background-color: #222; }
+::-webkit-scrollbar-track {  background-color: #444;}
+::-webkit-scrollbar-track-piece { background-color: #333;}
+::-webkit-scrollbar-thumb { height: 50px; background-color: #666; border-radius: 3px;}
+::-webkit-scrollbar-corner { background-color: #333;}
+::-webkit-resizer { background-color: #666;}
+
+.app
+{
+    display:flex;
+    flex-direction: column;
+    flex-grow:1;
+}
+
+.toolbar
+{
+    margin:1px;
+    display: flex;
+    width: 100%;
+    border: 2px;
+    align-items:center;
+}
+
+.contents
+{
+    flex-grow:1;
+    left:0;
+    top:2px;
+    right:0;
+    bottom:0px;
+    position:relative;
+    background-color:#282c34;
+    border:1px solid gray;
+}
+
+/* simple_bundled table styling*/
+.simple_table {
+    background-color: #222;
+    color: gray;
+    border-collapse: collapse;
+}
+.simple_table th {
+    color: #ddd;
+    background-color: #282828;
+    border-right: 1px solid #333;
+    padding:4px;
+    border-bottom-color: transparent;
+    text-align: left;
+    width:100px;
+    min-width: 100px;
+}
+
+.simple_table td {
+    border-right: 1px solid #333;
+    border-bottom: 1px solid #333;
+    padding:4px;
+}
+.simple_table tr:nth-child(even) {background: #242424}
+.simple_table tr:nth-child(odd) {background: #222}
