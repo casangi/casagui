@@ -1,9 +1,11 @@
 # Axis Labeling Using The ``image`` Tool
 
-| Date: Mon, 24 May 2021 12:06:52 -0400
-| From: dmehring <dmehring@nrao.edu>
-| To: Darrell Schiebel <drs@nrao.edu>
-| Subject: Re: image labels
+<pre>
+Date: Mon, 24 May 2021 12:06:52 -0400
+From: dmehring <dmehring@nrao.edu>
+To: Darrell Schiebel <drs@nrao.edu>
+Subject: Re: image labels
+</pre>
 
 On 2021-05-23 09:46, Darrell Schiebel wrote:
 > Hi Dave,
