@@ -33,4 +33,4 @@ Finally, a good way to test your kernel is by installing the [nteract desktop ap
 
 ## Developement Notes
 
-1. [coordinate labeling with casatools](docs/image-tool-labels.md)
+1. [coordinate labeling with casatools](mddocs/image-tool-labels.md)
