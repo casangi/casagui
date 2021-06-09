@@ -68,7 +68,7 @@ export class ImageDataSource extends ColumnDataSource {
                 let data = expand_arrays( obj )
                 this.data = data
             } else {
-                console.group("binary data", event.data.byteLength, "bytes" )
+                console.log("binary data", event.data.byteLength, "bytes" )
             }
         }
     }
