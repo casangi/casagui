@@ -3,7 +3,7 @@ import * as p from "core/properties"
 
 
 /**
-* Builds on Bokeh slider class to provide a websocket connected button widget.
+* Builds on Bokeh Button class to provide a websocket connected button widget.
 *
 * @remarks
 * This method is part of the {@link prototype/iclean/components/widgets/Button | IClean}.
@@ -29,7 +29,7 @@ export class ICleanButtonView extends ButtonView {
 
 export namespace ICleanButton {
     export type Attrs = p.AttrsOf<Props>
-    export type Props = Slider.Props & {
+    export type Props = Button.Props & {
         socket: p.Property<[string, number]>,
     }
 }
@@ -39,7 +39,7 @@ export interface ICleanButton extends ICleanButton.Attrs { }
 export class ICleanButton extends Button {
     properties: ICleanButton.Props
 
-    constructor(attrs?: Partial<ICleanSlider.Attrs>) {
+    constructor(attrs?: Partial<ICleanButton.Attrs>) {
         super(attrs)
     }
 
