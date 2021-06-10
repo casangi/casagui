@@ -4,7 +4,7 @@ from bokeh.layouts import column, row
 from bokeh.models import Button, CustomJS, Slider
 from bokeh.plotting import ColumnDataSource, figure, show
 from casatools import image as imagetool
-from bokeh.util.compiler import JavaScript
+from bokeh.util.compiler import TypeScript
 from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Tuple, String, Int
 
@@ -40,25 +40,41 @@ class ImageDataSource(ColumnDataSource):
 
     address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
 
-    __implementation__ = JavaScript("""import { ColumnDataSource } from "models/sources/column_data_source"
-import { UpdateMode } from "core/enums"
-import { Tuple, String, Int } from "core/properties"
+    __implementation__ = TypeScript("""import { ColumnDataSource } from "models/sources/column_data_source"
+import * as p from "core/properties"
 import { is_NDArray_ref, decode_NDArray } from "core/util/serialization"
 
+// Data source where the data is defined column-wise, i.e. each key in the
+// the data attribute is a column name, and its value is an array of scalars.
+// Each column should be the same length.
+export namespace ImageDataSource {
+  export type Attrs = p.AttrsOf<Props>
+
+  export type Props = ColumnDataSource.Props & {
+    address: p.Property<[string,number]>
+  }
+}
+
+export interface ImageDataSource extends ImageDataSource.Attrs {}
+
 export class ImageDataSource extends ColumnDataSource {
-    constructor(attrs) {
+    properties: ImageDataSource.Props
+    websocket: any
+
+    constructor(attrs?: Partial<ImageDataSource.Attrs>) {
         super(attrs);
         let ws_address = `ws://${this.address[0]}:${this.address[1]}`
         console.log( "websocket url:", ws_address )
         this.websocket = new WebSocket(ws_address)
         this.websocket.binaryType = "arraybuffer"
-        this.websocket.onmessage = (event) => {
-            function expand_arrays(obj) {
-                const res = Array.isArray(obj) ? new Array( ) : { }
+        this.websocket.onmessage = (event: any) => {
+            function expand_arrays(obj: any) {
+                const res: any = Array.isArray(obj) ? new Array( ) : { }
                 for (const key in obj) {
                     let value = obj[key];
                     if( is_NDArray_ref(value) ) {
-                        res[key] = decode_NDArray(value)
+                        const buffers0 = new Map<string, ArrayBuffer>( )
+                        res[key] = decode_NDArray(value,buffers0)
                     } else {
                         res[key] = expand_arrays(value)
                     }
@@ -74,20 +90,18 @@ export class ImageDataSource extends ColumnDataSource {
             }
         }
     }
-    initialize() {
+    initialize(): void {
         super.initialize();
     }
-    channel( i ) {
+    channel( i: number ): void {
         this.websocket.send(JSON.stringify({ action: 'channel', value: i }))
     }
-    static init_ImageDataSource() {
-        this.define(({ Tuple, String, Int }) => ({
-            address: [Tuple(String,Int)],
+    static init_ImageDataSource( ): void {
+        this.define<ImageDataSource.Props>(({ Tuple, String, Number }) => ({
+            address: [Tuple(String,Number)],
         }));
     }
 }
-ImageDataSource.__name__ = "ImageDataSource";
-ImageDataSource.init_ImageDataSource();
 """ )
 
     def shape( self ):
