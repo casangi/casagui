@@ -6,6 +6,7 @@ from bokeh.plotting import ColumnDataSource, figure, show
 from casatools import image as imagetool
 from bokeh.util.compiler import JavaScript
 from bokeh.util.serialization import transform_column_source_data
+from bokeh.core.properties import Tuple, String, Int
 
 import urllib.request
 import tarfile
@@ -37,18 +38,19 @@ class ImageDataSource(ColumnDataSource):
                                    ### only a subset of the planes of the image
     __chan_shape = None
 
-    address = find_ws_address( )
+    address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
 
     __implementation__ = JavaScript("""import { ColumnDataSource } from "models/sources/column_data_source"
 import { UpdateMode } from "core/enums"
+import { Tuple, String, Int } from "core/properties"
 import { is_NDArray_ref, decode_NDArray } from "core/util/serialization"
 
 export class ImageDataSource extends ColumnDataSource {
     constructor(attrs) {
         super(attrs);
-        this.ws_address = "%s"
-        console.log( "websocket url:", this.ws_address )
-        this.websocket = new WebSocket(this.ws_address)
+        let ws_address = `ws://${this.address[0]}:${this.address[1]}`
+        console.log( "websocket url:", ws_address )
+        this.websocket = new WebSocket(ws_address)
         this.websocket.binaryType = "arraybuffer"
         this.websocket.onmessage = (event) => {
             function expand_arrays(obj) {
@@ -79,20 +81,14 @@ export class ImageDataSource extends ColumnDataSource {
         this.websocket.send(JSON.stringify({ action: 'channel', value: i }))
     }
     static init_ImageDataSource() {
-        /******IT IS NOT CLEAR WHAT THIS DOES FOR WebDataSource************************************************/
-        /******https://github.com/bokeh/bokeh/blob/main/bokehjs/src/lib/models/sources/web_data_source.ts******/
-        /******MAYBE SHARING DATA BETWEEN PYTHON AND JAVASCRIPT?***********************************************/
-        this.define(({ Any, Int, String, Nullable }) => ({
-            max_size: [Nullable(Int), null],
-            mode: [UpdateMode, "replace"],
-            adapter: [Nullable(Any /*TODO*/), null],
-            data_url: [String],
+        this.define(({ Tuple, String, Int }) => ({
+            address: [Tuple(String,Int)],
         }));
     }
 }
 ImageDataSource.__name__ = "ImageDataSource";
 ImageDataSource.init_ImageDataSource();
-""" % ("ws://%s:%d/" % address))
+""" )
 
     def shape( self ):
         return self.__chan_shape + [ len(self.__im_indexes) ]
@@ -127,7 +123,7 @@ ImageDataSource.init_ImageDataSource();
             await websocket.send(json.dumps(msg))
             count += 1
 
-source = ImageDataSource( image=img )
+source = ImageDataSource( image=img, address=find_ws_address( ) )
 shape = source.shape( )
 
 fig = figure(tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")])
