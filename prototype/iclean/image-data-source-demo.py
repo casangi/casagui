@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from bokeh.layouts import column
-from bokeh.models import CustomJS, Slider
+from bokeh.layouts import column, row
+from bokeh.models import Button, CustomJS, Slider
 from bokeh.plotting import ColumnDataSource, figure, show
 from casatools import image as imagetool
 from bokeh.util.compiler import JavaScript
@@ -136,7 +136,17 @@ callback = CustomJS( args=dict( source=source, slider=slider ),
                      code="""source.channel(slider.value)""" )
 slider.js_on_change('value', callback)
 
-layout = column( fig, slider )
+button_prev = Button(label="prev", max_width=60)
+button_next = Button(label="next", max_width=60)
+button_prev.js_on_click(
+    CustomJS(args=dict(slider=slider), code="""if (slider.value>slider.start) { slider.value = slider.value - 1; }"""))
+button_next.js_on_click(
+    CustomJS(args=dict(slider=slider), code="""if (slider.value < slider.end) { slider.value = slider.value + 1; }"""))
+
+layout = column(fig,
+                row(slider, button_prev, button_next)
+                )
+
 show(layout)
 
 start_server = websockets.serve( source.process_messages, source.address[0], source.address[1] )
