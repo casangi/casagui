@@ -1,12 +1,14 @@
 import os
 import numpy as np
 from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider, RadioButtonGroup, TextInput
+from bokeh.models import CustomJS, Slider, RadioButtonGroup, TextInput, Button
 from bokeh.plotting import ColumnDataSource, figure, show
 from casatools import image
 
 import urllib.request
 import tarfile
+
+from components.awesome.awesome_icon import AwesomeIcon
 
 img = 'g35.03_II_nh3_11.hline.image'
 url = "https://casa.nrao.edu/download/devel/casavis/data/g35-hline-img.tar.gz"
@@ -36,6 +38,9 @@ fig.grid.grid_line_width = 0.5
 # Sliders
 slider = Slider(start=0, end=len(data)-1, value=0, step=1, title="Channel")
 
+# Button
+button = Button(label="", button_type="success", icon=AwesomeIcon(icon_name="play", size=2))
+
 # Button Group
 LABELS=['Stop', 'Play', 'Step']
 
@@ -61,5 +66,6 @@ layout = column( fig,
                      text_input_iter,
                      text_input_cycles,
                      text_input_threshold),
-                 slider )
+                 slider, 
+                 button)
 show(layout)
