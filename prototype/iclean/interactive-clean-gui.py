@@ -47,17 +47,40 @@ fig.plot_width = 900
 slider = ICleanSlider(start=0, end=len(data)-1, value=0, step=1, title="Channel", width=600)
 
 # Button
-button = ICleanButton(label="Button", button_type="success", width=600)
+play_button = ICleanButton(
+    label="", 
+    button_type="success", 
+    width=120, 
+    margin=(5,1,5,1), 
+    icon=SVGIcon(icon_name="play"))
 
-# Button Group
-LABELS=['Stop', 'Play', 'Step']
+stop_button = ICleanButton(
+    label="", 
+    button_type="danger", 
+    width=120, 
+    margin=(5,1,5,1), 
+    icon=SVGIcon(icon_name="play"))
 
-radio_button_group = RadioButtonGroup(labels=LABELS, active=0, width=600)
-radio_button_group.js_on_click(CustomJS(code="""
-    console.log('radio_button_group: active=' + this.active, this.toString())
-"""))
+step_forward_button = ICleanButton(
+    label="", 
+    button_type="primary", 
+    width=120, 
+    margin=(5,1,5,1), 
+    icon=SVGIcon(icon_name="step-forward"))
 
-# Text Inputboken.plotting.curplot().plot_height = 800
+step_backward_button = ICleanButton(
+    label="", 
+    button_type="primary", 
+    width=120, 
+    margin=(5,1,5,1), 
+    icon=SVGIcon(icon_name="step-backward"))
+
+pause_button = ICleanButton(
+    label="", 
+    button_type="warning", 
+    width=120, 
+    margin=(5,1,5,1), 
+    icon=SVGIcon(icon_name="pause"))
 
 text_input_iter = TextInput(title="Iterations", value="1", width=193)
 text_input_cycles = TextInput(title="Cycles", value="1", width=193)
@@ -70,13 +93,17 @@ callback = CustomJS( args=dict( source=source, data=data, slider=slider ),
 slider.js_on_change('value', callback)
 layout = row(
     column(
-        radio_button_group,
+        row(
+            step_backward_button,
+            play_button, 
+            pause_button, 
+            stop_button, 
+            step_forward_button),
         row(
             text_input_iter,
             text_input_cycles,
             text_input_threshold),
-        slider, 
-        button), 
+        slider), 
     fig)
 
 show(layout)
