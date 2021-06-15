@@ -59,7 +59,7 @@ stop_button = ICleanButton(
     button_type="danger", 
     width=120, 
     margin=(5,1,5,1), 
-    icon=SVGIcon(icon_name="play"))
+    icon=SVGIcon(icon_name="stop"))
 
 step_forward_button = ICleanButton(
     label="", 
