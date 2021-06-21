@@ -1,0 +1,12 @@
+{
+  "name": "casaguijs",
+  "version": "0.0.1",
+  "description": "casagui browser-side bokeh implementation",
+  "license": "BSD-3-Clause",
+  "keywords": [],
+  "repository": {},
+  "dependencies": {
+    "@bokeh/bokehjs": "^2.3.1"
+  },
+  "devDependencies": {}
+}
