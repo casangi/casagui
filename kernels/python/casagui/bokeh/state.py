@@ -56,7 +56,7 @@ def initialize_bokeh( libs=None ):
         resources_result = deepcopy(result)
         def get_urls( components, kind ):
             temp_result = resources_result["urls"](components, kind)
-            return temp_result + [ "file:///Users/drs/develop/casagui/kernels/python/casaguijs/dist/casaguijs.min.js" ] if kind == 'js' else temp_result
+            return temp_result + casaguijs_libs if kind == 'js' else temp_result
         result["urls"] = get_urls
         return result
     resources._get_cdn_urls = __get_cdn_urls
