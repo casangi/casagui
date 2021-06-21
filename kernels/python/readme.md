@@ -44,7 +44,7 @@ probably moving to a `demo` directory), but for the time being, you
 can run this demo by:
 
 1. [build casaguijs](casaguijs/readme.md)
-2. ensure that `casatools` is available in your `python3` installation
+2. ensure that `casatools` and `bokeh` are available in your `python3` installation (or `PYTHONPATH`)
 3. run `bash$ python3 image-data-source-demo.py`
 
 Currently, you have to use `^C` to exit.
