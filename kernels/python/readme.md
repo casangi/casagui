@@ -33,3 +33,18 @@ Electron App.
 
 The goal is that _Jupyter Notebook_ cells can import `casagui` and the
 key visualization elements will appear, in place, in the notebook.
+
+# Prototype Demo
+
+The _image cube scrolling_ demo for the interactive clean prototype was moved
+here to demonstrate the *current state* of image cube information flow
+between the _Bokeh_ plot in the web browser (via `casagui`/`casaguijs`
+extensions to _Bokeh_). This will change in the future (with this demo
+probably moving to a `demo` directory), but for the time being, you
+can run this demo by:
+
+1. [build casaguijs](casaguijs/readme.md)
+2. ensure that `casatools` is available in your `python3` installation
+3. run `bash$ python3 image-data-source-demo.py`
+
+Currently, you have to use `^C` to exit.
