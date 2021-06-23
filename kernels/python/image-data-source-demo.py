@@ -1,6 +1,7 @@
 import os
 from casagui.bokeh.state import initialize_bokeh
-initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )
+##initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )    ### local build
+initialize_bokeh( )                                        ### fetch from https://casa.nrao.edu/
 from casagui.bokeh.sources import ImageDataSource, ImagePipe
 from bokeh.layouts import column, row
 from bokeh.models import Button, CustomJS, Slider
