@@ -1,6 +1,7 @@
 import { ColumnDataSource } from "@bokehjs/models/sources/column_data_source"
 import * as p from "@bokehjs/core/properties"
-import { is_NDArray_ref, decode_NDArray } from "@bokehjs/core/util/serialization"
+import {uuid4} from "@bokehjs/core/util/string"
+import { ImagePipe } from "./image_pipe"
 
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
@@ -9,7 +10,7 @@ export namespace ImageDataSource {
   export type Attrs = p.AttrsOf<Props>
 
   export type Props = ColumnDataSource.Props & {
-    address: p.Property<[string,number]>
+      image_source: p.Property<ImagePipe>
   }
 }
 
@@ -17,46 +18,23 @@ export interface ImageDataSource extends ImageDataSource.Attrs {}
 
 export class ImageDataSource extends ColumnDataSource {
     properties: ImageDataSource.Props
-    websocket: any
+
+    imid: string
 
     constructor(attrs?: Partial<ImageDataSource.Attrs>) {
         super(attrs);
-        let ws_address = `ws://${this.address[0]}:${this.address[1]}`
-        console.log( "websocket url:", ws_address )
-        this.websocket = new WebSocket(ws_address)
-        this.websocket.binaryType = "arraybuffer"
-        this.websocket.onmessage = (event: any) => {
-            function expand_arrays(obj: any) {
-                const res: any = Array.isArray(obj) ? new Array( ) : { }
-                for (const key in obj) {
-                    let value = obj[key];
-                    if( is_NDArray_ref(value) ) {
-                        const buffers0 = new Map<string, ArrayBuffer>( )
-                        res[key] = decode_NDArray(value,buffers0)
-                    } else {
-                        res[key] = expand_arrays(value)
-                    }
-                }
-                return res
-            }
-            if (typeof event.data === 'string' || event.data instanceof String) {
-                let obj = JSON.parse( event.data )
-                let data = expand_arrays( obj )
-                this.data = data
-            } else {
-                console.log("binary data", event.data.byteLength, "bytes" )
-            }
-        }
+        this.imid = uuid4( )
+        console.log( 'image data source id:', this.imid )
     }
     initialize(): void {
         super.initialize();
     }
     channel( i: number ): void {
-        this.websocket.send(JSON.stringify({ action: 'channel', value: i }))
+        this.image_source.channel( [0, i], (data: any) => this.data = data, this.imid )
     }
     static init_ImageDataSource( ): void {
-        this.define<ImageDataSource.Props>(({ Tuple, String, Number }) => ({
-            address: [Tuple(String,Number)],
+        this.define<ImageDataSource.Props>(({ Ref }) => ({
+            image_source: [ Ref(ImagePipe) ],
         }));
     }
 }

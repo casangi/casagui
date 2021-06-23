@@ -1,7 +1,7 @@
 import os
 from casagui.bokeh.state import initialize_bokeh
 initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )
-from casagui.bokeh.sources import ImageDataSource
+from casagui.bokeh.sources import ImageDataSource, ImagePipe
 from bokeh.layouts import column, row
 from bokeh.models import Button, CustomJS, Slider
 from bokeh.plotting import figure, show
@@ -22,15 +22,16 @@ if not os.path.isdir(img):
     tar = tarfile.open(fileobj=tstream, mode="r:gz")
     tar.extractall()
 
-source = ImageDataSource( image=img, address=find_ws_address( ) )
-shape = source.shape( )
+pipe = ImagePipe( image=img, address=find_ws_address( ) )
+source = ImageDataSource( image_source=pipe )
+shape = pipe.shape( )
 
 fig = figure(tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")])
 fig.x_range.range_padding = fig.y_range.range_padding = 0
 fig.image(image="d", x=0, y=0, dw=shape[0], dh=shape[1], palette="Spectral11", level="image", source=source )
 fig.grid.grid_line_width = 0.5
 
-slider = Slider(start=0, end=shape[2]-1, value=87, step=1, title="Channel")
+slider = Slider(start=0, end=shape[-1]-1, value=87, step=1, title="Channel")
 callback = CustomJS( args=dict( source=source, slider=slider ),
                      code="""source.channel(slider.value)""" )
 slider.js_on_change('value', callback)
@@ -48,6 +49,6 @@ layout = column(fig,
 
 show(layout)
 
-start_server = websockets.serve( source.process_messages, source.address[0], source.address[1] )
+start_server = websockets.serve( pipe.process_messages, pipe.address[0], pipe.address[1] )
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()
