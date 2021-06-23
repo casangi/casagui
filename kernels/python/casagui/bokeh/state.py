@@ -47,7 +47,7 @@ def initialize_bokeh( libs=None ):
         for the current version of ``casaguijs`` and ``bokeh``
     """
 
-    casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s-b%s.min.js" % (version,version,bokeh_version) ] if libs is None else \
+    casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s-b%s.min.js" % (version,version,'.'.join(bokeh_version.split('.')[0:2])) ] if libs is None else \
         [ libs ] if type(libs) == str else libs
     casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
     original_func = resources._get_cdn_urls
