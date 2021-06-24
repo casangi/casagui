@@ -35,16 +35,16 @@ from .image_pipe import ImagePipe
 
 import json
 
-class ImageDataSource(ColumnDataSource):
-    """Implementation of a ``ColumnDataSource`` customized for planes from
-    `CASA`/`CNGI` image cubes. This is designed to use an `ImagePipe` to
-    update the image channel/plane displayed in a browser, app or notebook
-    with `bokeh`.
+class SpectraDataSource(ColumnDataSource):
+    """Implementation of a ``ColumnDataSource`` customized for spectral lines
+    from `CASA`/`CNGI` image cubes. This is designed to use an `ImagePipe` to
+    update the spectral line plot displayed in a browser, app or notebook with
+    `bokeh`.
 
     Attributes
     ----------
     image_source: ImagePipe
-        the conduit for updating the channel/plane from the image cube
+        the conduit for updating the spectral line data
     """
 
     image_source = Instance(ImagePipe)
@@ -53,5 +53,5 @@ class ImageDataSource(ColumnDataSource):
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
-        self.data = { 'd': [ self.image_source.channel( [0,87] ) ] }
+        self.data = self.image_source.spectra( [ 0, 0, 0 ] )
 

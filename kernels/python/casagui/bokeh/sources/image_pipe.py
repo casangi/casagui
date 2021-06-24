@@ -45,9 +45,11 @@ class ImagePipe(DataSource):
         #### index is expected to be [RA, DEC, STOKES]
         if self.__im is None:
             raise RuntimeError('no image is available')
-        print("\t>>>>---> fetching %s" % index)
-        return np.squeeze( self.__im.getchunk( blc=index + [0],
-                                               trc=index + self.__im_shape[-1] ) )
+        result = np.squeeze( self.__im.getchunk( blc=index + [0],
+                                                 trc=index + [self.__im_shape[-1]] ) )
+        ### should return spectral freq etc.
+        ### here for X rather than just the index
+        return { 'x': range(len(result)), 'y': result }
 
     def __init__( self, image, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
@@ -64,9 +66,8 @@ class ImagePipe(DataSource):
                 await websocket.send(json.dumps(msg))
                 count += 1
             elif cmd['action'] == 'spectra':
-                spectra = self.spectra(cmd['index'])
                 msg = { 'id': cmd['id'],
-                        'message': transform_column_source_data( { 'd': [ spectra ] } ) }
+                        'message': transform_column_source_data( self.spectra(cmd['index']) ) }
                 await websocket.send(json.dumps(msg))
             else:
                 print("received messate in python with unknown 'action' value: %s" % cmd)

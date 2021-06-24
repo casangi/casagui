@@ -11,6 +11,7 @@ export namespace ImagePipe {
     export type Props = DataSource.Props & {
         address: p.Property<[string,number]>
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
+        spectra: p.Property<( index: [number,number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
     }
 }
 
@@ -36,15 +37,11 @@ export class ImagePipe extends DataSource {
             function expand_arrays(obj: any) {
                 const res: any = Array.isArray(obj) ? new Array( ) : { }
                 for (const key in obj) {
-                    console.log("key",key)
                     let value = obj[key];
-                    console.log("value",value)
                     if( is_NDArray_ref(value) ) {
-                        console.log("n-dimensional")
                         const buffers0 = new Map<string, ArrayBuffer>( )
                         res[key] = decode_NDArray(value,buffers0)
                     } else {
-                        console.log("object")
                         res[key] = typeof value === 'object' && value !== null ? expand_arrays(value) : value
                     }
                 }
@@ -58,7 +55,6 @@ export class ImagePipe extends DataSource {
                     // 'message' here is generated in python and
                     // contains the requested slice of the image
                     let { id, message }: { id: string, message: any } = data
-                    console.log(id,message)
                     let { cb }: { cb: (x: any) => any } = this.pending[id]
                     delete this.pending[id]
                     if ( id in this.queue ) {
@@ -85,7 +81,7 @@ export class ImagePipe extends DataSource {
     // fetch channel
     //    index: [ stokes index, spectral plane ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
-    channel( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
+    channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
         let message = { action: 'channel', index, id }
         if ( id in this.pending ) {
             this.queue[id] = { cb, message }
