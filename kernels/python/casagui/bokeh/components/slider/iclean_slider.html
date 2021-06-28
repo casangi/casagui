@@ -1,0 +1,154 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+    
+      <meta charset="utf-8">
+      <title>Bokeh Plot</title>
+      
+      
+        
+          
+        
+        
+          
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-2.3.2.min.js" integrity="sha384-XypntL49z55iwGVUW4qsEu83zKL3XEcz0MjuGOQ9SlaaQ68X/g+k1FcioZi7oQAc" crossorigin="anonymous"></script>
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-2.3.2.min.js" integrity="sha384-TX0gSQTdXTTeScqxj6PVQxTiRW8DOoGVwinyi1D3kxv7wuxQ02XkOxv0xwiypcAH" crossorigin="anonymous"></script>
+        <script type="text/javascript">
+            Bokeh.set_log_level("info");
+        </script>
+        <script type="text/javascript">
+            (function(root, factory) {
+                    factory(root["Bokeh"]);
+                })(this, function(Bokeh) {
+                  var define;
+                  return (function outer(modules, entry) {
+                  if (Bokeh != null) {
+                    return Bokeh.register_plugin(modules, entry);
+                  } else {
+                    throw new Error("Cannot find Bokeh. You have to load it prior to loading plugins.");
+                  }
+                })
+                ({
+                  "custom/main": function(require, module, exports) {
+                    var models = {
+                      "ICleanSlider": require("custom/i_clean_slider").ICleanSlider
+                    };
+                    require("base").register_models(models);
+                    module.exports = models;
+                  },
+                  "custom/i_clean_slider": function(require, module, exports) {
+                "use strict";
+                Object.defineProperty(exports, "__esModule", { value: true });
+                exports.ICleanSlider = exports.ICleanSliderView = void 0;
+                const slider_1 = require("models/widgets/slider");
+                /**
+                * Builds on Bokeh slider class to provide a websocket connected slider widget.
+                *
+                * @remarks
+                * This method is part of the {@link prototype/iclean#components | IClean subsystem}.
+                *
+                * @param socket - A tuple containing the websocket connection information: (address, port)
+                *
+                * @beta
+                */
+                class ICleanSliderView extends slider_1.SliderView {
+                    connect_signals() {
+                        super.connect_signals();
+                    }
+                    render() {
+                        console.log("render");
+                        console.log(this.model);
+                        super.render();
+                    }
+                }
+                exports.ICleanSliderView = ICleanSliderView;
+                ICleanSliderView.__name__ = "ICleanSliderView";
+                class ICleanSlider extends slider_1.Slider {
+                    constructor(attrs) {
+                        super(attrs);
+                    }
+                    static init_ICleanSlider() {
+                        this.prototype.default_view = ICleanSliderView;
+                        this.define(({ String, Number, Tuple }) => ({
+                            socket: [Tuple(String, Number)],
+                        }));
+                    }
+                }
+                exports.ICleanSlider = ICleanSlider;
+                ICleanSlider.__name__ = "ICleanSlider";
+                ICleanSlider.init_ICleanSlider();
+                //# sourceMappingURL=iclean_slider.js.map
+                }
+                }, "custom/main");
+                ;
+                });
+
+        </script>
+        
+      
+      
+    
+  </head>
+  
+  
+  <body>
+    
+      
+        
+          
+          
+            
+              <div class="bk-root" id="d7c2068f-ce20-492d-98ff-206584abc9d1" data-root-id="1002"></div>
+            
+          
+        
+      
+      
+        <script type="application/json" id="1003">
+          {"1905551d-d1d3-4523-8d5e-f9febff069aa":{"defs":[],"roots":{"references":[{"attributes":{"children":[{"id":"1001"}]},"id":"1002","type":"Column"},{"attributes":{"end":10,"socket":["127.0.0.1",6799],"start":0,"step":0.1,"title":"value","value":0},"id":"1001","type":"ICleanSlider"}],"root_ids":["1002"]},"title":"Bokeh Application","version":"2.3.2"}}
+        </script>
+        <script type="text/javascript">
+          (function() {
+            var fn = function() {
+              Bokeh.safely(function() {
+                (function(root) {
+                  function embed_document(root) {
+                    
+                  var docs_json = document.getElementById('1003').textContent;
+                  var render_items = [{"docid":"1905551d-d1d3-4523-8d5e-f9febff069aa","root_ids":["1002"],"roots":{"1002":"d7c2068f-ce20-492d-98ff-206584abc9d1"}}];
+                  root.Bokeh.embed.embed_items(docs_json, render_items);
+                
+                  }
+                  if (root.Bokeh !== undefined) {
+                    embed_document(root);
+                  } else {
+                    var attempts = 0;
+                    var timer = setInterval(function(root) {
+                      if (root.Bokeh !== undefined) {
+                        clearInterval(timer);
+                        embed_document(root);
+                      } else {
+                        attempts++;
+                        if (attempts > 100) {
+                          clearInterval(timer);
+                          console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing");
+                        }
+                      }
+                    }, 10, root)
+                  }
+                })(window);
+              });
+            };
+            if (document.readyState != "loading") fn();
+            else document.addEventListener("DOMContentLoaded", fn);
+          })();
+        </script>
+    
+  </body>
+  
+</html>
