@@ -2,8 +2,9 @@ import os
 import numpy as np
 import bokeh
 
-from bokeh.layouts import column, row
-from bokeh.models import CustomJS, Slider, RadioButtonGroup, TextInput, Button, BoxAnnotation, PreText, Range1d, LinearAxis, Span, HoverTool
+from bokeh.layouts import column, row, Spacer
+from bokeh.models import CustomJS, Slider, RadioButtonGroup, TextInput, Button, MultiChoice
+from bokeh.models import BoxAnnotation, PreText, Range1d, LinearAxis, Span, HoverTool, DataTable, TableColumn
 from bokeh.events import SelectionGeometry
 from bokeh.plotting import ColumnDataSource, figure, show
 
@@ -26,7 +27,7 @@ import asyncio
 import websockets
 
 def __build_data(data):
-"""
+    """
     This function takes in the data array that defines containing the residual and total flu information
     and builds a convenient dictionary array.
 
@@ -42,22 +43,22 @@ def __build_data(data):
     Todo:
         * Add support for other array indexs that aren't currenlty used as well as polarization.
         * You have to also use ``sphinx.ext.todo`` extension
-"""
+    """
 
-  chan = data[5,:]
-  iteration = data[0,:]
-  residual = data[1,:]
-  flux = data[2,:]
+    chan = data[5,:]
+    iteration = data[0,:]
+    residual = data[1,:]
+    flux = data[2,:]
 
-  data_dict = []
-  for i in range(int(chan.max())):
-    data_dict.append({
-      'iteration':iteration[chan==i],
-      'residual':residual[chan==i],
-      'flux':flux[chan==i]
-  }) 
+    data_dict = []
+    for i in range(int(chan.max())):
+        data_dict.append({
+        'iteration':iteration[chan==i],
+        'residual':residual[chan==i],
+        'flux':flux[chan==i]
+    }) 
   
-  return data_dict
+    return data_dict
 
 img = 'g35.03_II_nh3_11.hline.image'
 
@@ -210,6 +211,65 @@ jscode = """
     box[%r] = cb_obj.end
 """
 
+# TClean Controls
+vis = TextInput(
+    value="select ms file ...", 
+    title="Vis", 
+    width=190)
+
+image_name = TextInput(
+    value="output file name ...", 
+    title="Imagename", 
+    width=190)
+
+imsize = TextInput(
+    value="100", 
+    title="Imsize", 
+    width=120)
+
+cell = TextInput(
+    value="8.0arcsec", 
+    title="Cell", 
+    width=120)
+
+specmode = TextInput(
+    value="cube", 
+    title="Specmode", 
+    width=120)
+
+start = TextInput(
+    value="1.0GHz", 
+    title="Start", 
+    width=120)
+
+width = TextInput(
+    value="0.1GHz", 
+    title="Width",
+    width=120)
+
+number_chan = TextInput(
+    value="10", 
+    title="Number of channels", 
+    width=120)
+
+OPTIONS = [('I', 'I'), ('Q', 'Q'), ('U', 'U'), ('V', 'V')]
+stokes = MultiChoice(
+    value=["I"], 
+    title="Stokes", 
+    options=OPTIONS, 
+    width=360)
+
+deconvolver = TextInput(
+    value="hogbom", 
+    title="Deconvolver", 
+    width=120)
+
+gain = TextInput(
+    value="0.1", 
+    title="Gain", 
+    width=120)
+
+
 # Button
 play_button = ICleanButton(
     label="", 
@@ -246,33 +306,62 @@ pause_button = ICleanButton(
     margin=(5,1,5,1), 
     icon=SVGIcon(icon_name="pause"))
 
-text_input_iter = TextInput(title="Iterations", value="1", width=120)
-text_input_cycles = TextInput(title="Cycles", value="1", width=120)
-text_input_threshold = TextInput(title="Threshold", value="0.5", width=120)
+text_input_iter = TextInput(
+    title="Iterations", 
+    value="1", 
+    width=90)
 
-mask = PreText(text='', width=380)
+text_input_cycles = TextInput(
+    title="Cycles", 
+    value="1", 
+    width=90)
+
+text_input_threshold = TextInput(
+    title="Threshold", 
+    value="0.1Jy", 
+    width=90)
+
+text_cycle_factor = TextInput(
+    value="20", 
+    title="Cycle factor", 
+    width=90)
+
+coordinates = ColumnDataSource({
+    'coordinates': ['x0', 'x1', 'y0', 'y1'],
+    'values':[0, 0, 0, 0]
+})
+
+columns = [
+        TableColumn(field="coordinates", title="Coordinates"),
+        TableColumn(field="values", title="Values"),
+    ]
+mask = DataTable(source=coordinates, columns=columns, width=380, height=300)
 
 image_figure.js_on_event(
     SelectionGeometry, 
     CustomJS(args=dict(
         source=source, 
         box=box, 
-        mask=mask), 
+        mask=coordinates), 
         code="""
-            const geometry = cb_obj['geometry']
-            const data = source.data
-            console.log(geometry)
+            const geometry = cb_obj['geometry'];
+            const data = source.data;
+            console.log(geometry);
     
-            box['left'] = geometry['x0']
-            box['right'] = geometry['x1']
-            box['top'] = geometry['y0']
-            box['bottom'] = geometry['y1']   
+            box['left'] = geometry['x0'];
+            box['right'] = geometry['x1'];
+            box['top'] = geometry['y0'];
+            box['bottom'] = geometry['y1'];
 
-            mask.text = "Mask Coordinates: " + geometry['type'] 
-            + "\\n\\nX: " + geometry['x0'] + " " + geometry['x1'] 
-            + "\\nY: " + geometry['y0'] + " " + geometry['y1']
+            mask.data['values'][0] = geometry['x0']; 
+            mask.data['values'][1] = geometry['x1'];  
+            mask.data['values'][2] = geometry['y0'];
+            mask.data['values'][3] = geometry['y1'];
 
-            source.change.emit()
+            console.log(mask.data);
+
+            mask.change.emit();
+            source.change.emit();
         """))
 
 slider = ICleanSlider(
@@ -307,8 +396,18 @@ layout = row(
         row(
             text_input_iter,
             text_input_cycles,
+            text_cycle_factor,
             text_input_threshold),
-        slider, mask), 
+        slider, 
+        Spacer(width=380, height=30, sizing_mode='scale_width'),
+        row(vis, image_name),
+        Spacer(width=380, height=30, sizing_mode='scale_width'),
+        stokes,
+        row(imsize, cell, specmode),
+        row(specmode, start, width),            
+        row(deconvolver, number_chan, gain),
+        Spacer(width=380, height=30, sizing_mode='scale_width'),
+        mask), 
     row(image_figure, column( spectral_figure, converge_figure)))
 
 image_figure.add_layout(box)
