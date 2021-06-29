@@ -49,7 +49,7 @@ sfig.line( x='x', y='y', source=spectra )
 sfig.grid.grid_line_width = 0.5
 
 hover_tool = HoverTool(callback=pos_cb)
-slider = Slider(start=0, end=shape[-1]-1, value=87, step=1, title="Channel")
+slider = Slider(start=0, end=shape[-1]-1, value=0, step=1, title="Channel")
 callback = CustomJS( args=dict( source=source, slider=slider ),
                      code="""source.channel(slider.value)""" )
 slider.js_on_change('value', callback)

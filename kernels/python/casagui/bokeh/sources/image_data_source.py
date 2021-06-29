@@ -53,5 +53,5 @@ class ImageDataSource(ColumnDataSource):
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
-        self.data = { 'd': [ self.image_source.channel( [0,87] ) ] }
+        self.data = { 'd': [ self.image_source.channel( [0,0] ) ] }
 
