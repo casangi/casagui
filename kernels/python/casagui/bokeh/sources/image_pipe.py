@@ -45,6 +45,12 @@ class ImagePipe(DataSource):
     or CNGI imge to be opened once and shared among multiple Bokeh plots,
     for example ploting an image channel and a plot of a spectra from the
     image cube.
+
+    Attributes
+    ----------
+    address: tuple of string and int
+        the string is the IP address for the network that should be used and the
+        integer is the port number, see ``casagui.utils.find_ws_address``
     """
     __im_path = None
     __im = None
