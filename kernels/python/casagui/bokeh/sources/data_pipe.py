@@ -40,6 +40,20 @@ import json
 import numpy as np
 
 class DataPipe(DataSource):
+    """This class allows for communication between Python and the JavaScript implementation
+    running in a browser. It allows Python code to send a message to JavaScript and register
+    a callback which will receive the result. JavaScript code can do the same to request
+    information from Python. Generally messages are expected to be dictionaries in the
+    Python domain and objects in the JavaScript domain. UUIDs are used to keep messages in
+    sync, and messages sent with the same UUID are queued until the currently pending
+    message reply is recieved. A class can use multipe UUIDs to control queuing behavior.
+
+    Attributes
+    ----------
+    address: tuple of string and int
+        the string is the IP address for the network that should be used and the
+        integer is the port number, see ``casagui.utils.find_ws_address``
+    """
 
     address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
 
@@ -90,14 +104,38 @@ class DataPipe(DataSource):
             return None
 
     def register( self, ident, callback ):
-        ## register callback for requests from javascript -> python
-        ## callback will be called for each arriving javascript request
+        """Register a callback to handle all requests coming from JavaScript. The
+        callback will be called whenever a request arrives.
+
+        Parameters
+        ----------
+        ident: string
+            UUID which is associated with the messages that should be delivered
+            to this callback
+        callback: (string) => dictionary
+            Callback which receives the message from Python as its sole parameter.
+            The return value of this callback is delivered to the JavaScript code
+            as the ''reply'' to to JavaScript in response to the ''request'' contained
+            in the message.
+        """
         with self.__lock:
             self.__incoming_callbacks[ident] = callback
 
     async def send( self, ident, message, callback ):
-        ## send new message from python -> javascript
-        ## callback will be called with the result
+        """Send a `message` to JavaScript identified by `ident`. Once the reply is
+        received, the `callback` will be called with the reply message.
+
+        Parameters
+        ----------
+        ident: string
+            UUID to associate with this message. It is used to keep track of the callback
+            that should be called when the reply is received.
+        message: dictionary
+            This dictionary contains the request for the JavaScript code.
+        callback: (string) => void
+            Callback which receives the message that JavaScript generates in response to
+            the request contained in the `message` parameter.
+        """
         with self.__lock:
             if self.__websocket is not None:
                 msg = { 'id': ident, 'message': pack_arrays(message), 'direction': 'p2j' }
@@ -114,6 +152,15 @@ class DataPipe(DataSource):
                         await self.__websocket.send(json.dumps( msg ))
 
     async def process_messages( self, websocket, path ):
+        """Process messages related to image display updates.
+
+        Parameters
+        ----------
+        websocket: websocket object
+            Websocket serve function passes in the websocket object to use.
+        path:
+            Websocket serve provides a second parameter.
+        """
         count = 1
         try:
             self.__websocket = websocket
