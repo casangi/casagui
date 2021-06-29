@@ -17,7 +17,7 @@ from casagui.bokeh.components.slider.iclean_slider import ICleanSlider
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
 from casatools import image
-from casatasks import tclean
+from casatasks import tclean, imstat
 
 from casagui.utils import find_ws_address
 
@@ -61,10 +61,11 @@ def __build_data(data):
     return data_dict
 
 img = 'g35.03_II_nh3_11.hline.image'
+output_image = 'test'
 
 rec = tclean(
     vis='refim_point_withline.ms', 
-    imagename='test', 
+    imagename=output_image, 
     imsize=512, 
     cell='12.0arcsec', 
     specmode='cube', 
@@ -80,12 +81,12 @@ rec = tclean(
     interactive=0)
 
 
-pipe = ImagePipe( image=img, address=find_ws_address( ) )
-source = ImageDataSource( image_source=pipe )
-spectra = SpectraDataSource( image_source=pipe )
+pipe = ImagePipe(image=img, address=find_ws_address())
+source = ImageDataSource(image_source=pipe)
+spectra = SpectraDataSource(image_source=pipe)
 shape = pipe.shape()
 
-pos_cb = CustomJS( args=dict(spectra=spectra),
+pos_cb = CustomJS(args=dict(spectra=spectra),
                    code = """var geometry = cb_data['geometry'];
                              var x_pos = Math.floor(geometry.x);
                              var y_pos = Math.floor(geometry.y);
@@ -95,10 +96,10 @@ pos_cb = CustomJS( args=dict(spectra=spectra),
 hover_tool = HoverTool(callback=pos_cb)
 
 spectral_figure = figure(
-    plot_height=150, 
+    plot_height=200, 
     plot_width=650, 
     title=None, 
-    tools=[ ])
+    tools=[])
 
 spectral_figure.x_range.range_padding = spectral_figure.y_range.range_padding = 0
 spectral_figure.line(
@@ -194,8 +195,8 @@ image_figure.image(
 
 image_figure.grid.grid_line_width = 0.5
 
-image_figure.plot_height = 800
-image_figure.plot_width = 800
+image_figure.plot_height = 600
+image_figure.plot_width = 600
 
 box = BoxAnnotation(
     left=0, 
@@ -337,6 +338,40 @@ columns = [
     ]
 mask = DataTable(source=coordinates, columns=columns, width=380, height=300)
 
+image_stats = imstat(imagename=img)
+
+stats = ColumnDataSource({
+    'statistics': [
+        'image', 
+        'npoints', 
+        'sum', 
+        'flux', 
+        'mean', 
+        'stdev', 
+        'min', 
+        'max', 
+        'rms'
+    ],
+    'values': [
+        img, 
+        image_stats['npts'][0], 
+        image_stats['sum'][0],
+        image_stats['flux'][0],
+        image_stats['mean'][0],
+        image_stats['sigma'][0],
+        image_stats['min'][0],
+        image_stats['max'][0],
+        image_stats['rms'][0],
+    ]
+})
+
+stats_column = [
+    TableColumn(field='statistics', title='Statistics'),
+    TableColumn(field='values', title='Values'),
+]
+
+stats_table = DataTable(source=stats, columns=stats_column, width=580, height=200)
+
 image_figure.js_on_event(
     SelectionGeometry, 
     CustomJS(args=dict(
@@ -406,13 +441,27 @@ layout = row(
         row(imsize, cell, specmode),
         row(specmode, start, width),            
         row(deconvolver, number_chan, gain),
-        Spacer(width=380, height=30, sizing_mode='scale_width'),
+        Spacer(width=380, height=70, sizing_mode='scale_width'),
         mask), 
-    row(image_figure, column( spectral_figure, converge_figure)))
+    row(
+        column(
+            image_figure, 
+            stats_table
+        ), 
+        column(
+            spectral_figure, 
+            converge_figure
+        )
+    ))
 
 image_figure.add_layout(box)
 show(layout)
 
-start_server = websockets.serve( pipe.process_messages, pipe.address[0], pipe.address[1] )
-asyncio.get_event_loop().run_until_complete(start_server)
-asyncio.get_event_loop().run_forever()
+try:
+    start_server = websockets.serve( pipe.process_messages, pipe.address[0], pipe.address[1] )
+    asyncio.get_event_loop().run_until_complete(start_server)
+    asyncio.get_event_loop().run_forever()
+
+except KeyboardInterrupt:
+    print('\nInterrupt received, shutting down ...')
+    os.system('rm -rf {output_image}.* *.html *.log'.format(output_image=output_image))
