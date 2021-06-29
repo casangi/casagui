@@ -2,7 +2,7 @@ import os
 from uuid import uuid4
 from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
-initialize_bokeh( )                                       ### fetch from https://casa.nrao.edu/
+initialize_bokeh(dev=2)                                       ### fetch from https://casa.nrao.edu/
 from bokeh.plotting import ColumnDataSource
 from casagui.bokeh.sources import DataPipe
 from casagui.utils import find_ws_address

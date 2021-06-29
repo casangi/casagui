@@ -28,7 +28,23 @@
 import numpy as np
 from bokeh.util.serialization import transform_column_source_data
 
+
 def pack_arrays( val ):
+    """Convert `numpy` N dimensional arrays stored within a dictionary to
+    a format that can be converted into the multi-dimensional arrays that
+    are usable for Bokeh data.
+
+    Parameters
+    ----------
+    val: value
+
+    Returns
+    -------
+    value
+        return value is identical to `val` parameter except that any
+        N dimensional `numpy` arrays are converted to Bokeh compatible
+        format
+    """
     if isinstance( val, dict ):
         result = { }
         for k, v in val.items( ):

@@ -29,7 +29,7 @@ from bokeh import resources
 from ..utils import path_to_url
 from ..resources import bokeh_version, version
 
-def initialize_bokeh( libs=None ):
+def initialize_bokeh( libs=None, dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
     The ``casaguijs`` extensions for Bokeh are built into a stand-alone
@@ -45,14 +45,13 @@ def initialize_bokeh( libs=None ):
         javascript library to load could be a local path, a URL or None.
         None is the default in which case it loads the published library
         for the current version of ``casaguijs`` and ``bokeh``
+    dev: int, optional
+        Chrome caches the javascript files. This parameter allows for
+        specifying `dev` allows for including a development version
+        for incremental updates to JavaScript from website.
     """
 
-    ###
-    ### Chrome caches the javascript files. The `dev_num` is to allow for incremental
-    ### updates during development.
-    ###
-    dev_num = 2
-    casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s.%d-b%s.min.js" % (version,version,dev_num,'.'.join(bokeh_version.split('.')[0:2])) ] if libs is None else \
+    casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s.%d-b%s.min.js" % (version,version,dev,'.'.join(bokeh_version.split('.')[0:2])) ] if libs is None else \
         [ libs ] if type(libs) == str else libs
     casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
     original_func = resources._get_cdn_urls
