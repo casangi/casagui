@@ -27,8 +27,9 @@
 ########################################################################3
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Tuple, String, Int
+
+from ..utils import pack_arrays
 
 import inspect
 import threading
@@ -37,17 +38,6 @@ import websockets
 import json
 
 import numpy as np
-
-def pack_arrays( val ):
-    if isinstance( val, dict ):
-        result = { }
-        for k, v in val.items( ):
-            result[k] = pack_arrays(v)
-        return result
-    elif isinstance( val, np.ndarray ):
-        return transform_column_source_data(val)
-    else:
-        return val
 
 class DataPipe(DataSource):
 
