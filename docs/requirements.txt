@@ -2,3 +2,4 @@ casatools
 bokeh
 websockets
 plotly
+pandas
