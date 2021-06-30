@@ -86,10 +86,10 @@ cont_id = str(uuid4())
 
 data_pipe = DataPipe(address=find_ws_address())
 
-pipe = ImagePipe(image=img, address=find_ws_address())
-source = ImageDataSource(image_source=pipe)
-spectra = SpectraDataSource(image_source=pipe)
-shape = pipe.shape()
+image_pipe = ImagePipe(image=img, address=find_ws_address())
+source = ImageDataSource(image_source=image_pipe)
+spectra = SpectraDataSource(image_source=image_pipe)
+shape = image_pipe.shape()
 
 pos_cb = CustomJS(args=dict(spectra=spectra),
                    code = """var geometry = cb_data['geometry'];
@@ -393,10 +393,10 @@ image_figure.js_on_event(
             box['top'] = geometry['y0'];
             box['bottom'] = geometry['y1'];
 
-            mask.data['values'][0] = geometry['x0']; 
-            mask.data['values'][1] = geometry['x1'];  
-            mask.data['values'][2] = geometry['y0'];
-            mask.data['values'][3] = geometry['y1'];
+            mask.data['values'][0] = Math.floor(geometry['x0']); 
+            mask.data['values'][1] = Math.floor(geometry['x1']);  
+            mask.data['values'][2] = Math.floor(geometry['y0']);
+            mask.data['values'][3] = Math.floor(geometry['y1']);
 
             console.log(mask.data);
 
@@ -463,8 +463,12 @@ image_figure.add_layout(box)
 show(layout)
 
 try:
-    start_server = websockets.serve( pipe.process_messages, pipe.address[0], pipe.address[1] )
-    asyncio.get_event_loop().run_until_complete(start_server)
+    async def async_loop( f1, f2 ):
+        res = await asyncio.gather(  f1, f2 )
+
+    image_server = websockets.serve( image_pipe.process_messages, image_pipe.address[0], image_pipe.address[1] )
+    data_server = websockets.serve( data_pipe.process_messages, data_pipe.address[0], data_pipe.address[1] )
+    asyncio.get_event_loop().run_until_complete(async_loop(data_server, image_server))
     asyncio.get_event_loop().run_forever()
 
 except KeyboardInterrupt:
