@@ -132,7 +132,7 @@ converge_figure = figure(
 converge_figure.extra_y_ranges = {
     'flux': Range1d(
         converge_source.data['flux'].min()*0.5,
-        converge_source.data['flux'].max()*2
+        converge_source.data['flux'].max()*1.5
     )
 }
 converge_figure.add_layout(LinearAxis(y_range_name='flux', axis_label='Total Flux'), 'right')
@@ -416,11 +416,15 @@ callback = CustomJS(
     args=dict(
         source=source,
         converge_source=converge_source,
-        minor_converge_dict=minor_converge_dict, 
+        minor_converge_dict=minor_converge_dict,
+        figure=converge_figure, 
         slider=slider), 
     code="""
         source.channel(slider.value);
         converge_source.data = minor_converge_dict[slider.value];
+        
+        figure.extra_y_ranges['flux'].end = 1.5*Math.max(...converge_source.data['flux'])
+        figure.extra_y_ranges['flux'].start = 0.5*Math.min(...converge_source.data['flux'])
     """)
 
 slider.js_on_change('value', callback)
