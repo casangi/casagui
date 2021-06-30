@@ -1,4 +1,3 @@
-Sphinx==3.4.3
 casadata
 casatools
 bokeh
