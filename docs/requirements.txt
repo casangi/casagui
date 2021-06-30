@@ -3,3 +3,4 @@ bokeh
 websockets
 plotly
 pandas
+numpy
