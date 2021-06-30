@@ -6,6 +6,7 @@ Subpackages
 
 .. toctree::
    :maxdepth: 6
+
    casagui.bokeh
 
 Submodules
