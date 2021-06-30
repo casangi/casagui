@@ -1,3 +1,4 @@
+casadata
 casatools
 bokeh
 websockets
