@@ -2,6 +2,9 @@
 
 CASA GUI Desktop application.
 
+This is a **pre-alpha** application. It is *not* useful for external users, and all
+applications being built with it are currently in various phases of *prototyping*.
+
 ## Installation
 
 Developers can build and run casagui with:

@@ -1,3 +1,5 @@
+from casatools import image
+
 def get_world_coordinates(ia):
     """
     .. todo::

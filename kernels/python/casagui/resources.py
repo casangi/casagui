@@ -25,5 +25,4 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################3
-from bokeh.resources import __version__ as bokeh_version
 version = "0.0.1"

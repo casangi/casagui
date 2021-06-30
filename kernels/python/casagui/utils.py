@@ -29,7 +29,7 @@ from socket import socket
 from os import path as __path
 
 def path_to_url( path ):
-    """Convert a single path to a URL.
+    """Convert a single filesystem path to a URL.
 
     If the string specified in the ``path`` parameter exists. It is turned into a
     fully qualified path and converted to a URL and returned. If ``path`` does not

@@ -27,7 +27,8 @@
 ########################################################################3
 from bokeh import resources
 from ..utils import path_to_url
-from ..resources import bokeh_version, version
+from ..resources import version
+from . import bokeh_version
 
 def initialize_bokeh( libs=None, dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.

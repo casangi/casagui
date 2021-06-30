@@ -31,7 +31,7 @@ from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Instance
-from .image_pipe import ImagePipe
+from . import ImagePipe
 
 import json
 
