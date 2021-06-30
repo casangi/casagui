@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import bokeh
+from uuid import uuid4
 
 from bokeh.layouts import column, row, Spacer
 from bokeh.models import CustomJS, Slider, RadioButtonGroup, TextInput, Button, MultiChoice
@@ -11,7 +12,7 @@ from bokeh.plotting import ColumnDataSource, figure, show
 from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
 initialize_bokeh( )                                           ### fetch from https://casa.nrao.edu/
-from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe
+from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.components.button.iclean_button import ICleanButton
 from casagui.bokeh.components.slider.iclean_slider import ICleanSlider
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
@@ -60,7 +61,8 @@ def __build_data(data):
   
     return data_dict
 
-img = 'g35.03_II_nh3_11.hline.image'
+#img = 'g35.03_II_nh3_11.hline.image'
+img = 'test.image'
 output_image = 'test'
 
 rec = tclean(
@@ -80,6 +82,9 @@ rec = tclean(
     scales=[0,3,10], 
     interactive=0)
 
+cont_id = str(uuid4())
+
+data_pipe = DataPipe(address=find_ws_address())
 
 pipe = ImagePipe(image=img, address=find_ws_address())
 source = ImageDataSource(image_source=pipe)
