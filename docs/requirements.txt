@@ -1,0 +1,7 @@
+casadata
+casatools
+bokeh
+websockets
+plotly
+pandas
+numpy
