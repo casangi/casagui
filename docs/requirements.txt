@@ -1,4 +1,4 @@
 casatools
 bokeh
 websockets
-
+plotly
