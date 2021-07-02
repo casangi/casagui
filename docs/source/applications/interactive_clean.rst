@@ -37,7 +37,6 @@ prototyped a GUI that will go beyond what is currently possible with current
 implementations of interactive clean, as show in this figure:
 
 .. image:: _static/iclean_prototype_gui.png
-           :align: left
            :width: 800px
 
 The interactive clean application has three main panel groups: control group, configuration group,
