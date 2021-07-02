@@ -49,9 +49,10 @@ include that allows the user to cycle through the visualization for each channel
 responsive manner.
 
 The configuration panel allows the user to set the minimal input parameters to `tclean` as well as
-displaying information about the image cube being used.
+displaying information about the image cube being used. In the future there are plans to add an
+advanced option to allow the user to access all of the tclean paramenters.
 
-the visualization panels display the the current .image file as well as any masks that may be applied.
+The visualization panels display the the current .image file as well as any masks that may be applied.
 For each `tclean` cycle information on the residual and total flux are displayed as well as histogram
 representing the spectral information at the current position when mousing over the image. All three
 displays are updated for each finished cycle. As mentioned previously the display for each channel can
