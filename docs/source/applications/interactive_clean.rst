@@ -40,3 +40,21 @@ implementations of interactive clean, as show in this figure:
            :align: left
            :width: 800px
 
+The interactive clean application has three main panel groups: control group, configuration group,
+and visualization group.  The control group provides interactive control of `tclean` allowing the
+user to step through the `tclean` process at the desired step resolution. Using the control panel,
+the user has options such `play`, `pause`, `step`, or `stop` as well as the ability to set properties
+such as the number of cycles , the interations, and the threshold value to use. A slider is also
+include that allows the user to cycle through the visualization for each channel in a smooth,
+responsive manner.
+
+The configuration panel allows the user to set the minimal input parameters to `tclean` as well as
+displaying information about the image cube being used.
+
+the visualization panels display the the current .image file as well as any masks that may be applied.
+For each `tclean` cycle information on the residual and total flux are displayed as well as histogram
+representing the spectral information at the current position when mousing over the image. All three
+displays are updated for each finished cycle. As mentioned previously the display for each channel can
+be accessed using the controls panel slider. There will be an option to scan and display different as
+well polarization in a future prototype.
+
