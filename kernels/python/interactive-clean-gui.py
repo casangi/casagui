@@ -27,6 +27,28 @@ import tarfile
 import asyncio
 import websockets
 
+##
+## demo measurement set to use
+##
+ms_path = 'refim_point_withline.ms'
+##
+## were to fetch the demo measurement set
+##
+ms_url = "https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz"
+##
+## output image file name
+##
+img = 'test.image'
+##
+## output image basename
+##
+output_image = 'test'
+
+if not os.path.isdir(ms_path):
+    tstream = urllib.request.urlopen(ms_url)
+    tar = tarfile.open(fileobj=tstream, mode="r:gz")
+    tar.extractall()
+
 def __build_data(data):
     """
     This function takes in the data array that defines containing the residual and total flu information
@@ -61,12 +83,9 @@ def __build_data(data):
   
     return data_dict
 
-#img = 'g35.03_II_nh3_11.hline.image'
-img = 'test.image'
-output_image = 'test'
 
 rec = tclean(
-    vis='refim_point_withline.ms', 
+    vis=ms_path,
     imagename=output_image, 
     imsize=512, 
     cell='12.0arcsec', 
