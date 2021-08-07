@@ -54,7 +54,7 @@ class gclean:
         self._niter = niter
         self._cyclefactor = cyclefactor
         self._scales = scales
-        self._howmany = 4
+        self._howmany = 4 # <<<---------<<<<<< arbitray arbitrary limit for debugging
         if len(list(filter(lambda f: os.path.isdir(f) and f.startswith(self._imagename + '.'), os.listdir( os.curdir )))) > 0:
             raise RuntimeError("image files already exist")
         self._convergence_rec = None        
