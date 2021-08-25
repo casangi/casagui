@@ -28,6 +28,30 @@
 from socket import socket
 from os import path as __path
 
+def static_vars(**kwargs):
+    """Initialize static function variables to for use within a function.
+
+    This function is used as a decorator which allows for the initialization of
+    static local variables for use within a function. It is used like:
+
+            @static_vars(counter=0)
+            def foo():
+                foo.counter += 1
+                print "Counter is %d" % foo.counter
+
+    This is used from:
+    https://stackoverflow.com/questions/279561/what-is-the-python-equivalent-of-static-variables-inside-a-function?rq=1
+
+    Parameters
+    ----------
+    Initialized static local variables.
+    """
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
 def path_to_url( path ):
     """Convert a single filesystem path to a URL.
 

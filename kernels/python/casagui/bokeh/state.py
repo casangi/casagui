@@ -29,7 +29,9 @@ from bokeh import resources
 from ..utils import path_to_url
 from ..resources import version
 from . import bokeh_version
+from casagui.utils import static_vars
 
+@static_vars(initialized=False)
 def initialize_bokeh( libs=None, dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
@@ -51,6 +53,9 @@ def initialize_bokeh( libs=None, dev=0 ):
         specifying `dev` allows for including a development version
         for incremental updates to JavaScript from website.
     """
+    if initialize_bokeh.initialized:
+        ### only initialize once...
+        return
 
     casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s.%d-b%s.min.js" % (version,version,dev,'.'.join(bokeh_version.split('.')[0:2])) ] if libs is None else \
         [ libs ] if type(libs) == str else libs
@@ -66,3 +71,4 @@ def initialize_bokeh( libs=None, dev=0 ):
         result["urls"] = get_urls
         return result
     resources._get_cdn_urls = __get_cdn_urls
+    initialize_bokeh.initialized = True

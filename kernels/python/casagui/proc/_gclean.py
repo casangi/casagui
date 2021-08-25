@@ -72,7 +72,7 @@ class gclean:
                 self._convergence_rec = _tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
                                                  specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
                                                  start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
-                                                 niter=0, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0 )
+                                                 niter=1, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0, gain=0.000001 )
                 self._convergence_rec['cleanstate'] = 'dirty'
             else:
 
