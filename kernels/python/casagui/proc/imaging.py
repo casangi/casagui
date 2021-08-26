@@ -10,6 +10,7 @@ from bokeh.layouts import column, row, Spacer
 from bokeh.events import SelectionGeometry
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.models import CustomJS, TextInput, MultiChoice
+from bokeh.models import HoverTool, Range1d, LinearAxis, Span, BoxAnnotation, TableColumn, DataTable
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.components.slider.iclean_slider import ICleanSlider
 from casagui.bokeh.components.button.iclean_button import ICleanButton
@@ -87,9 +88,6 @@ class iclean:
             self._pipe['image'] = ImagePipe(image=self._image_path, address=find_ws_address( ))
 
     def _launch_gui( self ):
-        from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
-        from bokeh.models import BoxAnnotation, PreText, Range1d, LinearAxis, Span, HoverTool, DataTable, TableColumn
-        from casagui.utils import find_ws_address
 
         self._init_pipes( )
         self._image_source = ImageDataSource(image_source=self._pipe['image'])
