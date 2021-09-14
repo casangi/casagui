@@ -2,8 +2,10 @@ from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
 initialize_bokeh( )                                           ### fetch from https://casa.nrao.edu/
 
+import time
 import asyncio
 import websockets
+from uuid import uuid4
 from casatasks import imstat
 from casagui.utils import find_ws_address
 from bokeh.layouts import column, row, Spacer
@@ -12,8 +14,10 @@ from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.models import CustomJS, TextInput, MultiChoice
 from bokeh.models import HoverTool, Range1d, LinearAxis, Span, BoxAnnotation, TableColumn, DataTable
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
-from casagui.bokeh.components.slider.iclean_slider import ICleanSlider
-from casagui.bokeh.components.button.iclean_button import ICleanButton
+from bokeh.models import Slider, Button
+from bokeh.core.has_props import HasProps
+from bokeh.colors import HSL, RGB
+from bokeh.colors import Color
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
 from ._gclean import gclean as _gclean
@@ -21,7 +25,6 @@ from ._gclean import gclean as _gclean
 class iclean:
     '''iclean(...) implements interactive clean it depends on asyncio
     '''
-
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
                   niter=0, cyclefactor=1.0, scales=[] ):
@@ -33,6 +36,7 @@ class iclean:
         ###
         ### clean generator
         ###
+        self._clean_count = 0
         self._clean = _gclean( vis, imagename, imsize, cell, specmode, nchan, start, width, interpolation,
                                gridder, pblimit, deconvolver, niter, cyclefactor, scales )
         self._convergence_rec = next(self._clean)
@@ -46,7 +50,6 @@ class iclean:
         self._hover = None
         self._cb = { }
         self._fig = { }
-
 
     def __build_data(self, data):
         """
@@ -183,10 +186,67 @@ class iclean:
         """
 
         # TClean Controls
-        self._control['vis'] = TextInput( value="select ms file ...",
-                                          title="Vis", width=190 )
-        self._control['image'] = TextInput( value="output file name ...",
-                                            title="Imagename", width=190 )
+        cwidth = 80
+        cheight = 50
+        self._control['clean'] = { }
+        self._control['clean']['continue'] = ( Button( label="", button_type="success", max_width=cwidth, max_height=cheight,
+                                                       icon=SVGIcon(icon_name="iclean-continue", size=3) ),
+                                               Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
+                                                       icon=SVGIcon(icon_name="iclean-continue", size=3) ) )
+        self._control['clean']['finish'] = ( Button( label="", button_type="primary", max_width=cwidth, max_height=cheight,
+                                                     icon=SVGIcon(icon_name="iclean-finish", size=3) ),
+                                             Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
+                                                     icon=SVGIcon(icon_name="iclean-finish", size=3) ) )
+        self._control['clean']['stop'] = ( Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
+                                                   icon=SVGIcon(icon_name="iclean-stop", size=3) ),
+                                           Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
+                                                   icon=SVGIcon(icon_name="iclean-stop", size=3) ) )
+
+        self._cb['clean'] = { }
+        for btn in "continue", 'finish', 'stop':
+            id = str(uuid4( ))
+            async def handle_event( msg, name=btn, id=id, self=self ):
+                print("received %s/%s event: %s" % (name,id,msg))
+                self._clean_count += 1
+                self._clean.update("cycle%03d" % self._clean_count)
+                #await asyncio.sleep(10)
+                result = await self._clean.__anext__( )
+                return dict( id=id, name=name, update=dict(state="update",convergence=result) )
+
+            print("%s: %s" % ( btn, id ) )
+            self._pipe['data'].register( id, handle_event )
+            self._control['clean'][btn][1].visible = False
+            self._cb['clean'][btn] = CustomJS( args=dict( btns=self._control['clean'], pressed=self._control['clean'][btn][0],
+                                                          pipe=self._pipe['data'], id=id, name=btn, img_src=self._image_source,
+                                                          spec_src=self._image_spectra ),
+                                               code='''function update_gui( msg ) {
+                                                           img_src.refresh( )
+                                                           spec_src.refresh( )
+                                                           for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                               btns[f][0].visible = true;
+                                                               btns[f][1].visible = false;
+                                                           }
+                                                       }
+                                                       if ( btns['continue'][0].visible ) {
+                                                           for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                               btns[f][0].visible = false;
+                                                               btns[f][1].visible = true;
+                                                           }
+                                                           // only send message for button that was pressed
+                                                           pipe.send( id,
+                                                                      { action: name, value: { a: 1, b: 2, c: 3 } },
+                                                                      update_gui )
+                                                       }''' )
+            self._control['clean'][btn][0].js_on_click( self._cb['clean'][btn] )
+
+        #### when hooked up to tclean, the wait button can stay disabled
+        #### so when tclean is ready for inputs the "input" button can be
+        #### made visible... also no need for the disabled button to have
+        #### a callback...
+        #self._control['clean']['continue'][1].disabled = True
+        self._control['clean']['continue'][1].js_on_click( self._cb['clean']['continue'] )
+        ###
+
 
         self._control['imsize'] = TextInput( value="100", title="Imsize", width=120 )
 
@@ -206,21 +266,6 @@ class iclean:
         self._control['deconvolver'] = TextInput( value="hogbom", title="Deconvolver", width=120 )
 
         self._control['gain'] = TextInput( value="0.1", title="Gain", width=120 )
-
-        # Button
-        self._button = { }
-        self._button['play'] = ICleanButton( label="", button_type="success", width=75, margin=(5,1,5,1),
-                                             icon=SVGIcon(icon_name="play") )
-        self._button['stop'] = ICleanButton( label="", button_type="danger", width=75, margin=(5,1,5,1),
-                                             icon=SVGIcon(icon_name="stop") )
-        self._button['forward'] = ICleanButton( label="", button_type="primary", width=75, margin=(5,1,5,1),
-                                                icon=SVGIcon(icon_name="step-forward") )
-
-        self._button['backward'] = ICleanButton( label="", button_type="primary", width=75, margin=(5,1,5,1),
-                                                 icon=SVGIcon(icon_name="step-backward") )
-
-        self._button['pause'] = ICleanButton( label="", button_type="warning", width=75, margin=(5,1,5,1),
-                                              icon=SVGIcon(icon_name="pause") )
 
         self._control['iter'] = TextInput( title="Iterations", value="1", width=90 )
         self._control['cycles'] = TextInput( title="Cycles", value="1", width=90 )
@@ -270,8 +315,8 @@ class iclean:
                                                           source.change.emit();
                                                   """ ) )
 
-        self._fig['slider'] = ICleanSlider( start=0, end=shape[-1]-1, value=0, step=1,
-                                            title="Channel", width=380 )
+        self._fig['slider'] = Slider( start=0, end=shape[-1]-1, value=0, step=1,
+                                      title="Channel", width=380 )
 
         callback = CustomJS( args=dict( source=self._image_source, converge_source=self._convergence_source,
                                         minor_converge_dict=minor_converge_dict,
@@ -285,23 +330,32 @@ class iclean:
 
         self._fig['slider'].js_on_change( 'value', callback )
 
+        self._control['goto'] = TextInput( title="goto channel", value="0", width=90 )
+
+        gtcb = CustomJS( args=dict( goto=self._control['goto'], slider=self._fig['slider'] ),
+                         code="""var v = parseInt(goto.value)
+                                 if ( v >= %d && v <= %d ) {
+                                     slider.value = v
+                                     goto.value = ""
+                                 }""" % (0,shape[-1]-1) )
+        self._control['goto'].js_on_change( 'value', gtcb )
+
         self._fig['layout'] = row(
                                    column(
-                                           row(
-                                                self._button['backward'],
-                                                self._button['play'],
-                                                self._button['pause'],
-                                                self._button['stop'],
-                                                self._button['forward'] ),
                                            row(
                                                 self._control['iter'],
                                                 self._control['cycles'],
                                                 self._control['cycle_factor'],
                                                 self._control['threshold'] ),
                                            self._fig['slider'],
-                                           Spacer( width=380, height=30, sizing_mode='scale_width' ),
-                                           row(self._control['vis'], self._control['image']),
-                                           Spacer(width=380, height=30, sizing_mode='scale_width'),
+                                           row( self._control['goto'],
+                                                column( self._control['clean']['continue'][0],
+                                                        self._control['clean']['continue'][1] ),
+                                                column( self._control['clean']['finish'][0],
+                                                        self._control['clean']['finish'][1] ),
+                                                column( self._control['clean']['stop'][0],
+                                                        self._control['clean']['stop'][1] ) ),
+                                           Spacer(width=380, height=15, sizing_mode='scale_width'),
                                            self._control['stokes'],
                                            row(self._control['imsize'], self._control['cell'], self._control['specmode']),
                                            row(self._control['specmode'], self._control['start'], self._control['width']),

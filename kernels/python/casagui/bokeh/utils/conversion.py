@@ -26,7 +26,7 @@
 #
 ########################################################################3
 import numpy as np
-from bokeh.util.serialization import transform_column_source_data
+from bokeh.util.serialization import transform_column_source_data, transform_array
 
 
 def pack_arrays( val ):
@@ -51,7 +51,6 @@ def pack_arrays( val ):
             result[k] = pack_arrays(v)
         return result
     elif isinstance( val, np.ndarray ):
-        return transform_column_source_data(val)
+        return transform_array(val,force_list=True)
     else:
         return val
-

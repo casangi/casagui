@@ -32,6 +32,11 @@ export class SpectraDataSource extends ColumnDataSource {
     spectra( r: number, d: number, s: number = 0 ): void {
         this.image_source.spectra( [r, d, s], (data: any) => this.data = data, this.imid )
     }
+    refresh( ): void {
+        // supply default index value because the ImagePipe will have no cached
+        // index values for this.imid if there have been no updates yet...
+        this.image_source.refresh( (data: any) => this.data = data, this.imid, [ 0, 0, 0 ] )
+    }
     static init_SpectraDataSource( ): void {
         this.define<SpectraDataSource.Props>(({ Ref }) => ({
             image_source: [ Ref(ImagePipe) ],

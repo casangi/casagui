@@ -182,8 +182,15 @@ class DataPipe(DataSource):
                         if msg['id'] not in self.__incoming_callbacks:
                             raise RuntimeError('incoming js request with no callback: %s' % msg)
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
-                        await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                 'message': pack_arrays(result),
-                                                                 'direction': msg['direction'] }))
+                        if inspect.isawaitable(result):
+                            await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                     #'message': pack_arrays(await result),
+                                                                     'message': pack_arrays(await result),
+                                                                     'direction': msg['direction'] }))
+                        else:
+                            result = cb(msg['message'])
+                            await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                     'message': pack_arrays(result),
+                                                                     'direction': msg['direction'] }))
         finally:
             self.__websocket = None

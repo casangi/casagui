@@ -12,6 +12,7 @@ export namespace ImagePipe {
         address: p.Property<[string,number]>
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         spectra: p.Property<( index: [number,number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
+        refresh: p.Property<( cb: (msg:{[key: string]: any}) => any, id: string, default_index: [number] ) => void>
     }
 }
 
@@ -23,6 +24,7 @@ export class ImagePipe extends DataSource {
     websocket: any
     queue: {[key: string]: any} = { }
     pending: {[key: string]: any} = { }
+    position: {[key: string]: any} = { }
 
     constructor(attrs?: Partial<ImagePipe.Attrs>) {
         super(attrs);
@@ -55,16 +57,17 @@ export class ImagePipe extends DataSource {
                     // 'message' here is generated in python and
                     // contains the requested slice of the image
                     let { id, message }: { id: string, message: any } = data
-                    let { cb }: { cb: (x: any) => any } = this.pending[id]
+                    let { cb, index }: { cb: (x: any) => any, index: [ number, ... [number]] } = this.pending[id]
                     delete this.pending[id]
                     if ( id in this.queue ) {
                         // send next message queued by 'id'
-                        let {cb, message} = this.queue[id]
+                        let {cb, message, index} = this.queue[id]
                         delete this.queue[id]
-                        this.pending[id] = { cb }
+                        this.pending[id] = { cb, index }
                         this.websocket.send(JSON.stringify(message))
                     }
                     // post message
+                    this.position[id] = { index }
                     cb( message )
                 } else {
                     console.log( `imagepipe received data without 'id' and/or 'message' field: ${data}` )
@@ -84,10 +87,10 @@ export class ImagePipe extends DataSource {
     channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
         let message = { action: 'channel', index, id }
         if ( id in this.pending ) {
-            this.queue[id] = { cb, message }
+            this.queue[id] = { cb, message, index }
         } else {
             this.websocket.send(JSON.stringify(message))
-            this.pending[id] = { cb }
+            this.pending[id] = { cb, index }
         }
     }
     // fetch spectra
@@ -96,10 +99,33 @@ export class ImagePipe extends DataSource {
     spectra( index: [number, number, number], cb: (msg:{[key: string]: any}) => any, id: string ) {
         let message = { action: 'spectra', index, id }
         if ( id in this.pending ) {
-            this.queue[id] = { cb, message }
+            this.queue[id] = { cb, message, index }
         } else {
             this.websocket.send(JSON.stringify(message))
-            this.pending[id] = { cb }
+            this.pending[id] = { cb, index }
+        }
+    }
+
+    refresh( cb: (msg:{[key: string]: any}) => any, id: string, default_index=[ ] as number[] ): void {
+        let { index } = id in this.position ? this.position[id] : { index: default_index }
+        if ( index.length === 2 ) {
+            // refreshing channel
+            let message = { action: 'channel', index, id }
+            if ( id in this.pending ) {
+                this.queue[id] = { cb, message, index }
+            } else {
+                this.websocket.send(JSON.stringify(message))
+                this.pending[id] = { cb, index }
+            }
+        } else if ( index.length === 3 ) {
+            // refreshing spectra
+            let message = { action: 'spectra', index, id }
+            if ( id in this.pending ) {
+                this.queue[id] = { cb, message, index }
+            } else {
+                this.websocket.send(JSON.stringify(message))
+                this.pending[id] = { cb, index }
+            }
         }
     }
 
