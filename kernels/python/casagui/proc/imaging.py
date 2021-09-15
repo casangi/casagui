@@ -25,9 +25,15 @@ from ._gclean import gclean as _gclean
 class iclean:
     '''iclean(...) implements interactive clean it depends on asyncio
     '''
+    def __stop( self ):
+        if self._image_server is not None and self._image_server.ws_server.loop.is_running( ):
+            self._image_server.ws_server.loop.stop( )
+        if self._data_server is not None and self._data_server.ws_server.loop.is_running( ):
+            self._data_server.ws_server.loop.stop( )
+
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
-                  niter=0, cyclefactor=1.0, scales=[] ):
+                  niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[] ):
         ###
         ### used by data pipe (websocket) initialization function
         ###
@@ -36,10 +42,20 @@ class iclean:
         ###
         ### clean generator
         ###
-        self._clean_count = 0
-        self._clean = _gclean( vis, imagename, imsize, cell, specmode, nchan, start, width, interpolation,
-                               gridder, pblimit, deconvolver, niter, cyclefactor, scales )
+        self._clean = _gclean( vis=vis, imagename=imagename, imsize=imsize, cell=cell, specmode=specmode,
+                               nchan=nchan, start=start, width=width, interpolation=interpolation,
+                               gridder=gridder, pblimit=pblimit, deconvolver=deconvolver, niter=niter,
+                               threshold=threshold, cycleniter=cycleniter, cyclefactor=cyclefactor,
+                               scales=scales )
         self._convergence_rec = next(self._clean)
+        ###
+        ### Initial Conditions
+        ###
+        self._params = { }
+        self._params['niter'] = niter
+        self._params['cycleniter'] = cycleniter
+        self._params['threshold'] = threshold
+        self._params['cyclefactor'] = cyclefactor
         ###
         ### GUI components
         ###
@@ -50,6 +66,14 @@ class iclean:
         self._hover = None
         self._cb = { }
         self._fig = { }
+
+        self._image_server = None
+        self._data_server = None
+
+        self._mode = 'interactive'         # interactive  =>  perform one step and wait for user
+                                           # finish       =>  perform step, update GUI, repeat
+                                           #                  until user presses stop or stop
+                                           #                  conditions reached
 
     def __build_data(self, data):
         """
@@ -189,42 +213,82 @@ class iclean:
         cwidth = 80
         cheight = 50
         self._control['clean'] = { }
-        self._control['clean']['continue'] = ( Button( label="", button_type="success", max_width=cwidth, max_height=cheight,
+        self._control['clean']['continue'] = ( Button( label="", max_width=cwidth, max_height=cheight,
                                                        icon=SVGIcon(icon_name="iclean-continue", size=3) ),
-                                               Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
-                                                       icon=SVGIcon(icon_name="iclean-continue", size=3) ) )
-        self._control['clean']['finish'] = ( Button( label="", button_type="primary", max_width=cwidth, max_height=cheight,
+                                               Button( label="", max_width=cwidth, max_height=cheight,
+                                                       icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
+                                               Button( label="", button_type='danger', max_width=cwidth, max_height=cheight,
+                                                       icon=SVGIcon(icon_name="iclean-dead", size=3) ) )
+        self._control['clean']['finish'] = ( Button( label="", max_width=cwidth, max_height=cheight,
                                                      icon=SVGIcon(icon_name="iclean-finish", size=3) ),
-                                             Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
-                                                     icon=SVGIcon(icon_name="iclean-finish", size=3) ) )
+                                             Button( label="", max_width=cwidth, max_height=cheight,
+                                                     icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
+                                             Button( label="", button_type='danger', max_width=cwidth, max_height=cheight,
+                                                     icon=SVGIcon(icon_name="iclean-dead", size=3) ) )
         self._control['clean']['stop'] = ( Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
                                                    icon=SVGIcon(icon_name="iclean-stop", size=3) ),
                                            Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
-                                                   icon=SVGIcon(icon_name="iclean-stop", size=3) ) )
+                                                   icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
+                                           Button( label="", button_type='danger', max_width=cwidth, max_height=cheight,
+                                                   icon=SVGIcon(icon_name="iclean-dead", size=3) ) )
+
+        self._control['iter'] = TextInput( title="Iterations", value="%s" % self._params['niter'], width=90 )
+        self._control['cycleniter'] = TextInput( title="Cycles", value="%s" % self._params['cycleniter'], width=90 )
+        self._control['threshold'] = TextInput( title="Threshold", value="%s" % self._params['threshold'], width=90 )
+        self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="Cycle factor", width=90 )
+
+        async def eh_interactive_continue( msg, self=self ):
+            self._clean.update(msg['value'])
+            result = await self._clean.__anext__( )
+            return dict( action="continue", mode=self._mode, update=dict(state="update",convergence=result) )
+
+        async def eh_interactive_stop( msg, self=self ):
+            self.__stop( )
+            return dict( action="stop", mode=self._mode, update=dict(state="update", convergence={ }) )
+
+        async def eh_stub( msg, self=self ):
+            print(">>>>>>>> in stub %s" % msg)
+            return dict( update=dict(state="update",convergence={ }) )
+
+        self._events = { }
+        self._events['interactive'] = { }
+        self._events['interactive']['continue'] = eh_interactive_continue
+        self._events['interactive']['stop'] = eh_interactive_stop
+        self._events['interactive']['finish'] = eh_stub
 
         self._cb['clean'] = { }
         for btn in "continue", 'finish', 'stop':
             id = str(uuid4( ))
             async def handle_event( msg, name=btn, id=id, self=self ):
-                print("received %s/%s event: %s" % (name,id,msg))
-                self._clean_count += 1
-                self._clean.update("cycle%03d" % self._clean_count)
-                #await asyncio.sleep(10)
-                result = await self._clean.__anext__( )
-                return dict( id=id, name=name, update=dict(state="update",convergence=result) )
+                if msg['action'] == 'continue':
+                    self._clean.update(msg['value'])
+                    result = await self._clean.__anext__( )
+                    return dict( id=id, action=name, update=dict(state="update",convergence=result) )
 
             print("%s: %s" % ( btn, id ) )
-            self._pipe['data'].register( id, handle_event )
+            self._pipe['data'].register( id, self._events['interactive'][btn] )
             self._control['clean'][btn][1].visible = False
+            self._control['clean'][btn][2].visible = False
             self._cb['clean'][btn] = CustomJS( args=dict( btns=self._control['clean'], pressed=self._control['clean'][btn][0],
-                                                          pipe=self._pipe['data'], id=id, name=btn, img_src=self._image_source,
-                                                          spec_src=self._image_spectra ),
+                                                          pipe=self._pipe['data'], id=id, action=btn, img_src=self._image_source,
+                                                          spec_src=self._image_spectra,
+                                                          niter=self._control['iter'], cycleniter=self._control['cycleniter'],
+                                                          threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor']
+                                                         ),
                                                code='''function update_gui( msg ) {
-                                                           img_src.refresh( )
-                                                           spec_src.refresh( )
-                                                           for ( let f of [ "continue", "finish", "stop" ] ) {
-                                                               btns[f][0].visible = true;
-                                                               btns[f][1].visible = false;
+                                                           if ( msg.action !== 'stop' ) {
+                                                               img_src.refresh( )
+                                                               spec_src.refresh( )
+                                                               for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                                   btns[f][0].visible = true;
+                                                                   btns[f][1].visible = false;
+                                                               }
+                                                           } else {
+                                                               for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                                   btns[f][0].visible = false;
+                                                                   btns[f][1].visible = false;
+                                                                   btns[f][2].visible = true;
+                                                               }
                                                            }
                                                        }
                                                        if ( btns['continue'][0].visible ) {
@@ -234,19 +298,13 @@ class iclean:
                                                            }
                                                            // only send message for button that was pressed
                                                            pipe.send( id,
-                                                                      { action: name, value: { a: 1, b: 2, c: 3 } },
+                                                                      { action,
+                                                                        value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value } },
                                                                       update_gui )
                                                        }''' )
+            self._control['clean'][btn][1].disabled = True
             self._control['clean'][btn][0].js_on_click( self._cb['clean'][btn] )
-
-        #### when hooked up to tclean, the wait button can stay disabled
-        #### so when tclean is ready for inputs the "input" button can be
-        #### made visible... also no need for the disabled button to have
-        #### a callback...
-        #self._control['clean']['continue'][1].disabled = True
-        self._control['clean']['continue'][1].js_on_click( self._cb['clean']['continue'] )
-        ###
-
 
         self._control['imsize'] = TextInput( value="100", title="Imsize", width=120 )
 
@@ -262,15 +320,11 @@ class iclean:
 
         OPTIONS = [('I', 'I'), ('Q', 'Q'), ('U', 'U'), ('V', 'V')]
         self._control['stokes'] = MultiChoice( value=["I"], title="Stokes", options=OPTIONS, width=360 )
+        self._control['stokes'].disabled = True   ### enable when switching stokes axes is working
 
         self._control['deconvolver'] = TextInput( value="hogbom", title="Deconvolver", width=120 )
 
         self._control['gain'] = TextInput( value="0.1", title="Gain", width=120 )
-
-        self._control['iter'] = TextInput( title="Iterations", value="1", width=90 )
-        self._control['cycles'] = TextInput( title="Cycles", value="1", width=90 )
-        self._control['threshold'] = TextInput( title="Threshold", value="0.1Jy", width=90 )
-        self._control['cycle_factor'] = TextInput( value="20", title="Cycle factor", width=90 )
 
         self._coordinates = ColumnDataSource( { 'coordinates': ['x0', 'x1', 'y0', 'y1'],
                                                 'values':[0, 0, 0, 0] } )
@@ -344,17 +398,20 @@ class iclean:
                                    column(
                                            row(
                                                 self._control['iter'],
-                                                self._control['cycles'],
+                                                self._control['cycleniter'],
                                                 self._control['cycle_factor'],
                                                 self._control['threshold'] ),
                                            self._fig['slider'],
                                            row( self._control['goto'],
                                                 column( self._control['clean']['continue'][0],
-                                                        self._control['clean']['continue'][1] ),
+                                                        self._control['clean']['continue'][1],
+                                                        self._control['clean']['continue'][2] ),
                                                 column( self._control['clean']['finish'][0],
-                                                        self._control['clean']['finish'][1] ),
+                                                        self._control['clean']['finish'][1],
+                                                        self._control['clean']['finish'][2] ),
                                                 column( self._control['clean']['stop'][0],
-                                                        self._control['clean']['stop'][1] ) ),
+                                                        self._control['clean']['stop'][1],
+                                                        self._control['clean']['stop'][2] ) ),
                                            Spacer(width=380, height=15, sizing_mode='scale_width'),
                                            self._control['stokes'],
                                            row(self._control['imsize'], self._control['cell'], self._control['specmode']),
@@ -376,12 +433,12 @@ class iclean:
 
     def _asyncio_loop( self ):
         async def async_loop( f1, f2 ):
-            return await asyncio.gather(  f1, f2 )
+            return await asyncio.gather( f1, f2 )
 
         self._init_pipes( )
-        image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
-        data_server = websockets.serve( self._pipe['data'].process_messages, self._pipe['data'].address[0], self._pipe['data'].address[1] )
-        return async_loop( data_server, image_server )
+        self._image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
+        self._data_server = websockets.serve( self._pipe['data'].process_messages, self._pipe['data'].address[0], self._pipe['data'].address[1] )
+        return async_loop( self._data_server, self._image_server )
 
     def show( self ):
         self._launch_gui( )

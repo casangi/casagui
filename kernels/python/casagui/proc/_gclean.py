@@ -10,7 +10,6 @@ def _tclean( *args, **kwargs ):
         parameters = arg_s + ", " + kw_s
     else:
         parameters = arg_s + kw_s
-    print( "tclean( %s )" % parameters  )
     return tclean( *args, **kwargs )
 
 class gclean:
@@ -36,9 +35,28 @@ class gclean:
               print(rec)
     '''
 
+    def update( self, msg ):
+        if 'niter' in msg:
+            try:
+                self._niter = int(msg['niter'])
+            except ValueError:
+                pass
+        if 'cycleniter' in msg:
+            try:
+                self._cycleniter = int(msg['cycleniter'])
+            except ValueError:
+                pass
+        if 'threshold' in msg:
+            self._threshold = msg['threshold']
+        if 'cyclefactor' in msg:
+            try:
+                self._cyclefactor = int(msg['cyclefactor'])
+            except ValueError:
+                pass
+
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
-                  niter=0, cyclefactor=1.0, scales=[] ):
+                  niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[] ):
         self._vis = vis
         self._imagename = imagename
         self._imsize = imsize
@@ -52,17 +70,16 @@ class gclean:
         self._pblimit = pblimit
         self._deconvolver = deconvolver
         self._niter = niter
+        self._threshold = threshold
+        self._cycleniter = cycleniter
         self._cyclefactor = cyclefactor
         self._scales = scales
-        self._howmany = 4 # <<<---------<<<<<< arbitray arbitrary limit for debugging
+
         if len(list(filter(lambda f: os.path.isdir(f) and f.startswith(self._imagename + '.'), os.listdir( os.curdir )))) > 0:
             raise RuntimeError("image files already exist")
-        self._convergence_rec = None        
+        self._convergence_rec = None
 
     def __next__( self ):
-        if self._howmany <= 0:
-            raise StopIteration
-        self._howmany -= 1
         if self._niter < 1:
             print("warning, nothing to run, niter == %s" % self._niter)
             return self._convergence_rec
@@ -75,14 +92,13 @@ class gclean:
                                                  niter=1, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0, gain=0.000001 )
                 self._convergence_rec['cleanstate'] = 'dirty'
             else:
-
                 self._convergence_rec = _tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
                                                  specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
                                                  start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
                                                  niter=self._niter, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0,
                                                  restart=True, calcpsf=False, calcres=False,
-                                                 cycleniter=self._niter, threshold=0, maxpsffraction=1, minpsffraction=0
-                                                 #, cyclefactor=0.01
+                                                 threshold=self._threshold, cycleniter=self._cycleniter,
+                                                 maxpsffraction=1, minpsffraction=0
                                                 )
             img = '%s.image' % self._imagename
             if os.path.exists( img ):
