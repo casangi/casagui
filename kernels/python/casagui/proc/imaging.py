@@ -269,9 +269,9 @@ class iclean:
             self._pipe['data'].register( id, self._events['interactive'][btn] )
             self._control['clean'][btn][1].visible = False
             self._control['clean'][btn][2].visible = False
-            self._cb['clean'][btn] = CustomJS( args=dict( btns=self._control['clean'], pressed=self._control['clean'][btn][0],
-                                                          pipe=self._pipe['data'], id=id, action=btn, img_src=self._image_source,
-                                                          spec_src=self._image_spectra,
+            self._cb['clean'][btn] = CustomJS( args=dict( btns=self._control['clean'],
+                                                          pipe=self._pipe['data'], id=id, action=btn,
+                                                          img_src=self._image_source, spec_src=self._image_spectra,
                                                           niter=self._control['iter'], cycleniter=self._control['cycleniter'],
                                                           threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor']
                                                          ),
