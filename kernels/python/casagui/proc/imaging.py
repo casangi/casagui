@@ -65,6 +65,7 @@ class iclean:
         self._image_spectra = None
         self._hover = None
         self._cb = { }
+        self._ids = { }
         self._fig = { }
 
         self._image_server = None
@@ -213,19 +214,19 @@ class iclean:
         cwidth = 80
         cheight = 50
         self._control['clean'] = { }
-        self._control['clean']['continue'] = ( Button( label="", max_width=cwidth, max_height=cheight,
+        self._control['clean']['continue'] = ( Button( label="", max_width=cwidth, max_height=cheight, name='continue',
                                                        icon=SVGIcon(icon_name="iclean-continue", size=3) ),
                                                Button( label="", max_width=cwidth, max_height=cheight,
                                                        icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
                                                Button( label="", button_type='danger', max_width=cwidth, max_height=cheight,
                                                        icon=SVGIcon(icon_name="iclean-dead", size=3) ) )
-        self._control['clean']['finish'] = ( Button( label="", max_width=cwidth, max_height=cheight,
+        self._control['clean']['finish'] = ( Button( label="", max_width=cwidth, max_height=cheight, name='finish',
                                                      icon=SVGIcon(icon_name="iclean-finish", size=3) ),
                                              Button( label="", max_width=cwidth, max_height=cheight,
                                                      icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
                                              Button( label="", button_type='danger', max_width=cwidth, max_height=cheight,
                                                      icon=SVGIcon(icon_name="iclean-dead", size=3) ) )
-        self._control['clean']['stop'] = ( Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
+        self._control['clean']['stop'] = ( Button( label="", button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
                                                    icon=SVGIcon(icon_name="iclean-stop", size=3) ),
                                            Button( label="", button_type="danger", max_width=cwidth, max_height=cheight,
                                                    icon=SVGIcon(icon_name="iclean-disabled", size=3) ),
@@ -256,55 +257,62 @@ class iclean:
         self._events['interactive']['stop'] = eh_interactive_stop
         self._events['interactive']['finish'] = eh_stub
 
-        self._cb['clean'] = { }
+        self._ids['clean'] = { }
         for btn in "continue", 'finish', 'stop':
-            id = str(uuid4( ))
             async def handle_event( msg, name=btn, id=id, self=self ):
                 if msg['action'] == 'continue':
                     self._clean.update(msg['value'])
                     result = await self._clean.__anext__( )
                     return dict( id=id, action=name, update=dict(state="update",convergence=result) )
 
-            print("%s: %s" % ( btn, id ) )
-            self._pipe['data'].register( id, self._events['interactive'][btn] )
+            self._ids['clean'][btn] = str(uuid4( ))
+            print("%s: %s" % ( btn, self._ids['clean'][btn] ) )
+            self._pipe['data'].register( self._ids['clean'][btn], self._events['interactive'][btn] )
             self._control['clean'][btn][1].visible = False
             self._control['clean'][btn][2].visible = False
-            self._cb['clean'][btn] = CustomJS( args=dict( btns=self._control['clean'],
-                                                          pipe=self._pipe['data'], id=id, action=btn,
-                                                          img_src=self._image_source, spec_src=self._image_spectra,
-                                                          niter=self._control['iter'], cycleniter=self._control['cycleniter'],
-                                                          threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor']
-                                                         ),
-                                               code='''function update_gui( msg ) {
-                                                           if ( msg.action !== 'stop' ) {
-                                                               img_src.refresh( )
-                                                               spec_src.refresh( )
-                                                               for ( let f of [ "continue", "finish", "stop" ] ) {
-                                                                   btns[f][0].visible = true;
-                                                                   btns[f][1].visible = false;
-                                                               }
-                                                           } else {
-                                                               for ( let f of [ "continue", "finish", "stop" ] ) {
-                                                                   btns[f][0].visible = false;
-                                                                   btns[f][1].visible = false;
-                                                                   btns[f][2].visible = true;
-                                                               }
-                                                           }
-                                                       }
-                                                       if ( btns['continue'][0].visible ) {
-                                                           for ( let f of [ "continue", "finish", "stop" ] ) {
-                                                               btns[f][0].visible = false;
-                                                               btns[f][1].visible = true;
-                                                           }
-                                                           // only send message for button that was pressed
-                                                           pipe.send( id,
-                                                                      { action,
-                                                                        value: { niter: niter.value, cycleniter: cycleniter.value,
-                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value } },
-                                                                      update_gui )
-                                                       }''' )
             self._control['clean'][btn][1].disabled = True
-            self._control['clean'][btn][0].js_on_click( self._cb['clean'][btn] )
+
+
+        self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
+                                                 pipe=self._pipe['data'], ids=self._ids['clean'],
+                                                 img_src=self._image_source, spec_src=self._image_spectra,
+                                                 niter=self._control['iter'], cycleniter=self._control['cycleniter'],
+                                                 threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor']
+                                                ),
+                                      code='''function update_gui( msg ) {
+                                                  if ( msg.action !== 'stop' ) {
+                                                      img_src.refresh( )
+                                                      spec_src.refresh( )
+                                                      for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                          btns[f][0].visible = true;
+                                                          btns[f][1].visible = false;
+                                                      }
+                                                  } else {
+                                                      for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                          btns[f][0].visible = false;
+                                                          btns[f][1].visible = false;
+                                                          btns[f][2].visible = true;
+                                                      }
+                                                  }
+                                              }
+                                              console.log('source',this.origin.name)
+                                              if ( btns['continue'][0].visible ) {
+                                                  for ( let f of [ "continue", "finish", "stop" ] ) {
+                                                      btns[f][0].visible = false;
+                                                      btns[f][1].visible = true;
+                                                  }
+                                                  // only send message for button that was pressed
+                                                  // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
+                                                  // (or even if 'XXX.origin.' is public)...
+                                                  pipe.send( ids[this.origin.name],
+                                                             { action: this.origin.name,
+                                                               value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                        threshold: threshold.value, cyclefactor: cyclefactor.value } },
+                                                             update_gui )
+                                              }''' )
+
+        self._control['clean']['continue'][0].js_on_click( self._cb['clean'] )
+        self._control['clean']['stop'][0].js_on_click( self._cb['clean'] )
 
         self._control['imsize'] = TextInput( value="100", title="Imsize", width=120 )
 
