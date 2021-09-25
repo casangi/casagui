@@ -52,6 +52,9 @@ def static_vars(**kwargs):
         return func
     return decorate
 
+def static_dir(func):
+    return [a for a in dir(func) if a[0] != '_']
+
 def path_to_url( path ):
     """Convert a single filesystem path to a URL.
 

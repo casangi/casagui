@@ -39,6 +39,9 @@ import json
 
 import numpy as np
 
+import logging
+import traceback
+
 class DataPipe(DataSource):
     """This class allows for communication between Python and the JavaScript implementation
     running in a browser. It allows Python code to send a message to JavaScript and register
@@ -188,9 +191,11 @@ class DataPipe(DataSource):
                                                                      'message': pack_arrays(await result),
                                                                      'direction': msg['direction'] }))
                         else:
-                            result = cb(msg['message'])
                             await self.__websocket.send(json.dumps({ 'id': msg['id'],
                                                                      'message': pack_arrays(result),
                                                                      'direction': msg['direction'] }))
+        except Exception as e:
+            logging.error(traceback.format_exc())
+
         finally:
             self.__websocket = None
