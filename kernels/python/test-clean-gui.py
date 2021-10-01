@@ -1,5 +1,7 @@
 import os
 import asyncio
+import urllib
+import tarfile
 #from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
 
