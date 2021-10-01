@@ -16,8 +16,10 @@ an aggressive project that aims to support three separate use cases:
 An *interactive clean* implementation is currently under development. This application is designed to
 primarily support Python users and developers using a terminal to interact with Python.
 
+:show-inheritance:
+
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    design/intro
