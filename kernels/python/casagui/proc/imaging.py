@@ -36,7 +36,7 @@ class iclean:
             ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
                          cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
 
-        and then the GUI can be started with:
+        and then the GUI can be started with::
 
             ic.show( )
 
@@ -68,7 +68,7 @@ class iclean:
     At the bottom of the GUI, footnotes accumulate which includes the Python calls to
     ``tclean`` that have been made.
 
-    *Please see ``tclean`` documentation for details about the arguments summarized here.*
+    *Please see tclean documentation for details about the arguments summarized here.*
 
     Args:
         vis (str, :obj:`list` of :obj:`str`): Name of input visibility file(s). A single path may
@@ -691,13 +691,13 @@ class iclean:
         '''Launch and display GUI.
 
         Example:
-            Launch and run interactive clean in an event loop:
+            Launch and run interactive clean in an event loop::
 
                 ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
                          cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
                 ic.show( )
 
-            Retrieve event loop to combine with other event based operations:
+            Retrieve event loop to combine with other event based operations::
 
                 ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
                          cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
@@ -706,7 +706,8 @@ class iclean:
                     asyncio.get_event_loop().run_forever()
 
                 except KeyboardInterrupt:
-                    print('\nInterrupt received, shutting down ...')
+                    print('Interrupt received, shutting down ...')
+
         '''
         self._launch_gui( )
         if runloop:
