@@ -5,7 +5,7 @@ import tarfile
 #from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
 
-from casagui.proc.imaging import iclean
+from casagui import iclean
 
 ##
 ## demo measurement set to use
