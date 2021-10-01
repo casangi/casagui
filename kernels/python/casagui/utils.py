@@ -29,7 +29,7 @@ from socket import socket
 from os import path as __path
 
 def static_vars(**kwargs):
-    """Initialize static function variables to for use within a function.
+    '''Initialize static function variables to for use within a function.
 
     This function is used as a decorator which allows for the initialization of
     static local variables for use within a function. It is used like:
@@ -45,7 +45,7 @@ def static_vars(**kwargs):
     Parameters
     ----------
     Initialized static local variables.
-    """
+    '''
     def decorate(func):
         for k in kwargs:
             setattr(func, k, kwargs[k])
@@ -56,7 +56,7 @@ def static_dir(func):
     return [a for a in dir(func) if a[0] != '_']
 
 def path_to_url( path ):
-    """Convert a single filesystem path to a URL.
+    '''Convert a single filesystem path to a URL.
 
     If the string specified in the ``path`` parameter exists. It is turned into a
     fully qualified path and converted to a URL and returned. If ``path`` does not
@@ -71,11 +71,11 @@ def path_to_url( path ):
     -------
     str
         ``path`` converted to a URL if ``path`` exists, otherwise ``path`` unchanged
-    """
+    '''
     return "file://" + __path.abspath(path) if __path.exists(path) else path
 
 def find_ws_address( ip='127.0.0.1' ):
-    """Find free port on ``ip`` network and return a tuple with ``ip`` and port number
+    '''Find free port on ``ip`` network and return a tuple with ``ip`` and port number
 
     This function uses the low level socket function to find a free port and return
     a tuple representing the address plus port number.
@@ -89,7 +89,7 @@ def find_ws_address( ip='127.0.0.1' ):
     -------
     tuple of str and int
         network address (`str`) and port number (`int`)
-    """
+    '''
     sock = socket( )
     sock.bind((ip,0))
     result = sock.getsockname( )
@@ -97,8 +97,8 @@ def find_ws_address( ip='127.0.0.1' ):
     return result
 
 def partition(pred, iterable):
-    """Split ``iterable`` into two lists based on ``pred`` predicate.
-    """
+    '''Split ``iterable`` into two lists based on ``pred`` predicate.
+    '''
     trues = []
     falses = []
     for item in iterable:

@@ -709,7 +709,6 @@ class iclean:
                 except KeyboardInterrupt:
                     print('\nInterrupt received, shutting down ...')
         '''
-
         self._launch_gui( )
         if runloop:
             try:
