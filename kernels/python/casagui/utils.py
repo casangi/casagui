@@ -95,3 +95,15 @@ def find_ws_address( ip='127.0.0.1' ):
     result = sock.getsockname( )
     sock.close( )
     return result
+
+def partition(pred, iterable):
+    """Split ``iterable`` into two lists based on ``pred`` predicate.
+    """
+    trues = []
+    falses = []
+    for item in iterable:
+        if pred(item):
+            trues.append(item)
+        else:
+            falses.append(item)
+    return trues, falses

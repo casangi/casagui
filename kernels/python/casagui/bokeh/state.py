@@ -25,7 +25,6 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################3
-from bokeh import resources
 from ..utils import path_to_url
 from ..resources import version
 from . import bokeh_version
@@ -38,7 +37,7 @@ def initialize_bokeh( libs=None, dev=0 ):
     The ``casaguijs`` extensions for Bokeh are built into a stand-alone
     external JavaScript file constructed for the specific version of
     Bokeh that is being used. The URL or the local path to a locally
-    built verion must be supplied as the ``lib`` parameter. If ``lib``
+    built verion must be supplied as the ``libs`` parameter. If ``libs``
     is ``None`` then the default is to use the published verison of
     ``casaguijs`` extensions built and installed for `HTTP` access.
 
@@ -53,22 +52,46 @@ def initialize_bokeh( libs=None, dev=0 ):
         specifying `dev` allows for including a development version
         for incremental updates to JavaScript from website.
     """
+
     if initialize_bokeh.initialized:
         ### only initialize once...
         return
 
-    casaguijs_libs = [ "https://casa.nrao.edu/download/javascript/casaguijs/%s/casaguijs-v%s.%d-b%s.min.js" % (version,version,dev,'.'.join(bokeh_version.split('.')[0:2])) ] if libs is None else \
-        [ libs ] if type(libs) == str else libs
-    casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
-    original_func = resources._get_cdn_urls
-    def __get_cdn_urls(version=None, minified=True, legacy=False):
-        from copy import deepcopy
-        result = original_func( version, minified, legacy )
-        resources_result = deepcopy(result)
-        def get_urls( components, kind ):
-            temp_result = resources_result["urls"](components, kind)
-            return temp_result + casaguijs_libs if kind == 'js' else temp_result
-        result["urls"] = get_urls
+    library_hashes = {
+        ###
+        ### Generate hashes with:
+        ### echo `cat casaguijs-v0.0.2.0-b2.3.js | openssl dgst -sha384 -binary | openssl base64 -A`
+        ###
+        'casaguijs-v0.0.2.0-b2.3.js': 'EtB9H3ooIK3inPGx9RsRXeUv/COHtArEjhZUr7P75GBUPl+lAoGH/tqoAc1sV5jD',
+        'casaguijs-v0.0.2.0-b2.3.min.js': 'jAFFXRC9B93jSanS1dmqo+l/3rkcBqM48uTMN+SFcY7GPC/IPeEoI+p+Za5ztkcm'
+    }
+
+    casalib = None
+    casaguijs_libs = None
+    casaguijs_url = None
+
+    if libs is None:
+        casalib = "casaguijs-v%s.%d-b%s.min.js" % (version,dev,'.'.join(bokeh_version.split('.')[0:2]))
+        casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (version,casalib)
+        casaguijs_libs = [ casaguijs_url ]
+    else:
+        casaguijs_libs = [ libs ] if type(libs) == str else libs
+        casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
+
+    from bokeh import resources
+    resources.JSResources._old_hashes = resources.JSResources.hashes
+    def hashes( self ):
+        result = self._old_hashes
+        if casalib is not None and casalib in library_hashes:
+            result[casaguijs_url] = library_hashes[casalib]
         return result
-    resources._get_cdn_urls = __get_cdn_urls
+
+    resources.JSResources._old_js_files = resources.JSResources.js_files
+    def js_files( self ):
+        result = self._old_js_files
+        result = result + casaguijs_libs
+        return result
+
+    resources.JSResources.hashes = property(hashes)
+    resources.JSResources.js_files = property(js_files)
     initialize_bokeh.initialized = True

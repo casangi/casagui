@@ -29,13 +29,15 @@ from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Tuple, String, Int
+from casatools import regionmanager
 from casatools import image as imagetool
+from ..utils import pack_arrays
+from ...utils import partition
+import numpy as np
 
 import asyncio
 import websockets
 import json
-
-import numpy as np
 
 class ImagePipe(DataSource):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
@@ -70,8 +72,10 @@ class ImagePipe(DataSource):
         if self.__im is not None:
             self.__im.close( )
         self.__im = imagetool( )
+        self.__rg = regionmanager( )
         try:
             self.__im.open(image)
+            self.__path = image
         except:
             self.__im = None
             raise RuntimeError('could not open image: %s' % image)
@@ -113,9 +117,41 @@ class ImagePipe(DataSource):
         ### here for X rather than just the index
         return { 'x': range(len(result)), 'y': result }
 
-    def __init__( self, image, *args, **kwargs ):
+    def __init__( self, image, stats=False, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
+        self._stats = stats
         self.__open( image )
+
+    def statistics( self, index ):
+        """Retrieve statistics for one channel from the image cube. The `index`
+        should be a two element list of integers. The first integer is the
+        ''stokes'' axis in the image cube. The second integer is the ''channel''
+        axis in the image cube.
+
+        Parameters
+        ----------
+        index: [ int, int ]
+            list containing first the ''stokes'' index and second the ''channel'' index
+        """
+        def singleton( l ):
+            # convert a list of a single element to the element
+            return l if len(l) != 1 else l[0]
+        def sort_result( d ):
+            p = partition( lambda s: (s.startswith('trc') or s.startswith('blc')), sorted(d.keys( )) )
+            return { k: d[k] for k in p[1] + p[0] }
+
+        reg = self.__rg.box( [0,0] + index, self.__chan_shape + index )
+        ###
+        ### This seems like it should work:
+        ###
+        #      rawstats = self.__im.statistics( region=reg )
+        ###
+        ### but it does not so we have to create a one-use image tool (see CAS-13625)
+        ###
+        ia = imagetool( )
+        ia.open(self.__path)
+        rawstats = ia.statistics( region=reg )
+        return sort_result( { k: singleton([ x.item( ) for x in v ]) if type(v) == np.ndarray else v for k,v in rawstats.items( ) } )
 
     async def process_messages( self, websocket, path ):
         """Process messages related to image display updates.
@@ -132,14 +168,22 @@ class ImagePipe(DataSource):
             cmd = json.loads(message)
             if cmd['action'] == 'channel':
                 chan = self.channel(cmd['index'])
-                msg = { 'id': cmd['id'],
-                        'message': transform_column_source_data( { 'd': [ chan ] } ) }
+                if self._stats:
+                    #statistics for the displayed plane of the image cubea
+                    statistics = self.statistics( cmd['index'] )
+                    msg = { 'id': cmd['id'],
+                            # 'stats': pack_arrays(self.__im.statistics( axes=cmd['index'] )),
+                            'message': { 'chan': transform_column_source_data( { 'd': [ chan ] } ),
+                                         'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) } } }
+                else:
+                    msg = { 'id': cmd['id'],
+                            'message': { 'chan': transform_column_source_data( { 'd': [ chan ] } ) } }
+
                 await websocket.send(json.dumps(msg))
                 count += 1
             elif cmd['action'] == 'spectra':
                 msg = { 'id': cmd['id'],
-                        'message': transform_column_source_data( self.spectra(cmd['index']) ) }
+                        'message': { 'spectrum': transform_column_source_data( self.spectra(cmd['index']) ) } }
                 await websocket.send(json.dumps(msg))
             else:
                 print("received messate in python with unknown 'action' value: %s" % cmd)
-

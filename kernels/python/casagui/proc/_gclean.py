@@ -107,7 +107,6 @@ class gclean:
                                                       restart=True, calcpsf=False, calcres=False,
                                                       threshold=self._threshold, cycleniter=self._cycleniter,
                                                       maxpsffraction=1, minpsffraction=0, mask=self._mask )
-
             img = '%s.image' % self._imagename
             if os.path.exists( img ):
                 self._convergence_rec['image'] = os.path.abspath(img)

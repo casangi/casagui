@@ -29,13 +29,20 @@ export class ImageDataSource extends ColumnDataSource {
     initialize(): void {
         super.initialize();
     }
-    channel( c: number, s: number = 0 ): void {
-        this.image_source.channel( [s, c], (data: any) => this.data = data, this.imid )
+    channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
+        this.image_source.channel( [s, c],
+                                   (data: any) => {
+                                       if ( cb ) { cb(data) }
+                                       this.data = data.chan
+                                   }, this.imid )
     }
-    refresh( ): void {
+    refresh( cb?: (msg:{[key: string]: any}) => any ): void {
         // supply default index value because the ImagePipe will have no cached
         // index values for this.imid if there have been no updates yet...
-        this.image_source.refresh( (data: any) => this.data = data, this.imid, [ 0, 0 ] )
+        this.image_source.refresh( (data: any) => {
+            if ( cb ) { cb(data) }
+            this.data = data.chan
+        }, this.imid, [ 0, 0 ] )
     }
     static init_ImageDataSource( ): void {
         this.define<ImageDataSource.Props>(({ Ref }) => ({

@@ -69,32 +69,40 @@ class iclean:
     At the bottom of the GUI, footnotes accumulate which includes the Python calls to
     ``tclean`` that have been made.
 
+    *Please see ``tclean`` documentation for details about the arguments summarized here.*
+
     Args:
         vis (str, :obj:`list` of :obj:`str`): Name of input visibility file(s). A single path may
             be specified, e.g. "ngc5921.ms", or a list of paths may be specified, e.g.
             ``['ngc5921a.ms','ngc5921b.ms']``.
-        imagename (str): Name of the output images (without a suffix). Setting ``imagename`` to
-            "test" will result in a set of images which may include "test.psf", "test.residual",
-            "test.image", "test.module", "test.sumwt", "test.pb", "test.alpha", "test.alpha.error"
-            etc.
+        imagename (str): Name of the output images (without a suffix).
         imsize (int, :obj:`list` of int): Number of pixels in a image plane, for example ``[350,250]``.
             ``500`` implies ``[500,500]``. The number of pixels must be even and factorizable by 2,3,5,7 only
             due to FFT limitations.
         cell (str, :obj:`list` of str): Cell size, e.g. ``['0.5arcsec,'0.5arcsec']``. ``'1arcsec'`` is
             equivalent to ``['1arcsec','1arcsec']``
-        specmode:
-        nchan:
-        start:
-        width:
-        interpolation:
-        gridder:
-        pblimit:
-        deconvolver:
-        niter:
-        threshold:
-        cycleniter:
-        cyclefactor:
-        scales:
+        specmode (str): Spectral definition mode (mfs,cube,cubedata, cubesource)
+            * mode='mfs' : Continuum imaging with only one output image channel
+            * mode='cube' : Spectral line imaging with one or more channels
+            * mode='cubedata' : Spectral line imaging with one or more channels
+        nchan (int): Number of channels in the output image. For default (=-1),
+            the number of channels will be automatically determined based on data
+            selected by 'spw' with 'start' and 'width'.
+        start (int, str): First channel (e.g. start=3,start='1.1GHz',start='15343km/s'.
+        width (int, str): Channel width (e.g. width=2,width='0.1MHz',width='10km/s') of output cube images
+            specified by data channel number (integer), velocity (string with a unit), or frequency (string
+            with a unit).
+        interpolation (str): Spectral interpolation (nearest,linear,cubic). Interpolation
+            rules to use when binning data channels onto image channels and evaluating
+            visibility values at the centers of image channels.
+        gridder (str): Gridding options (standard, wproject, widefield, mosaic, awproject)
+        pblimit (float): PB gain level at which to cut off normalizations
+        deconvolver (str): Minor cycle algorithm (hogbom,clark,multiscale,mtmfs,mem,clarkstokes)
+        niter (int): Maximum total number of iterations
+        threshold (str | float): Stopping threshold (number in units of Jy, or string).
+        cycleniter (int): Maximum number of minor-cycle iterations (per plane) before triggering a major cycle
+        cyclefactor (float): Scaling on PSF sidelobe level to compute the minor-cycle stopping threshold.
+        scales (:obj:`list` of int): List of scale sizes (in pixels) for multi-scale algorithms
 
     '''
     def __stop( self ):
@@ -148,6 +156,7 @@ class iclean:
         self._cb = { }
         self._ids = { }
         self._fig = { }
+        self._status = { }
         self._last_mask = ''
 
         self._image_server = None
@@ -185,7 +194,7 @@ class iclean:
         if not self.__pipes_initialized:
             self.__pipes_initialized = True
             self._pipe['data'] = DataPipe(address=find_ws_address( ))
-            self._pipe['image'] = ImagePipe(image=self._image_path, address=find_ws_address( ))
+            self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, address=find_ws_address( ))
 
     def _launch_gui( self ):
 
@@ -339,7 +348,18 @@ class iclean:
                      box[%r] = cb_obj.end
         """
 
-        self._log = Div( text="<hr><p>%s</p>" % self._clean.cmds( )[-1] )
+        self._status['log'] = Div( text="<hr><p>%s</p>" % self._clean.cmds( )[-1] )
+        self._status['stopcode'] = Div( text="<div>initial image</div>" )
+
+        ### statistics for first image plane
+        image_stats = self._pipe['image'].statistics( [0,0] )
+        self._stats_source = ColumnDataSource( { 'labels': list(image_stats.keys( )),
+                                                 'values': list(image_stats.values( )) } )
+
+        stats_column = [ TableColumn(field='labels', title='Statistics', width=75),
+                         TableColumn(field='values', title='Values') ]
+
+        stats_table = DataTable(source=self._stats_source, columns=stats_column, width=400, height=200, autosize_mode='none')
 
         # TClean Controls
         cwidth = 80
@@ -402,7 +422,8 @@ class iclean:
                                                  convergence_src=self._convergence_source,
                                                  convergence_id=self._convergence_id, slider=self._fig['slider'],
                                                  convergence_fig=self._fig['convergence'],
-                                                 log=self._log, img_fig=self._fig['image']
+                                                 log=self._status['log'], img_fig=self._fig['image'],
+                                                 stopstatus=self._status['stopcode'], stat_src=self._stats_source
                                                 ),
                                       code='''function refresh( ) {
                                                   function upconv( msg ) {
@@ -412,7 +433,11 @@ class iclean:
                                                           convergence_fig.extra_y_ranges['flux'].start = 0.5*Math.min(...msg.result.converge['flux'])
                                                       }
                                                   }
-                                                  img_src.refresh( )
+                                                  img_src.refresh( msg => {
+                                                      if ( 'stats' in msg ) {
+                                                         stat_src.data = msg.stats
+                                                      }
+                                                  } )
                                                   spec_src.refresh( )
                                                   pipe.send( convergence_id, { action: 'update', value: slider.value }, upconv )
                                               }
@@ -445,6 +470,25 @@ class iclean:
                                                       btns['finish'].disabled = false
                                                   }
                                               }
+                                              function update_status( status ) {
+                                                  const stopstr = [ 'zero stop code',
+                                                                     'iteration limit hit',
+                                                                     'force stop',
+                                                                     'no change in peak residual across two major cycles',
+                                                                     'peak residual increased by 3x from last major cycle',
+                                                                     'peak residual increased by 3x from the minimum',
+                                                                     'zero mask found',
+                                                                     'n-sigma or other valid exit criterion',
+                                                                     'unrecognized stop code' ]
+                                                  if ( typeof status === 'number' ) {
+                                                      stopstatus.text = '<div>' +
+                                                                            stopstr[ status < 0 || status >= stopstr.length ?
+                                                                                     stopstr.length - 1 : status ] +
+                                                                            '</div>'
+                                                  } else {
+                                                      stopstatus.text = `<div>${status}</div>`
+                                                  }
+                                              }
                                               function update_gui( msg ) {
                                                   if ( msg.result === 'stopped' ) {
                                                       window.close()
@@ -453,24 +497,10 @@ class iclean:
                                                          log.text = log.text + msg.cmd
                                                       }
                                                       refresh( )
-                                                      // stopcode   description
-                                                      // --------   -----------------------------------------------------------
-                                                      //   1         iteration limit
-                                                      //   2         threshold
-                                                      //   3         force stop
-                                                      //   4         no change in peak residual across two major cycles
-                                                      //   5         peak residual increased by more than 3 times from
-                                                      //             the previous major cycle
-                                                      //   6         peak residual increased by more than 3 times from
-                                                      //             the minimum reached
-                                                      //   7         zero mask
-                                                      //   8         any combination of n-sigma and other valid exit
-                                                      //             criterion
-                                                      // --------   -----------------------------------------------------------
-                                                      //   0         stopcode should not equal to zero (which means keep going)
                                                       state.stopped = state.stopped || msg.stopcode > 1 || msg.stopcode == 0
                                                       if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                           btns['stop'].button_type = "danger"
+                                                          update_status( 'stopcode' in msg ? msg.stopcode : -1 )
                                                           if ( ! state.stopped ) {
                                                               enable( false )
                                                           } else {
@@ -487,7 +517,10 @@ class iclean:
                                                           } else {
                                                               state.mode = 'interactive'
                                                               btns['stop'].button_type = "danger"
-                                                              disable( false )
+                                                              //disable( false )
+                                                              enable(false)
+                                                              state.stopped = false
+                                                              update_status( 'stopcode' in msg ? msg.stopcode : -1 )
                                                           }
                                                       }
                                                   }
@@ -495,12 +528,15 @@ class iclean:
                                               function wait_for_tclean_stop( msg ) {
                                                   state.mode = 'interactive'
                                                   btns['stop'].button_type = "danger"
-                                                  enable( state.stopped )
+                                                  // enable( state.stopped )
+                                                  enable( false )
                                                   state.awaiting_stop = false
                                                   refresh( )
+                                                  update_status( 'user requested stop' )
                                               }
                                               if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
                                                   state.mode = 'continuous'
+                                                  update_status( 'running multiple iterations' )
                                                   disable( false )
                                                   btns['stop'].button_type = "warning"
                                                   pipe.send( ids[cb_obj.origin.name],
@@ -512,6 +548,7 @@ class iclean:
                                               }
                                               if ( ! state.stopped && state.mode === 'interactive' &&
                                                    cb_obj.origin.name === 'continue' ) {
+                                                  update_status( 'running one iteration' )
                                                   disable( true )
                                                   // only send message for button that was pressed
                                                   // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
@@ -547,20 +584,6 @@ class iclean:
         OPTIONS = [('I', 'I'), ('Q', 'Q'), ('U', 'U'), ('V', 'V')]
         #self._control['stokes'] = MultiChoice( value=["I"], title="Stokes", options=OPTIONS, width=360 )
         #self._control['stokes'].disabled = True   ### enable when switching stokes axes is working
-
-        image_stats = imstat(imagename=self._image_path)
-
-        stats = ColumnDataSource( { 'statistics': [ 'image', 'npoints', 'sum', 'flux',
-                                                    'mean', 'stdev', 'min', 'max', 'rms' ],
-                                    'values': [ self._image_path, image_stats['npts'][0], image_stats['sum'][0],
-                                                image_stats['flux'][0], image_stats['mean'][0],
-                                                image_stats['sigma'][0], image_stats['min'][0],
-                                                image_stats['max'][0], image_stats['rms'][0], ] } )
-
-        stats_column = [ TableColumn(field='statistics', title='Statistics'),
-                         TableColumn(field='values', title='Values') ]
-
-        stats_table = DataTable(source=stats, columns=stats_column, width=400, height=200)
 
         self._fig['image'].js_on_event( SelectionGeometry,
                                         CustomJS( args=dict( source=self._image_source,
@@ -603,7 +626,8 @@ class iclean:
         callback = CustomJS( args=dict( source=self._image_source, convergence_src=self._convergence_source,
                                         minor_converge_dict=self._convergence_data,
                                         figure=self._fig['convergence'], slider=self._fig['slider'],
-                                        pipe=self._pipe['data'], convergence_id=self._convergence_id
+                                        pipe=self._pipe['data'], convergence_id=self._convergence_id,
+                                        stat_src=self._stats_source
                                        ),
                              code="""function update_convergence( msg ) {
                                          if ( 'result' in msg ) {
@@ -612,14 +636,15 @@ class iclean:
                                              figure.extra_y_ranges['flux'].start = 0.5*Math.min(...msg.result.converge['flux'])
                                          }
                                      }
-                                     source.channel(slider.value)
+                                     source.channel( slider.value, 0,
+                                                     msg => { if ( 'stats' in msg ) { stat_src.data = msg.stats } } )
                                      pipe.send( convergence_id,
                                                 { action: 'update', value: slider.value },
                                                 update_convergence )""" )
 
         self._fig['slider'].js_on_change( 'value', callback )
 
-        self._control['goto'] = TextInput( title="goto channel", value="0", width=90 )
+        self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
 
         gtcb = CustomJS( args=dict( goto=self._control['goto'], slider=self._fig['slider'] ),
                          code="""var v = parseInt(goto.value)
@@ -638,15 +663,16 @@ class iclean:
                                                self._control['threshold'] ),
                                           self._fig['slider'],
                                           row( self._control['goto'],
-                                                self._control['clean']['continue'],
-                                                self._control['clean']['finish'],
-                                                self._control['clean']['stop'] ),
+                                               self._control['clean']['continue'],
+                                               self._control['clean']['finish'],
+                                               self._control['clean']['stop'] ),
+                                          row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
                                           stats_table ),
                                       self._fig['image'] ),
                                   self._fig['spectra'],
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
-                                  self._log )
+                                  self._status['log'] )
 
         self._fig['image'].add_layout(self._mask['rect'])
         self._fig['image'].add_layout(self._mask['poly'])
@@ -662,6 +688,34 @@ class iclean:
         self._data_server = websockets.serve( self._pipe['data'].process_messages, self._pipe['data'].address[0], self._pipe['data'].address[1] )
         return async_loop( self._data_server, self._image_server )
 
-    def show( self ):
+    def show( self, runloop=True ):
+        '''Launch and display GUI.
+
+        Example:
+            Launch and run interactive clean in an event loop:
+
+                ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
+                         cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
+                ic.show( )
+
+            Retrieve event loop to combine with other event based operations:
+
+                ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
+                         cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
+                try:
+                    asyncio.get_event_loop().run_until_complete(ic.show(False))
+                    asyncio.get_event_loop().run_forever()
+
+                except KeyboardInterrupt:
+                    print('\nInterrupt received, shutting down ...')
+        '''
+
         self._launch_gui( )
-        return self._asyncio_loop( )
+        if runloop:
+            try:
+                asyncio.get_event_loop().run_until_complete(self._asyncio_loop( ))
+                asyncio.get_event_loop().run_forever()
+            except KeyboardInterrupt:
+                print('\nInterrupt received, stopping GUI...')
+        else:
+            return self._asyncio_loop( )
