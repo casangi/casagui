@@ -158,6 +158,11 @@ class iclean:
         self._status = { }
         self._last_mask = ''
 
+        ###
+        ### Final return value
+        ###
+        self._result = { }
+
         self._image_server = None
         self._data_server = None
 
@@ -687,20 +692,40 @@ class iclean:
         self._data_server = websockets.serve( self._pipe['data'].process_messages, self._pipe['data'].address[0], self._pipe['data'].address[1] )
         return async_loop( self._data_server, self._image_server )
 
-    def show( self, runloop=True ):
-        '''Launch and display GUI.
+    def __call__( self, loop=asyncio.get_event_loop( ) ):
+        '''Display GUI using the event loop specified by ``loop``.
+
+        ``loop`` defaults to standard asyncio event loop.
 
         Example:
-            Launch and run interactive clean in an event loop::
+            Create ``iclean`` object and display::
 
-                ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
-                         cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
-                ic.show( )
+                print( "Result: %s" %
+                       iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
+                               cell='12.0arcsec', specmode='cube',
+                               interpolation='nearest', ... )( ) )
+        '''
+        try:
+            loop.run_until_complete(self.show( ))
+            loop.run_forever( )
+        except KeyboardInterrupt:
+            print('\nInterrupt received, stopping GUI...')
 
+        return self.result( )
+
+    def result( self ):
+        ''' Retrieve any result produced by the GUI.
+        '''
+        return self._result
+
+    def show( self ):
+        '''Construct GUI and return ``asyncio`` task.
+
+        Example:
             Retrieve event loop to combine with other event based operations::
 
                 ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
-                         cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
+                             cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
                 try:
                     asyncio.get_event_loop().run_until_complete(ic.show(False))
                     asyncio.get_event_loop().run_forever()
@@ -708,13 +733,7 @@ class iclean:
                 except KeyboardInterrupt:
                     print('Interrupt received, shutting down ...')
 
+                print("Result: %s" % ic.result( ))
         '''
         self._launch_gui( )
-        if runloop:
-            try:
-                asyncio.get_event_loop().run_until_complete(self._asyncio_loop( ))
-                asyncio.get_event_loop().run_forever()
-            except KeyboardInterrupt:
-                print('\nInterrupt received, stopping GUI...')
-        else:
-            return self._asyncio_loop( )
+        return self._asyncio_loop( )

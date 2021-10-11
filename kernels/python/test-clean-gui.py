@@ -41,12 +41,14 @@ ic = iclean( vis=ms_path, imagename=img,
              scales=[0,3,10] )
 
 if True:
-    ic.show( )
+    print( "Result: %s" % ic( ) )
 else:
     try:
-        asyncio.get_event_loop().run_until_complete(ic.show(False))
+        asyncio.get_event_loop().run_until_complete(ic.show( ))
         asyncio.get_event_loop().run_forever()
 
     except KeyboardInterrupt:
         print('\nInterrupt received, shutting down ...')
         #os.system('rm -rf {output_image}.* *.html *.log'.format(output_image=output_image))
+
+    print( "Result: %s" % ic.result( ) )
