@@ -38,7 +38,7 @@ class iclean:
 
         and then the GUI can be started with::
 
-            ic.show( )
+            ic( )
 
     The GUI will be displayed in a web browser and control will return to Python when the
     user clicks the ``STOP`` button on the GUI. When the ``STOP`` button is colored *red*,
@@ -727,7 +727,7 @@ class iclean:
                 ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
                              cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
                 try:
-                    asyncio.get_event_loop().run_until_complete(ic.show(False))
+                    asyncio.get_event_loop().run_until_complete(ic.show( ))
                     asyncio.get_event_loop().run_forever()
 
                 except KeyboardInterrupt:
