@@ -59,5 +59,14 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+###
+### cause documentation for class.__call__ to be generated
+###
+def member_skip( app, what, name, obj, would_skip, options ):
+    if name == '__call__':
+        return False
+    return would_skip
+
 def setup(app):
     app.add_css_file('customization.css')
+    app.connect( 'autodoc-skip-member', member_skip )
