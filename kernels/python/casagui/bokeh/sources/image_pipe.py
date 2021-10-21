@@ -27,7 +27,6 @@
 ########################################################################3
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Tuple, String, Int
 from casatools import regionmanager
 from casatools import image as imagetool
@@ -109,13 +108,16 @@ class ImagePipe(DataSource):
             list containing first the ''right ascension'', the ''declination'' and
             the ''stokes'' axis
         """
+        index = list(map( lambda i: 0 if i is None else i, index ))
+        if index[0] >= self.__im_shape[0]: index[0] = self.__im_shape[0] - 1
+        if index[1] >= self.__im_shape[1]: index[1] = self.__im_shape[1] - 1
         if self.__im is None:
             raise RuntimeError('no image is available')
         result = np.squeeze( self.__im.getchunk( blc=index + [0],
                                                  trc=index + [self.__im_shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
-        return { 'x': range(len(result)), 'y': result }
+        return { 'x': range(len(result)), 'y': list(result) }
 
     def __init__( self, image, stats=False, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
@@ -173,17 +175,17 @@ class ImagePipe(DataSource):
                     statistics = self.statistics( cmd['index'] )
                     msg = { 'id': cmd['id'],
                             # 'stats': pack_arrays(self.__im.statistics( axes=cmd['index'] )),
-                            'message': { 'chan': transform_column_source_data( { 'd': [ chan ] } ),
+                            'message': { 'chan': { 'd': [ pack_arrays(chan) ] },
                                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) } } }
                 else:
                     msg = { 'id': cmd['id'],
-                            'message': { 'chan': transform_column_source_data( { 'd': [ chan ] } ) } }
+                            'message': { 'chan': { 'd': [ pack_arrays(chan) ] } } }
 
                 await websocket.send(json.dumps(msg))
                 count += 1
             elif cmd['action'] == 'spectra':
                 msg = { 'id': cmd['id'],
-                        'message': { 'spectrum': transform_column_source_data( self.spectra(cmd['index']) ) } }
+                        'message': { 'spectrum': pack_arrays( self.spectra(cmd['index']) ) } }
                 await websocket.send(json.dumps(msg))
             else:
                 print("received messate in python with unknown 'action' value: %s" % cmd)

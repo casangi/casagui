@@ -1,7 +1,3 @@
-from casagui.bokeh.state import initialize_bokeh
-#initialize_bokeh( "casaguijs/dist/casaguijs.min.js" )        ### local build
-initialize_bokeh( )                                           ### fetch from https://casa.nrao.edu/
-
 import time
 import asyncio
 import websockets
@@ -105,14 +101,34 @@ class iclean:
 
     '''
     def __stop( self ):
-        if self._image_server is not None and self._image_server.ws_server.loop.is_running( ):
-            self._image_server.ws_server.loop.stop( )
-        if self._data_server is not None and self._data_server.ws_server.loop.is_running( ):
-            self._data_server.ws_server.loop.stop( )
+        if self._image_server is not None and self._image_server.ws_server.is_serving( ):
+            #### FIXME: find another way to discover which event loop is being used
+            ####        ( or find the right way to shutdown whether we're using
+            ####          asyncio.get_event_loop( ) or an event loop that the
+            ####          user chooses after calling show( ) )
+            self._image_server.ws_server.server._loop.stop( )
+        if self._data_server is not None and self._data_server.ws_server.is_serving( ):
+            #### FIXME: find another way to discover which event loop is being used
+            ####        ( or find the right way to shutdown whether we're using
+            ####          asyncio.get_event_loop( ) or an event loop that the
+            ####          user chooses after calling show( ) )
+            self._data_server.ws_server.server._loop.stop( )
 
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
                   niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[] ):
+        ###
+        ### insure that Bokeh is initialized with our casaguijs URIs...
+        ### if this is done at the file scope (above) the initialization is always
+        ### doneusing the default URIs because then this file scope initialization
+        ### happens when the user does:
+        ###
+        ###    from casagui.bokeh.state import initialize_bokeh
+        ###
+        ### leaving no opportunity to set alternate URIs.
+        ###
+        from casagui.bokeh.state import initialize_bokeh
+        initialize_bokeh( )
         ###
         ### used by data pipe (websocket) initialization function
         ###

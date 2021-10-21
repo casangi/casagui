@@ -58,12 +58,17 @@ def initialize_bokeh( libs=None, dev=0 ):
         return
 
     library_hashes = {
-        ###
+        ### --------------------------------------------------------------------------------------------------
         ### Generate hashes with:
         ### echo `cat casaguijs-v0.0.2.0-b2.3.js | openssl dgst -sha384 -binary | openssl base64 -A`
-        ###
+        ### ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---
+        ### NOTE: with the conversion from Bokeh 2.3.3 to 2.4.1, it seems that the security hashes are no
+        ### longer included in the generated HTML.
+        ### --------------------------------------------------------------------------------------------------
         'casaguijs-v0.0.2.0-b2.3.js': 'EtB9H3ooIK3inPGx9RsRXeUv/COHtArEjhZUr7P75GBUPl+lAoGH/tqoAc1sV5jD',
-        'casaguijs-v0.0.2.0-b2.3.min.js': 'jAFFXRC9B93jSanS1dmqo+l/3rkcBqM48uTMN+SFcY7GPC/IPeEoI+p+Za5ztkcm'
+        'casaguijs-v0.0.2.0-b2.3.min.js': 'jAFFXRC9B93jSanS1dmqo+l/3rkcBqM48uTMN+SFcY7GPC/IPeEoI+p+Za5ztkcm',
+        'casaguijs-v0.0.3.0-b2.4.min.js': '23DOS7ISXIG8BRyIsD7vINUllDbo8NDCozIGBy7jGC+M14Z+axfF7j4bruA2ZnzL',
+        'casaguijs-v0.0.3.0-b2.4.js': 'OmIWKy37YXZf973kemdoFd2L/h0I9AY/hsP5PMdk5/g5xlgj16yk6b0cgO01UMxM'
     }
 
     casalib = None
