@@ -101,18 +101,11 @@ class iclean:
 
     '''
     def __stop( self ):
+        loop = asyncio.get_running_loop( )
         if self._image_server is not None and self._image_server.ws_server.is_serving( ):
-            #### FIXME: find another way to discover which event loop is being used
-            ####        ( or find the right way to shutdown whether we're using
-            ####          asyncio.get_event_loop( ) or an event loop that the
-            ####          user chooses after calling show( ) )
-            self._image_server.ws_server.server._loop.stop( )
+            loop.stop( )
         if self._data_server is not None and self._data_server.ws_server.is_serving( ):
-            #### FIXME: find another way to discover which event loop is being used
-            ####        ( or find the right way to shutdown whether we're using
-            ####          asyncio.get_event_loop( ) or an event loop that the
-            ####          user chooses after calling show( ) )
-            self._data_server.ws_server.server._loop.stop( )
+            loop.stop( )
 
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
