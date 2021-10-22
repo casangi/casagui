@@ -218,8 +218,12 @@ class iclean:
 
 
         shape = self._pipe['image'].shape()
-        self._fig['slider'] = Slider( start=0, end=shape[-1]-1, value=0, step=1,
+        slider_end = shape[-1]-1
+        self._fig['slider'] = Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
                                       title="Channel", width=380 )
+        if slider_end == 0:
+            # for a cube with one channel, a slider is of no use
+            self._fig['slider'].disabled = True
 
         self._sp_span = Span( location=-1,
                               dimension='height',

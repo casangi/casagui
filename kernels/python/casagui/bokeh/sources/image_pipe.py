@@ -117,7 +117,13 @@ class ImagePipe(DataSource):
                                                  trc=index + [self.__im_shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
-        return { 'x': range(len(result)), 'y': list(result) }
+        try:
+            return { 'x': range(len(result)), 'y': list(result) }
+        except:
+            ## In this case, result is not iterable (e.g.) only one channel in the cube.
+            ## A zero length numpy ndarray has no shape and looks like a float but it is
+            ## an ndarray.
+            return { 'x': [0], 'y': [float(result)] }
 
     def __init__( self, image, stats=False, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
