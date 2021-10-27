@@ -85,35 +85,74 @@ class gclean:
 
         if len(list(filter(lambda f: os.path.isdir(f) and f.startswith(self._imagename + '.'), os.listdir( os.curdir )))) > 0:
             raise RuntimeError("image files already exist")
-        self._convergence_rec = None
+        self._convergence_result = (None,None)
+
+    def __filter_convergence( raw ):
+        ###
+        ### this function filters out the pieces of the `raw` tclean return dictionary
+        ### that we care about
+        ###
+        ### the first index in the `raw` dictionary is the channel axis
+        ### each channel may have a number of polarity dictionaries
+        ###
+        return  { channel_k: {
+                      stokes_k: { mapping: stokes_v[mapping] for mapping in
+                                      [ 'modelFlux', 'iterDone', 'peakRes' ]
+                                }
+                      for stokes_k,stokes_v in channel_v.items( ) } for channel_k,channel_v in raw.items( )
+                }
+
+    def __update_convergence( oldconv, newconv ):
+        def update_one( prevdone, old, new ):
+            if 'iterDone' in new:
+                new['iterDone'] = list(map(lambda x: x+prevdone,new['iterDone']))
+            result = { key: old[key] + new[key] for key in new.keys( ) }
+            ###
+            ### THIS SHOULD NOT BE REQUIRED, BUT SOMETIMES iterDone SEEMS TO BE OUT OF ORDER:
+            ###
+            ###   1: {0: {'modelFlux': [1.317482829093933, 1.7495331764221191], 'iterDone': [10.0, 9.0], 'peakRes': [0.7052989602088928, 0.27324655652046204]}}
+            ###
+            ###   FROM result[1][0]:
+            ###
+            ###   tclean( vis='refim_point_withline.ms', imagename='test', imsize=512, cell='12.0arcsec', specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz', width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', niter=1, cyclefactor=3, scales=[0, 3, 10], interactive=0, gain=1e-06 )
+            ###   tclean( vis='refim_point_withline.ms', imagename='test', imsize=512, cell='12.0arcsec', specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz', width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', niter=50, cyclefactor=3, scales=[0, 3, 10], interactive=0, restart=True, calcpsf=False, calcres=False, threshold='0.001Jy', cycleniter=10, maxpsffraction=1, minpsffraction=0, mask='' )
+            ###
+            if 'iterDone' in result:
+                result['iterDone'] = sorted(result['iterDone'])
+            return result
+        if oldconv is None:
+            return newconv
+        else:
+            return { channel_k: {
+                         stokes_k: update_one( max(oldconv[channel_k][stokes_k]['iterDone']) if 'iterDone' in oldconv[channel_k][stokes_k] else 0,
+                                               oldconv[channel_k][stokes_k], stokes_v )
+                         for stokes_k,stokes_v in channel_v.items( ) } for channel_k,channel_v in newconv.items( )
+                   }
 
     def __next__( self ):
         if self._niter < 1:
             print("warning, nothing to run, niter == %s" % self._niter)
-            return self._convergence_rec
+            return self._convergence_result
         else:
-            if self._convergence_rec is None:
+            if self._convergence_result[0] is None:
                 # initial call to tclean(...) creates the initial dirty image with niter=0
-                self._convergence_rec = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
-                                                      specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
-                                                      start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
-                                                      niter=1, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0, gain=0.000001 )
-                self._convergence_rec['cleanstate'] = 'dirty'
+                tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                                           specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
+                                           start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
+                                           niter=1, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0, gain=0.000001 )
             else:
-                self._convergence_rec = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
-                                                      specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
-                                                      start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
-                                                      niter=self._niter, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0,
-                                                      restart=True, calcpsf=False, calcres=False,
-                                                      threshold=self._threshold, cycleniter=self._cycleniter,
-                                                      maxpsffraction=1, minpsffraction=0, mask=self._mask )
-            img = '%s.image' % self._imagename
-            if os.path.exists( img ):
-                self._convergence_rec['image'] = os.path.abspath(img)
-            else:
-                self._convergence_rec['image'] = None
+                tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                                           specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
+                                           start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
+                                           niter=self._niter, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0,
+                                           restart=True, calcpsf=False, calcres=False,
+                                           threshold=self._threshold, cycleniter=self._cycleniter,
+                                           maxpsffraction=1, minpsffraction=0, mask=self._mask )
 
-            return self._convergence_rec
+            new_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
+            self._convergence_result = ( tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
+                                         gclean.__update_convergence(self._convergence_result[1],new_rec) )
+            return self._convergence_result
 
     def __reflect_stop( self ):
         ## if python wasn't hacky, you would be able to try/except/raise in lambda
@@ -121,7 +160,7 @@ class gclean:
             return self.__next__( )
         except StopIteration:
             raise StopAsyncIteration
-            
+
     async def __anext__( self ):
         loop = asyncio.get_event_loop( )
         return await loop.run_in_executor( None, self.__reflect_stop )
@@ -131,4 +170,3 @@ class gclean:
 
     def __aiter__( self ):
         return self
-

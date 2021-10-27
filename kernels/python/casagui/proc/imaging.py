@@ -136,12 +136,10 @@ class iclean:
                                threshold=threshold, cycleniter=cycleniter, cyclefactor=cyclefactor,
                                scales=scales )
         ###
-        ### self._convergence_rec:  raw convergence information as returned by tclean
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
         ###
-        self._convergence_rec = next(self._clean)
-        self._convergence_data = { }
+        self._stopcode, self._convergence_data = next(self._clean)
         self._convergence_id = str(uuid4( ))
 
         ###
@@ -152,6 +150,10 @@ class iclean:
         self._params['cycleniter'] = cycleniter
         self._params['threshold'] = threshold
         self._params['cyclefactor'] = cyclefactor
+        ###
+        ### Polarity plane
+        ###
+        self._stokes = 0
         ###
         ### GUI components
         ###
@@ -179,29 +181,6 @@ class iclean:
                                            # finish       =>  perform step, update GUI, repeat
                                            #                  until user presses stop or stop
                                            #                  conditions reached
-
-    @static_vars( iterDone=0,     peakRes=1,         modelFlux=2,
-                  cycleThresh=3,  mapperId=4,        chan=5,
-                  pol=6,          cycleStartIters=7, startIterDone=8,
-                  startPeakRes=9, startModelFlux=10, startPeakResNM=11,
-                  peakResNM=12,   stopCode=13 )
-    def __minorsummary( prevdone, data ):
-        from casatasks.private.imagerhelpers.imager_base import PySynthesisImager
-        summary = PySynthesisImager.indexMinorCycleSummaryBySubimage(data)
-        stokes = 0
-        return { chan:
-                 { s: [ x + prevdone[chan] for x in summary[chan][stokes][getattr(iclean.__minorsummary,s)]]
-                      if s == 'iterDone' else summary[chan][stokes][getattr(iclean.__minorsummary,s)]
-                   for s in static_dir(iclean.__minorsummary) }
-                 for chan in summary.keys() }
-
-    def __update_convergence( self, data ):
-        summary = iclean.__minorsummary( [ max(chandata['iteration']) for k,chandata in self._convergence_data.items( ) ], data )
-        self._convergence_data = { chan: { s[1]: self._convergence_data[chan][s[1]] + summary[chan][s[0]] for s in [ ('modelFlux','flux'), ('iterDone','iteration'), ('peakRes','residual') ] } for chan in summary }
-
-    def __init_convergence(self, data):
-        summary = iclean.__minorsummary( [0] * data.shape[1], data )
-        self._convergence_data = { chan: { s[1]: summary[chan][s[0]] for s in [ ('modelFlux','flux'), ('iterDone','iteration'), ('peakRes','residual') ] } for chan in summary }
 
     def _init_pipes( self ):
         if not self.__pipes_initialized:
@@ -280,17 +259,16 @@ class iclean:
                                            """ )
         self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
 
-        self.__init_convergence( self._convergence_rec['summaryminor'] )
-        self._convergence_source = ColumnDataSource(data=self._convergence_data[0])
+        self._convergence_source = ColumnDataSource(data=self._convergence_data[0][self._stokes])
 
         self._fig['convergence'] = figure( tooltips=[ ("x","$x"), ("y","$y"), ("value", "@image")],
                                            output_backend="webgl", plot_height=180, plot_width=800,
                                            tools=[ ],
                                            title='Convergence', x_axis_label='Iteration', y_axis_label='Peak Residual' )
         self._fig['convergence'].yaxis.axis_label_text_color = 'crimson'
-        self._fig['convergence'].extra_y_ranges = { 'flux': Range1d( min(self._convergence_source.data['flux'])*0.5,
-                                                                     max(self._convergence_source.data['flux'])*1.5 ) }
-        self._fig['convergence'].add_layout( LinearAxis( y_range_name='flux', axis_label='Total Flux', axis_label_text_color='forestgreen' ), 'right' )
+        self._fig['convergence'].extra_y_ranges = { 'modelFlux': Range1d( min(self._convergence_source.data['modelFlux'])*0.5,
+                                                                     max(self._convergence_source.data['modelFlux'])*1.5 ) }
+        self._fig['convergence'].add_layout( LinearAxis( y_range_name='modelFlux', axis_label='Total Flux', axis_label_text_color='forestgreen' ), 'right' )
 
         ###
         ### Bokeh Spans cannot be used because one Span object must be created for each
@@ -308,30 +286,30 @@ class iclean:
         #    self._fig['convergence'].add_layout( major_cycle )
 
 
-        self._fig['convergence'].circle( x='iteration',
-                                         y='residual',
+        self._fig['convergence'].circle( x='iterDone',
+                                         y='peakRes',
                                          color='crimson',
                                          size=10,
                                          alpha=0.4,
                                          #legend_label='Peak Residual',
                                          source=self._convergence_source )
-        self._fig['convergence'].circle( x='iteration',
-                                         y='flux',
+        self._fig['convergence'].circle( x='iterDone',
+                                         y='modelFlux',
                                          color='forestgreen',
                                          size=10,
                                          alpha=0.4,
-                                         y_range_name='flux',
+                                         y_range_name='modelFlux',
                                          #legend_label='Total Flux',
                                          source=self._convergence_source )
-        self._fig['convergence'].line( x='iteration',
-                                       y='residual',
+        self._fig['convergence'].line( x='iterDone',
+                                       y='peakRes',
                                        color='crimson',
                                        source=self._convergence_source )
 
-        self._fig['convergence'].line( x='iteration',
-                                       y='flux',
+        self._fig['convergence'].line( x='iterDone',
+                                       y='modelFlux',
                                        color='forestgreen',
-                                       y_range_name='flux',
+                                       y_range_name='modelFlux',
                                        source=self._convergence_source )
 
         self._fig['image'] = figure( output_backend="webgl",
@@ -397,7 +375,7 @@ class iclean:
 
         def convergence_handler( msg, self=self ):
             if msg['value'] in self._convergence_data:
-                return { 'action': 'update-success', 'result': dict(converge=self._convergence_data[msg['value']]) }
+                return { 'action': 'update-success', 'result': dict(converge=self._convergence_data[msg['value']][self._stokes]) }
             else:
                 return { 'action': 'update-failure' }
 
@@ -412,9 +390,7 @@ class iclean:
                 else:
                     msg['value']['mask'] = ''
                 self._clean.update(msg['value'])
-                result = await self._clean.__anext__( )
-                stopcode = result['stopcode'] if 'stopcode' in result else 0
-                self.__update_convergence(result['summaryminor'])
+                stopcode, self._convergence_data = await self._clean.__anext__( )
                 return dict( result='update', stopcode=stopcode, cmd="<p>%s</p>" % self._clean.cmds( )[-1] )
             elif msg['action'] == 'stop':
                 self.__stop( )
@@ -446,8 +422,8 @@ class iclean:
                                                   function upconv( msg ) {
                                                       if ( 'result' in msg ) {
                                                           convergence_src.data = msg.result.converge
-                                                          convergence_fig.extra_y_ranges['flux'].end = 1.5*Math.max(...msg.result.converge['flux'])
-                                                          convergence_fig.extra_y_ranges['flux'].start = 0.5*Math.min(...msg.result.converge['flux'])
+                                                          convergence_fig.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...msg.result.converge['modelFlux'])
+                                                          convergence_fig.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...msg.result.converge['modelFlux'])
                                                       }
                                                   }
                                                   img_src.refresh( msg => {
@@ -641,7 +617,6 @@ class iclean:
 
 
         callback = CustomJS( args=dict( source=self._image_source, convergence_src=self._convergence_source,
-                                        minor_converge_dict=self._convergence_data,
                                         figure=self._fig['convergence'], slider=self._fig['slider'],
                                         pipe=self._pipe['data'], convergence_id=self._convergence_id,
                                         stat_src=self._stats_source
@@ -649,8 +624,8 @@ class iclean:
                              code="""function update_convergence( msg ) {
                                          if ( 'result' in msg ) {
                                              convergence_src.data = msg.result.converge
-                                             figure.extra_y_ranges['flux'].end = 1.5*Math.max(...msg.result.converge['flux'])
-                                             figure.extra_y_ranges['flux'].start = 0.5*Math.min(...msg.result.converge['flux'])
+                                             figure.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...msg.result.converge['modelFlux'])
+                                             figure.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...msg.result.converge['modelFlux'])
                                          }
                                      }
                                      source.channel( slider.value, 0,
