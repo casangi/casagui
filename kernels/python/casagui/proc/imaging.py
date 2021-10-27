@@ -286,14 +286,14 @@ class iclean:
         #    self._fig['convergence'].add_layout( major_cycle )
 
 
-        self._fig['convergence'].circle( x='iterDone',
+        self._fig['convergence'].circle( x='iterations',
                                          y='peakRes',
                                          color='crimson',
                                          size=10,
                                          alpha=0.4,
                                          #legend_label='Peak Residual',
                                          source=self._convergence_source )
-        self._fig['convergence'].circle( x='iterDone',
+        self._fig['convergence'].circle( x='iterations',
                                          y='modelFlux',
                                          color='forestgreen',
                                          size=10,
@@ -301,12 +301,12 @@ class iclean:
                                          y_range_name='modelFlux',
                                          #legend_label='Total Flux',
                                          source=self._convergence_source )
-        self._fig['convergence'].line( x='iterDone',
+        self._fig['convergence'].line( x='iterations',
                                        y='peakRes',
                                        color='crimson',
                                        source=self._convergence_source )
 
-        self._fig['convergence'].line( x='iterDone',
+        self._fig['convergence'].line( x='iterations',
                                        y='modelFlux',
                                        color='forestgreen',
                                        y_range_name='modelFlux',

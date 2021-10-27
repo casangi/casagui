@@ -1,6 +1,6 @@
 import os
 import asyncio
-import functools
+from functools import reduce
 
 class gclean:
     '''gclean(...) creates a stream of convergence records which indicate
@@ -105,26 +105,23 @@ class gclean:
     def __update_convergence( oldconv, newconv ):
         def update_one( prevdone, old, new ):
             if 'iterDone' in new:
-                new['iterDone'] = list(map(lambda x: x+prevdone,new['iterDone']))
-            result = { key: old[key] + new[key] for key in new.keys( ) }
-            ###
-            ### THIS SHOULD NOT BE REQUIRED, BUT SOMETIMES iterDone SEEMS TO BE OUT OF ORDER:
-            ###
-            ###   1: {0: {'modelFlux': [1.317482829093933, 1.7495331764221191], 'iterDone': [10.0, 9.0], 'peakRes': [0.7052989602088928, 0.27324655652046204]}}
-            ###
-            ###   FROM result[1][0]:
-            ###
-            ###   tclean( vis='refim_point_withline.ms', imagename='test', imsize=512, cell='12.0arcsec', specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz', width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', niter=1, cyclefactor=3, scales=[0, 3, 10], interactive=0, gain=1e-06 )
-            ###   tclean( vis='refim_point_withline.ms', imagename='test', imsize=512, cell='12.0arcsec', specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz', width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', niter=50, cyclefactor=3, scales=[0, 3, 10], interactive=0, restart=True, calcpsf=False, calcres=False, threshold='0.001Jy', cycleniter=10, maxpsffraction=1, minpsffraction=0, mask='' )
-            ###
-            if 'iterDone' in result:
-                result['iterDone'] = sorted(result['iterDone'])
-            return result
+                new['iterations'] = reduce( lambda acc, v: (acc[0]+v, acc[1] + [v + prevdone + acc[0]]), new['iterDone'], (0,[]) )[1]
+                ### we converted to from a vector of iteration counts to a normal sequence
+                ### so the key changes from 'iterDone' to 'iterations'
+                del new['iterDone']
+            return { key: old[key] + new[key] for key in new.keys( ) }
         if oldconv is None:
-            return newconv
+            ### substitute 'iterations' for 'iterDone'
+            return { chan_k: {
+                       stokes_k: {
+                         k: v for k,v in
+                           map( lambda x: ('iterations' if x[0] == 'iterDone' else x[0], x[1]),
+                                stokes_v.items( ) )
+                       } for stokes_k,stokes_v in chan_v.items()
+                     } for chan_k,chan_v in newconv.items() }
         else:
             return { channel_k: {
-                         stokes_k: update_one( max(oldconv[channel_k][stokes_k]['iterDone']) if 'iterDone' in oldconv[channel_k][stokes_k] else 0,
+                         stokes_k: update_one( max(oldconv[channel_k][stokes_k]['iterations']) if 'iterations' in oldconv[channel_k][stokes_k] else 0,
                                                oldconv[channel_k][stokes_k], stokes_v )
                          for stokes_k,stokes_v in channel_v.items( ) } for channel_k,channel_v in newconv.items( )
                    }
@@ -142,6 +139,7 @@ class gclean:
                                            niter=1, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0, gain=0.000001 )
             else:
                 tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+
                                            specmode=self._specmode, interpolation=self._interpolation, nchan=self._nchan,
                                            start=self._start, width=self._width, pblimit=self._pblimit, deconvolver=self._deconvolver,
                                            niter=self._niter, cyclefactor=self._cyclefactor, scales=self._scales, interactive=0,
