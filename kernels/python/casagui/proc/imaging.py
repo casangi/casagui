@@ -391,7 +391,7 @@ class iclean:
                     msg['value']['mask'] = ''
                 self._clean.update(msg['value'])
                 stopcode, self._convergence_data = await self._clean.__anext__( )
-                return dict( result='update', stopcode=stopcode, cmd="<p>%s</p>" % self._clean.cmds( )[-1] )
+                return dict( result='update', stopcode=stopcode, cmd="<p>%s</p>" % self._clean.cmds( )[-1], convergence=self._convergence_data )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
@@ -418,13 +418,25 @@ class iclean:
                                                  log=self._status['log'], img_fig=self._fig['image'],
                                                  stopstatus=self._status['stopcode'], stat_src=self._stats_source
                                                 ),
-                                      code='''function refresh( ) {
-                                                  function upconv( msg ) {
-                                                      if ( 'result' in msg ) {
+                                      code='''function refresh( clean_msg ) {
+                                                  let stokes = 0    // later we will receive the polarity
+                                                                    // from some widget mechanism...
+                                                  //======================================================================
+                                                  //== convergence_fig._convergence_data is used to store the complete  ==
+                                                  //== convergence record...                                            ==
+                                                  //======================================================================
+                                                  function update_convergence( msg ) {
+                                                      //!!!!!!! DUPLICATED BELOW !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                                      if ( typeof msg === 'undefined' && '_convergence_data' in convergence_fig ) {
+                                                          // use complete convergence cache attached to convergence_fig...
+                                                          // get the convergence data for channel (slider.value) and stokes
+                                                          convergence_src.data = convergence_fig._convergence_data[slider.value][stokes]
+                                                      } else if ( 'result' in msg ) {
+                                                          // update based on msg received from data_pipe
                                                           convergence_src.data = msg.result.converge
-                                                          convergence_fig.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...msg.result.converge['modelFlux'])
-                                                          convergence_fig.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...msg.result.converge['modelFlux'])
                                                       }
+                                                      convergence_fig.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...convergence_src.data['modelFlux'])
+                                                      convergence_fig.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...convergence_src.data['modelFlux'])
                                                   }
                                                   img_src.refresh( msg => {
                                                       if ( 'stats' in msg ) {
@@ -432,7 +444,14 @@ class iclean:
                                                       }
                                                   } )
                                                   spec_src.refresh( )
-                                                  pipe.send( convergence_id, { action: 'update', value: slider.value }, upconv )
+                                                  if ( 'convergence' in clean_msg ) {
+                                                      // save convergence information and update convergence using saved state
+                                                      convergence_fig._convergence_data = clean_msg.convergence
+                                                      update_convergence( )
+                                                  } else {
+                                                      // fetch convergence information for the current channel (slider.value)
+                                                      pipe.send( convergence_id, { action: 'update', value: slider.value }, update_convergence )
+                                                  }
                                               }
                                               // enabling/disabling tools in self._fig['image'].toolbar.tools does not seem to not work
                                               // self._fig['image'].toolbar.tools.tool_name (e.g. "Box Select", "Lasso Select")
@@ -489,7 +508,7 @@ class iclean:
                                                       if ( 'cmd' in msg ) {
                                                          log.text = log.text + msg.cmd
                                                       }
-                                                      refresh( )
+                                                      refresh( msg )
                                                       state.stopped = state.stopped || msg.stopcode > 1 || msg.stopcode == 0
                                                       if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                           btns['stop'].button_type = "danger"
@@ -617,22 +636,37 @@ class iclean:
 
 
         callback = CustomJS( args=dict( source=self._image_source, convergence_src=self._convergence_source,
-                                        figure=self._fig['convergence'], slider=self._fig['slider'],
+                                        convergence_fig=self._fig['convergence'], slider=self._fig['slider'],
                                         pipe=self._pipe['data'], convergence_id=self._convergence_id,
                                         stat_src=self._stats_source
                                        ),
-                             code="""function update_convergence( msg ) {
-                                         if ( 'result' in msg ) {
+                             code="""let stokes = 0    // later we will receive the polarity
+                                                       // from some widget mechanism...
+                                     function update_convergence( msg ) {
+                                         //!!!!!!! DUPLICATED ABOVE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                         if ( typeof msg === 'undefined' && '_convergence_data' in convergence_fig ) {
+                                             // use complete convergence cache attached to convergence_fig...
+                                             // get the convergence data for channel (slider.value) and stokes
+                                             convergence_src.data = convergence_fig._convergence_data[slider.value][stokes]
+                                         } else if ( 'result' in msg ) {
+                                             // update based on msg received from data_pipe
                                              convergence_src.data = msg.result.converge
-                                             figure.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...msg.result.converge['modelFlux'])
-                                             figure.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...msg.result.converge['modelFlux'])
                                          }
+                                         convergence_fig.extra_y_ranges['modelFlux'].end = 1.5*Math.max(...convergence_src.data['modelFlux'])
+                                         convergence_fig.extra_y_ranges['modelFlux'].start = 0.5*Math.min(...convergence_src.data['modelFlux'])
                                      }
                                      source.channel( slider.value, 0,
                                                      msg => { if ( 'stats' in msg ) { stat_src.data = msg.stats } } )
-                                     pipe.send( convergence_id,
-                                                { action: 'update', value: slider.value },
-                                                update_convergence )""" )
+                                     if ( '_convergence_data' in convergence_fig ) {
+                                         // use saved state for update of convergence plot if it is
+                                         // available (so update can happen while tclean is running)
+                                         update_convergence( )
+                                     } else {
+                                         // update convergence plot with a request to python
+                                         pipe.send( convergence_id,
+                                                    { action: 'update', value: slider.value },
+                                                    update_convergence )
+                                     }""" )
 
         self._fig['slider'].js_on_change( 'value', callback )
 
