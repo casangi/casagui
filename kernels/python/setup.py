@@ -76,5 +76,5 @@ setuptools.setup(
                                 'bokeh/components/button/iclean_button.ts',
                                 'bokeh/components/button_group/button_group.ts',
                                 'README.md', 'LICENSE' ] },
-    install_requires=['bokeh == 2.4.1', 'websockets >= 10.0', 'casatasks']
+    install_requires=['bokeh == 2.4.1', 'websockets >= 10.0', 'casatasks == 6.4.3.4a6692.dev3']
 )
