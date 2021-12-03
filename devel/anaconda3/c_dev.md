@@ -36,6 +36,6 @@ Building portions of CASA are supported by Anaconda environment files (this will
 | Software | macos | rhel8 |
 | --- | --- | --- |
 | casatools | | |
-| casatablebrowser | (qt4-macos.yml)[qt4-macos.yml] | |
+| casatablebrowser | [qt4-macos.yml](qt4-macos.yml) | |
 
 
