@@ -31,11 +31,12 @@ This will create another environment that is identical to the `my-new-environmen
 
 # Using CASA Environments
 
+## Environment
+
 Building portions of CASA are supported by Anaconda environment files (this will be filled out as experience mounts):
 
-| Software | macos | rhel8 |
-| --- | --- | --- |
-| casatools | | |
-| casatablebrowser | [qt4-macos.yml](qt4-macos.yml) | |
-
+| Software | macos | rhel8 | Notes |
+| --- | --- | --- | --- |
+| casatools | | | does not include openmpi |
+| casatablebrowser | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
 
