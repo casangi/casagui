@@ -38,6 +38,6 @@ Building portions of CASA are supported by Anaconda environment files (this will
 | Software | macos | rhel8 | Notes |
 | --- | --- | --- | --- |
 | casatools | [casa6-macos.yml](casa6-macos.yml) | | does not include openmpi |
-| casatools + openmpi | [casa6-mpi-macos.yml)[casa6-mpi-macos.yml) | | includes openmpi |
+| casatools + openmpi | [casa6-mpi-macos.yml](casa6-mpi-macos.yml) | | includes openmpi |
 | casatablebrowser | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
 
