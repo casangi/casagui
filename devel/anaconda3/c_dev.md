@@ -35,9 +35,10 @@ This will create another environment that is identical to the `my-new-environmen
 
 Building portions of CASA are supported by Anaconda environment files (this will be filled out as experience mounts):
 
-| Software | macos | rhel8 | Notes |
-| --- | --- | --- | --- |
-| casatools | [casa6-macos.yml](casa6-macos.yml) | [casa6-linux.yml](casa6-linux.yml) | does not include openmpi |
+| Software            | macos | rhel8 | Notes |
+|---------------------| --- | --- | --- |
+| casatools           | [casa6-macos.yml](casa6-macos.yml) | [casa6-linux.yml](casa6-linux.yml) | does not include openmpi |
 | casatools + openmpi | [casa6-mpi-macos.yml](casa6-mpi-macos.yml) | [casa6-mpi-linux.yml](casa6-mpi-linux) | includes openmpi (on linux, libmpi_cxx does not seem to be available and does not seem to be needed) |
-| casatablebrowser | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
+| casatablebrowser    | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
+| casafeather         | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
 
