@@ -85,7 +85,6 @@ dependencies:
   - numpy=1.21.4=py38he2449b9_0
   - openjdk=11.0.9.1=h5cc2fde_1
   - openmpi=4.1.2=hbfc84c5_0
-  - openmpi-mpicxx=4.1.2=h4bd325d_0
   - openssl=1.1.1l=h7f98852_0
   - pcre=8.45=h9c3ff4c_0
   - perl=5.32.1=1_h7f98852_perl5
