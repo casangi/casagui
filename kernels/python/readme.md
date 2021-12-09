@@ -49,3 +49,15 @@ can run this demo by:
 1. run `bash$ python3 image-data-source-demo.py`
 
 Currently, you have to use `^C` to exit.
+
+
+# Example of casagui.apps usage
+## Plot antenna positions: `plotants`
+In an interactive Python session, or from a Jupyter Notebook:
+```python
+from casagui.apps import plotants
+
+
+plotants("ngc5921.ms") # this will prompt a Bokeh plot in web browser tab
+plotants("ngc5921.ms", filename="fig_plotants_ngc5921.pdf") # this will produce a PDF image of the plot
+```
