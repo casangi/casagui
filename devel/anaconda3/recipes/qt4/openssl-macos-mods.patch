@@ -1,0 +1,117 @@
+diff -ru ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslcertificate.cpp ./src/network/ssl/qsslcertificate.cpp
+--- ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslcertificate.cpp	2015-05-07 10:14:44.000000000 -0400
++++ ./src/network/ssl/qsslcertificate.cpp	2021-11-16 22:24:05.000000000 -0500
+@@ -261,7 +261,7 @@
+     QMutexLocker lock(QMutexPool::globalInstanceGet(d.data()));
+     if (d->versionString.isEmpty() && d->x509)
+         d->versionString =
+-            QByteArray::number(qlonglong(q_ASN1_INTEGER_get(d->x509->cert_info->version)) + 1);
++            QByteArray::number(qlonglong(X509_get_version(d->x509)) + 1);
+ 
+     return d->versionString;
+ }
+@@ -276,7 +276,7 @@
+ {
+     QMutexLocker lock(QMutexPool::globalInstanceGet(d.data()));
+     if (d->serialNumberString.isEmpty() && d->x509) {
+-        ASN1_INTEGER *serialNumber = d->x509->cert_info->serialNumber;
++        ASN1_INTEGER *serialNumber = X509_get_serialNumber(d->x509);
+         // if we cannot convert to a long, just output the hexadecimal number
+         if (serialNumber->length > 4) {
+             QByteArray hexString;
+@@ -489,19 +489,19 @@
+     QSslKey key;
+ 
+     key.d->type = QSsl::PublicKey;
+-    X509_PUBKEY *xkey = d->x509->cert_info->key;
+-    EVP_PKEY *pkey = q_X509_PUBKEY_get(xkey);
++    X509_PUBKEY *xkey = X509_get_X509_PUBKEY(d->x509);
++    EVP_PKEY *pkey = X509_PUBKEY_get(xkey);
+     Q_ASSERT(pkey);
+ 
+-    if (q_EVP_PKEY_type(pkey->type) == EVP_PKEY_RSA) {
++    if (q_EVP_PKEY_type(EVP_PKEY_id(pkey)) == EVP_PKEY_RSA) {
+         key.d->rsa = q_EVP_PKEY_get1_RSA(pkey);
+         key.d->algorithm = QSsl::Rsa;
+         key.d->isNull = false;
+-    } else if (q_EVP_PKEY_type(pkey->type) == EVP_PKEY_DSA) {
++    } else if (q_EVP_PKEY_type(EVP_PKEY_id(pkey)) == EVP_PKEY_DSA) {
+         key.d->dsa = q_EVP_PKEY_get1_DSA(pkey);
+         key.d->algorithm = QSsl::Dsa;
+         key.d->isNull = false;
+-    } else if (q_EVP_PKEY_type(pkey->type) == EVP_PKEY_DH) {
++    } else if (q_EVP_PKEY_type(EVP_PKEY_id(pkey)) == EVP_PKEY_DH) {
+         // DH unsupported
+     } else {
+         // error?
+diff -ru ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslkey.cpp ./src/network/ssl/qsslkey.cpp
+--- ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslkey.cpp	2015-05-07 10:14:44.000000000 -0400
++++ ./src/network/ssl/qsslkey.cpp	2021-11-16 22:48:16.000000000 -0500
+@@ -321,8 +321,18 @@
+ {
+     if (d->isNull)
+         return -1;
++#if OPENSSL_VERSION_NUMBER < 0x10100000L
+     return (d->algorithm == QSsl::Rsa)
+            ? q_BN_num_bits(d->rsa->n) : q_BN_num_bits(d->dsa->p);
++#else
++    if (d->algorithm == QSsl::Rsa) {
++      return RSA_bits(d->rsa);
++    }else{
++      const BIGNUM *p = NULL;
++      DSA_get0_pqg(d->dsa, &p, NULL, NULL);
++      return q_BN_num_bits(p);
++    }
++#endif
+ }
+ 
+ /*!
+diff -ru ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslsocket_openssl.cpp ./src/network/ssl/qsslsocket_openssl.cpp
+--- ../qt-everywhere-opensource-src-4.8.7-BUILD-BASELINE/src/network/ssl/qsslsocket_openssl.cpp	2015-05-07 10:14:44.000000000 -0400
++++ ./src/network/ssl/qsslsocket_openssl.cpp	2021-11-16 23:19:12.000000000 -0500
+@@ -222,8 +222,7 @@
+             ciph.d->encryptionMethod = descriptionList.at(4).mid(4);
+         ciph.d->exportable = (descriptionList.size() > 6 && descriptionList.at(6) == QLatin1String("export"));
+ 
+-        ciph.d->bits = cipher->strength_bits;
+-        ciph.d->supportedBits = cipher->alg_bits;
++        ciph.d->bits = SSL_CIPHER_get_bits(cipher,&ciph.d->supportedBits);
+ 
+     }
+     return ciph;
+@@ -325,7 +324,7 @@
+         options |= SSL_OP_NO_COMPRESSION;
+ #endif
+ 
+-    q_SSL_CTX_set_options(ctx, options);
++    SSL_CTX_set_options(ctx, options);
+ 
+     // Initialize ciphers
+     QByteArray cipherString;
+@@ -363,7 +362,7 @@
+         //
+         // See also: QSslContext::fromConfiguration()
+         if (caCertificate.expiryDate() >= QDateTime::currentDateTime()) {
+-            q_X509_STORE_add_cert(ctx->cert_store, (X509 *)caCertificate.handle());
++            X509_STORE_add_cert(SSL_CTX_get_cert_store(ctx), (X509 *)caCertificate.handle());
+         }
+     }
+ 
+@@ -659,13 +658,17 @@
+     STACK_OF(SSL_CIPHER) *supportedCiphers = q_SSL_get_ciphers(mySsl);
+     for (int i = 0; i < q_sk_SSL_CIPHER_num(supportedCiphers); ++i) {
+         if (SSL_CIPHER *cipher = q_sk_SSL_CIPHER_value(supportedCiphers, i)) {
++#if OPENSSL_VERSION_NUMBER < 0x10100000L
+             if (cipher->valid) {
++#endif
+                 QSslCipher ciph = QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(cipher);
+                 if (!ciph.isNull()) {
+                     if (!ciph.name().toLower().startsWith(QLatin1String("adh")))
+                         ciphers << ciph;
+                 }
++#if OPENSSL_VERSION_NUMBER < 0x10100000L
+             }
++#endif
+         }
+     }
+ 

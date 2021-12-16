@@ -1,0 +1,27 @@
+# Copyright 2015-2020 Peter Williams and collaborators.
+# This file is licensed under a 3-clause BSD license; see LICENSE.txt.
+
+package:
+  name: qwt6
+  version: "6.1.1"
+
+source:
+  fn: qwt-6.1.1.tar.bz2
+  url: http://sourceforge.net/projects/qwt/files/qwt/6.1.1/qwt-6.1.1.tar.bz2/download
+  md5: fe4bdd561ef5584924e72e15bcf46b9e
+
+build:
+  number: 6
+  detect_binary_files_with_prefix: true
+
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - qt4
+  host:
+    - qt4
+
+about:
+  home: http://qwt.sourceforge.net/
+  license: Qwt License version 1.0
+  summary: version 5 of a technical widget library for Qt
