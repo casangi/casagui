@@ -78,7 +78,7 @@ dependencies:
   - pthread-stubs=0.4=hc929b4f_1001
   - python=3.8.8=h88f2d9e_5
   - python_abi=3.8=2_cp38
-  - qt4=4.8.7=h01edc0c_22
+  - qt4=4.8.7=h01edc0c_23
   - qwt6=6.1.1=ha5a8b8e_6
   - re2=2021.11.01=he49afe7_0
   - readline=8.1=h05e3726_0
