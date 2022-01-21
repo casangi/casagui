@@ -318,10 +318,9 @@ class iclean:
                                        source=self._convergence_source )
 
         self._fig['image'] = figure( output_backend="webgl",
-                                     tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",self._hover['image'],"save","reset" ],
+                                     tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",self._hover['image'],"save","reset" ],
                                      tooltips=None
                                     )
-                                     #tools=["lasso_select","box_select","pan,wheel_zoom","box_zoom",self._hover['image'],"save","reset","help"] )
 
         self._fig['image'].x_range.range_padding = self._fig['image'].y_range.range_padding = 0
 
@@ -340,13 +339,10 @@ class iclean:
         self._mask = { }
         self._mask['rect'] = BoxAnnotation( left=0, right=0, bottom=0, top=0,
                                            fill_alpha=0.1, line_color='black', fill_color='black' )
+        self._mask['lasso'] = PolyAnnotation( xs=[], ys=[],
+                                             fill_alpha=0.1, line_color='black', fill_color='black' )
         self._mask['poly'] = PolyAnnotation( xs=[], ys=[],
                                              fill_alpha=0.1, line_color='black', fill_color='black' )
-
-        jscode = """
-                     box[%r] = cb_obj.start
-                     box[%r] = cb_obj.end
-        """
 
         self._status['log'] = Div( text="<hr><p>%s</p>" % self._clean.cmds( )[-1] )
         self._status['stopcode'] = Div( text="<div>initial image</div>" )
@@ -632,12 +628,16 @@ class iclean:
 
         self._fig['image'].js_on_event( SelectionGeometry,
                                         CustomJS( args=dict( source=self._image_source,
-                                                             box=self._mask['rect'], poly=self._mask['poly'] ),
-                                                  code="""if ( source._mask_disabled != true ){
+                                                             box=self._mask['rect'],
+                                                             lasso=self._mask['lasso'],
+                                                             poly=self._mask['poly'] ),
+                                                  code="""console.log("-----------------------------here----------------------------------------")
+                                                          if ( source._mask_disabled != true ){
                                                               const geometry = cb_obj['geometry'];
+                                                              console.log(">>>>>>geometry>type>>>",geometry)
                                                               if ( geometry.type === 'rect' ) {
-                                                                  poly.xs = [ ]
-                                                                  poly.ys = [ ]
+                                                                  lasso.xs = [ ]
+                                                                  lasso.ys = [ ]
                                                                   box.left = geometry.x0
                                                                   box.right = geometry.x1
                                                                   box.top = geometry.y0
@@ -649,22 +649,22 @@ class iclean:
                                                                   box.right = 0
                                                                   box.top = 0
                                                                   box.bottom = 0
-                                                                  poly.xs = [ ].slice.call(geometry.x)
-                                                                  poly.ys = [ ].slice.call(geometry.y)
-                                                                  var coords = poly.xs.map( function(e, i) { return `[ ${e.toFixed(1)}pix, ${poly.ys[i].toFixed(1)}pix ]` } )
-                                                                  source._mask_clean = `poly[ ${coords.join(", ")} ]`
+                                                                  lasso.xs = [ ].slice.call(geometry.x)
+                                                                  lasso.ys = [ ].slice.call(geometry.y)
+                                                                  var coords = lasso.xs.map( function(e, i) { return `[ ${e.toFixed(1)}pix, ${lasso.ys[i].toFixed(1)}pix ]` } )
+                                                                  source._mask_clean = `lasso[ ${coords.join(", ")} ]`
                                                               }
                                                           }""" ) )
         self._fig['image'].js_on_event( 'reset',
-                                        CustomJS( args=dict( box=self._mask['rect'], poly=self._mask['poly'],
+                                        CustomJS( args=dict( box=self._mask['rect'], lasso=self._mask['lasso'],
                                                              source=self._image_source ),
                                                   code="""console.log("reset pressed")
                                                           box.left = 0
                                                           box.right = 0
                                                           box.top = 0
                                                           box.bottom = 0
-                                                          poly.xs = [ ]
-                                                          poly.ys = [ ]
+                                                          lasso.xs = [ ]
+                                                          lasso.ys = [ ]
                                                           source._mask_clean = ''""" ) )
 
 
@@ -734,6 +734,7 @@ class iclean:
                                   self._status['log'] )
 
         self._fig['image'].add_layout(self._mask['rect'])
+        self._fig['image'].add_layout(self._mask['lasso'])
         self._fig['image'].add_layout(self._mask['poly'])
         show(self._fig['layout'])
 
