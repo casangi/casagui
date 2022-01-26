@@ -42,3 +42,23 @@ Building portions of CASA are supported by Anaconda environment files (this will
 | casatablebrowser    | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
 | casafeather         | [qt4-macos.yml](qt4-macos.yml) | | should **not** be built with openmpi |
 
+# Setup casatools using conda environments:
+
+## Steps to build casatools on M1 w/ macos 11 (using emulator) and Xcode 12.0 or x86 w/ macos 10.15 and Xcode 11.7:
+```
+bash$ conda env create -f ~/casa6-macos.yml
+bash$ conda activate casa6
+bash$ autoconf
+bash$ ./configure --enable-system-grpc
+bash$ ./setup.py --debug bdist_wheel
+```
+
+##  Steps to build casatools on RHEL8:
+```
+bash$ conda env create -f casa6-linux.yml
+bash$ conda activate casa6
+bash$ autoconf
+bash$ ./configure --enable-system-grpc
+bash$ ./setup.py --debug bdist_wheel
+```
+Instructions for installing Anaconda on linux can be found [here](https://docs.anaconda.com/anaconda/install/linux/)
