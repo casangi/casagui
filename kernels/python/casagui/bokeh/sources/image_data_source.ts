@@ -1,6 +1,7 @@
 import { ColumnDataSource } from "@bokehjs/models/sources/column_data_source"
 import * as p from "@bokehjs/core/properties"
 import {uuid4} from "@bokehjs/core/util/string"
+import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 import { ImagePipe } from "./image_pipe"
 
 // Data source where the data is defined column-wise, i.e. each key in the
@@ -10,7 +11,11 @@ export namespace ImageDataSource {
   export type Attrs = p.AttrsOf<Props>
 
   export type Props = ColumnDataSource.Props & {
+      init_script: p.Property<CallbackLike0<ColumnDataSource> | null>;
       image_source: p.Property<ImagePipe>
+      num_chans: p.Property<[Number,Number]>          // [ stokes, spectral ]
+      cur_chan:  p.Property<[Number,Number]>          // [ stokes, spectral ]
+      init: p.Property<String>
   }
 }
 
@@ -24,15 +29,21 @@ export class ImageDataSource extends ColumnDataSource {
     constructor(attrs?: Partial<ImageDataSource.Attrs>) {
         super(attrs);
         this.imid = uuid4( )
-        console.log( 'image data source id:', this.imid )
     }
     initialize(): void {
         super.initialize();
+        const execute = () => {
+            if ( this.init_script != null ) this.init_script!.execute( this )
+        }
+        execute( )
     }
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
-                                       if ( cb ) { cb(data) }
+                                       this.cur_chan = [ s, c ]
+                                       if ( cb ) {
+                                           cb(data)
+                                       }
                                        this.data = data.chan
                                    }, this.imid )
     }
@@ -45,8 +56,12 @@ export class ImageDataSource extends ColumnDataSource {
         }, this.imid, [ 0, 0 ] )
     }
     static init_ImageDataSource( ): void {
-        this.define<ImageDataSource.Props>(({ Ref }) => ({
+        this.define<ImageDataSource.Props>(({ Tuple, Number, String, Ref, Any }) => ({
+            init_script: [ Any ],
             image_source: [ Ref(ImagePipe) ],
+            num_chans: [ Tuple(Number,Number) ],
+            cur_chan:  [ Tuple(Number,Number) ],
+            init: [ String ],
         }));
     }
 }

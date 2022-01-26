@@ -55,17 +55,12 @@ class ImagePipe(DataSource):
     """
     __im_path = None
     __im = None
-    __im_shape = None
     __chan_shape = None
 
     address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
+    shape = Tuple( Int, Int, Int, Int, help="shape: [ RA, DEC, Stokes, Spectral ]" )
 
     __implementation__ = TypeScript( "" )
-
-    def shape( self ):
-        """Retrieve the shape of the image cube.
-        """
-        return self.__im_shape
 
     def __open( self, image ):
         if self.__im is not None:
@@ -78,8 +73,7 @@ class ImagePipe(DataSource):
         except:
             self.__im = None
             raise RuntimeError('could not open image: %s' % image)
-        self.__im_shape = self.__im.shape( )
-        self.__chan_shape = list(self.__im_shape[0:2])
+        self.__chan_shape = list(self.__im.shape( )[0:2])
 
     def channel( self, index ):
         """Retrieve one channel from the image cube. The `index` should be a
@@ -109,12 +103,12 @@ class ImagePipe(DataSource):
             the ''stokes'' axis
         """
         index = list(map( lambda i: 0 if i is None else i, index ))
-        if index[0] >= self.__im_shape[0]: index[0] = self.__im_shape[0] - 1
-        if index[1] >= self.__im_shape[1]: index[1] = self.__im_shape[1] - 1
+        if index[0] >= self.shape[0]: index[0] = self.shape[0] - 1
+        if index[1] >= self.shape[1]: index[1] = self.shape[1] - 1
         if self.__im is None:
             raise RuntimeError('no image is available')
         result = np.squeeze( self.__im.getchunk( blc=index + [0],
-                                                 trc=index + [self.__im_shape[-1]] ) )
+                                                 trc=index + [self.shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
         try:
@@ -126,9 +120,10 @@ class ImagePipe(DataSource):
             return { 'x': [0], 'y': [float(result)] }
 
     def __init__( self, image, stats=False, *args, **kwargs ):
-        super( ).__init__( *args, **kwargs )
+        super( ).__init__( *args, **kwargs, )
         self._stats = stats
         self.__open( image )
+        self.shape = list(self.__im.shape( ))
 
     def statistics( self, index ):
         """Retrieve statistics for one channel from the image cube. The `index`

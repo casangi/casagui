@@ -9,6 +9,7 @@ export namespace ImagePipe {
     export type Attrs = p.AttrsOf<Props>
 
     export type Props = DataSource.Props & {
+        shape: p.Property<[number,number,number,number]>
         address: p.Property<[string,number]>
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         spectra: p.Property<( index: [number,number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
@@ -132,6 +133,7 @@ export class ImagePipe extends DataSource {
     static init_ImagePipe( ): void {
         this.define<ImagePipe.Props>(({ Tuple, String, Number }) => ({
             address: [Tuple(String,Number)],
+            shape: [Tuple(Number,Number,Number,Number)]
         }));
     }
 }

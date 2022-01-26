@@ -30,8 +30,10 @@ import numpy as np
 from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.util.serialization import transform_column_source_data
-from bokeh.core.properties import Instance
+from bokeh.core.properties import Instance, Tuple, Int, Nullable, String, Nullable
 from .image_pipe import ImagePipe
+from bokeh.models.callbacks import Callback
+
 
 import json
 
@@ -47,11 +49,20 @@ class ImageDataSource(ColumnDataSource):
         the conduit for updating the channel/plane from the image cube
     """
 
+    init_script = Nullable(Instance(Callback), help="""
+    JavaScript to be run during initialization of an instance of an ImageDataSource object.
+    """)
+
     image_source = Instance(ImagePipe)
+    num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
+    cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
+    init = String( )
 
     __implementation__ = TypeScript("")
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
         self.data = { 'd': [ self.image_source.channel( [0,0] ) ] }
+        self.num_chans = list(self.image_source.shape[-2:])
+        self.cur_chan  = [ 0, 0 ]
 

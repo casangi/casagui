@@ -17,7 +17,7 @@ from bokeh.colors import HSL, RGB
 from bokeh.colors import Color
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
-from ._gclean import gclean as _gclean
+from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 
 class iclean:
     '''iclean(...) implements interactive clean using Bokeh
@@ -201,7 +201,7 @@ class iclean:
         self._image_spectra = SpectraDataSource(image_source=self._pipe['image'])
 
 
-        shape = self._pipe['image'].shape()
+        shape = self._pipe['image'].shape
         slider_end = shape[-1]-1
         self._fig['slider'] = Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
                                       title="Channel", width=380 )
