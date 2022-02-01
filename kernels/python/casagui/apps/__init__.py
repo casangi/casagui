@@ -17,8 +17,9 @@ def setup_session():
         output_notebook()
 
 
-__all__ = ["plotants", "plotbandpass"]
+__all__ = ["plotants", "plotbandpass", 'makemask']
 from .plotants import plotants
 from .plotbandpass import plotbandpass
+from ._makemask import makemask
 
 setup_session()

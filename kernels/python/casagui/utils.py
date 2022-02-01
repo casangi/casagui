@@ -1,6 +1,6 @@
-########################################################################3
+########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021,2022
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
 #                        520 Edgemont Road
 #                        Charlottesville, VA 22903-2475 USA
 #
-########################################################################3
+########################################################################
 from socket import socket
 from os import path as __path
 
@@ -53,6 +53,13 @@ def static_vars(**kwargs):
     return decorate
 
 def static_dir(func):
+    '''return a list of static variables associated with ``func``
+
+    Parameters
+    ----------
+    func: function
+        function with static variables
+    '''
     return [a for a in dir(func) if a[0] != '_']
 
 def path_to_url( path ):
@@ -107,3 +114,37 @@ def partition(pred, iterable):
         else:
             falses.append(item)
     return trues, falses
+
+
+@static_vars(url='http://clients3.google.com/generate_204')
+def have_network( ):
+    '''check to see if an active network with general internet connectivity
+    is available. returns ``True`` if we have internet connectivity and
+    ``False`` if we do not.
+    '''
+    ###
+    ### see: https://stackoverflow.com/questions/50558000/test-internet-connection-for-python3
+    ###
+    import requests
+
+    try:
+        response = requests.get(have_network.url, timeout=5)
+        if response.status_code == 204:
+            return True
+        else:
+            return False
+    except requests.exceptions.RequestException as err:
+        ### some generic error
+        return False
+    except requests.exceptions.HTTPError as errh:
+        ### http error
+        return False
+    except requests.exceptions.ConnectionError as errc:
+        ### connection error
+        return False
+    except requests.exceptions.Timeout as errt:
+        ### timeout
+        return False
+    except:
+        ### reachable?
+        return False

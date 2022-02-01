@@ -1,4 +1,4 @@
-########################################################################3
+########################################################################
 #
 # Copyright (C) 2021
 # Associated Universities, Inc. Washington DC, USA.
@@ -24,7 +24,7 @@
 #                        520 Edgemont Road
 #                        Charlottesville, VA 22903-2475 USA
 #
-########################################################################3
+########################################################################
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int

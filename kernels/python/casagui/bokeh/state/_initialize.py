@@ -1,6 +1,6 @@
-########################################################################3
+########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021,2022
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -24,13 +24,14 @@
 #                        520 Edgemont Road
 #                        Charlottesville, VA 22903-2475 USA
 #
-########################################################################3
-from ..utils import path_to_url
-from ..resources import version
-from . import bokeh_version
-from casagui.utils import static_vars
+########################################################################
+from ...utils import path_to_url, static_vars, have_network
+from ...resources import version
+from .. import bokeh_version
+from os.path import dirname, join, basename
 
-@static_vars(initialized=False)
+
+@static_vars(initialized=False,do_local_subst=not have_network( ))
 def initialize_bokeh( libs=None, dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
@@ -57,6 +58,11 @@ def initialize_bokeh( libs=None, dev=0 ):
         ### only initialize once...
         return
 
+    ###
+    ### if no network is available, substitute local JavaScript libraries
+    ### for remote URLs
+    ###
+
     library_hashes = {
         ### --------------------------------------------------------------------------------------------------
         ### Generate hashes with:
@@ -70,6 +76,15 @@ def initialize_bokeh( libs=None, dev=0 ):
         'casaguijs-v0.0.3.0-b2.4.min.js': '23DOS7ISXIG8BRyIsD7vINUllDbo8NDCozIGBy7jGC+M14Z+axfF7j4bruA2ZnzL',
         'casaguijs-v0.0.3.0-b2.4.js': 'OmIWKy37YXZf973kemdoFd2L/h0I9AY/hsP5PMdk5/g5xlgj16yk6b0cgO01UMxM'
     }
+    ### --------------------------------------------------------------------------------------------------
+    ### casagui will ship with local versions of the Bokeh and casaguijs libraries which can be used
+    ### when there is no network connectivity...
+    ### --------------------------------------------------------------------------------------------------
+    local_libraries = {
+        'bokeh-2.4.1.min.js': join( dirname(__file__), 'js', 'bokeh-2.4.1.min.js' ),
+        'bokeh-gl-2.4.1.min.js':  join( dirname(__file__), 'js', 'bokeh-gl-2.4.1.min.js' ),
+        'bokeh-widgets-2.4.1.min.js':  join( dirname(__file__), 'js', 'bokeh-widgets-2.4.1.min.js' ),
+    }
 
     casalib = None
     casaguijs_libs = None
@@ -77,13 +92,23 @@ def initialize_bokeh( libs=None, dev=0 ):
 
     if libs is None:
         casalib = "casaguijs-v%s.%d-b%s.min.js" % (version,dev,'.'.join(bokeh_version.split('.')[0:2]))
-        casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (version,casalib)
+        if initialize_bokeh.do_local_subst:
+            casaguijs_url = path_to_url( join( dirname(__file__), 'js', casalib ) )
+        else:
+            ### ------------------------------------------------------------------------------------------
+            ### should potentially find a better download location...
+            ### ------------------------------------------------------------------------------------------
+            casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (version,casalib)
         casaguijs_libs = [ casaguijs_url ]
     else:
         casaguijs_libs = [ libs ] if type(libs) == str else libs
         casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
 
     from bokeh import resources
+    ###
+    ### substitute our function for the Bokeh function that retrieves
+    ### the security hashes for the javascript files...
+    ###
     resources.JSResources._old_hashes = resources.JSResources.hashes
     def hashes( self ):
         result = self._old_hashes
@@ -91,9 +116,22 @@ def initialize_bokeh( libs=None, dev=0 ):
             result[casaguijs_url] = library_hashes[casalib]
         return result
 
+    ###
+    ### substitute our function for the Bokeh function that retrieves
+    ### the javascript files...
+    ###
     resources.JSResources._old_js_files = resources.JSResources.js_files
     def js_files( self ):
-        result = self._old_js_files
+        if initialize_bokeh.do_local_subst:
+            result = [ ]
+            for url in self._old_js_files:
+                lib = basename(url)
+                if lib in local_libraries:
+                    result.append( path_to_url(local_libraries[lib]) )
+                else:
+                    result.append( url )
+        else:
+            result = self._old_js_files
         result = result + casaguijs_libs
         return result
 
