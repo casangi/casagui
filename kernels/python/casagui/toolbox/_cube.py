@@ -92,12 +92,15 @@ class cube_mask:
         ###    selection buffer:  tied to per-channel state                                                                     ###
         ###    copy buffer:       global                                                                                        ###
         ###########################################################################################################################
-        self._js = { 'slider_w_stats':  '''source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
+        self._js = { ### update stats in response to channel changes
+                     'slider_w_stats':  '''source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
                      'slider_wo_stats': '''source.channel( slider.value, 0 )''',
+                     ### setup maping of keys to numeric values 
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
                                                             command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
-                     'image-init':      '''if ( typeof(source._cur_chan_prev) === 'undefined' ) {
+                     ### initialize mask state
+                     'mask-state-init': '''if ( typeof(source._cur_chan_prev) === 'undefined' ) {
                                                source._cur_chan_prev = source.cur_chan
                                            }
                                            if ( typeof(source._polys) === 'undefined' ) {
@@ -157,6 +160,9 @@ class cube_mask:
                                                    while(chan-- > 0) source._chanmasks[stokes][chan] = [ [ ], [ ], [ ], [ ], [ stokes, chan ] ]
                                                }
                                            }''',
+                     ### function to return mask state for current channel, the 'source' (image_data_source) object
+                     ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
+                     ### point to our 'source' object
                      'func-curmasks': lambda source="source": '''
                                            function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
                                            function collect_masks( ) {
@@ -181,6 +187,8 @@ class cube_mask:
                                                } )
                                                return { action: 'done', value: { masks: details, polys: poly_result } }
                                            }'''.replace('source',source),
+                     ### create a new polygon -- create state and establish a correspondence between the polygon and the
+                     ###                         annotation that will be used to represent it for this particular channel
                      'func-newpoly':    '''function newpoly( cm ) {
                                                let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) ) // find id not in use
                                                if ( typeof(anno_id) != 'string') return null                         // is id reasonable
@@ -194,7 +202,8 @@ class cube_mask:
                                                cm[1].push(poly_id)                                                   // polygons in use by this channel
                                                return result
                                            }''',
-                     'func-states':     '''function state_update_cursor( index, cm = curmasks( ) ) {
+                     ### functions for updating the polygon/annotation state in response to key presses
+                     'key-state-funcs': '''function state_update_cursor( index, cm = curmasks( ) ) {
                                                if ( index >= 0 && index < cm[0].length ) {
                                                    source._annotations[cm[0][index]].line_color = source._cursor_color
                                                    source._cursor = index
@@ -404,6 +413,137 @@ class cube_mask:
                                                const addition = groupby( source._copy_buffer[0], poly_already_exists )
                                                paste_with_offset( addition[0] )
                                                paste( addition[1] )
+                                           }''',
+                     ### add a polygon after one is drawn by the user via the Bokeh annotation tools
+                     'add-polygon':     '''slider.value = cb_obj.cur_chan[1]
+                                           const cur_masks = curmasks( )
+                                           const prev_masks = curmasks(cb_obj._cur_chan_prev)
+                                           prev_masks[0].forEach( (i) => {                                  // RESET ANNOTATIONS FROM OLD CHANNEL
+                                               cb_obj._annotations[i].xs = [ ];                             // clear Xs for annotations used by prev
+                                               cb_obj._annotations[i].ys = [ ]                              // clear Ys for annotations used by prev
+                                               cb_obj._annotations[i].line_color = null                     // clear line color
+                                               cb_obj._annotations[i].fill_color = cb_obj._default_color    // set default mask fill
+                                           } )
+                                           cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
+                                               const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
+                                               const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
+
+                                               // set Xs for the current annotation add any X translation from current poly
+                                               mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
+                                               // set Ys for the current annotation add any Y translation from current poly
+                                               mask_annotation.ys = mask_poly.geometry.ys.reduce( 
+                                                                        (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
+                                                                        // restore selections for this channel
+                                                                        if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
+                                                                    } )
+                                               cb_obj._cur_chan_prev = cb_obj.cur_chan''',
+                     ### invoke key state management functions in response to keyboard events in the document. this
+                     ### code manages the permitted key combinations while most of the state management is handled
+                     ### by the state management functions.
+                     'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
+                                               document._key_state = { option: false, control: false, shift: false }
+                                               document.addEventListener( 'keydown',
+                                                   (e) => { if ( e.keyCode === keymap.shift ) {
+                                                                // shift key is independent of the control/option state
+                                                                document._key_state.shift = true
+                                                            } else if ( document._key_state.option === true ) {     // option key
+                                                                if ( document._key_state.control === true ) {       // control key
+                                                                                                                    // arrow (no opt key) up moves through channels
+                                                                    if ( e.keyCode === keymap.up ) {
+                                                                        const prev_masks = curmasks( )
+                                                                        let cur_masks = null
+                                                                        if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
+                                                                            // wrap round to the first channel
+                                                                            source.channel( 0, source.cur_chan[0] )
+                                                                            cur_masks = curmasks( [ source.cur_chan[0], 0 ] )
+                                                                        } else {
+                                                                            // advance to the next channel
+                                                                            source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
+                                                                            cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
+                                                                        }
+                                                                        // curmasks( ) will only report the new updated channel after
+                                                                        // the round-trip to python... so we need to use the updated
+                                                                        // indexes from here...
+                                                                        state_update_chan_state( prev_masks, cur_masks )
+                                                                    } else if ( e.keyCode === keymap.down ) {
+                                                                        if ( source.cur_chan[1] - 1 >= 0 ) {
+                                                                            // advance to the prev channel
+                                                                            source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
+                                                                        } else {
+                                                                            // wrap round to the last channel
+                                                                            source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
+                                                                        }
+                                                                    }
+                                                                }                                              // control key
+                                                                else {                                         // no control key
+                                                                    const shape = source.image_source.shape
+                                                                    const shifted = document._key_state.shift
+                                                                    if ( e.keyCode === keymap.control ) {
+                                                                        let cm = curmasks( )
+                                                                        if ( document._key_state.option )
+                                                                            state_clear_cursor( cm )
+                                                                            document._key_state.control = true
+                                                                            state_clear_cursor( cm )
+                                                                        } else if ( e.keyCode === keymap.next ) {
+                                                                            state_next_cursor( )
+                                                                        } else if ( e.keyCode === keymap.prev ) {
+                                                                            state_prev_cursor( )
+                                                                        } else if ( e.keyCode === keymap.space ) {
+                                                                            let cm = curmasks( )
+                                                                            state_cursor_to_selection( cm )
+                                                                        } else if ( e.keyCode === keymap.escape ) {
+                                                                            state_clear_selection( )
+                                                                        } else if ( e.keyCode === keymap.delete ) {
+                                                                            // remove cursor mask from channel
+                                                                            state_remove_mask( )
+                                                                        } else if ( e.keyCode === keymap.up ) {
+                                                                            state_translate_selection( 0, shifted ? Math.floor(shape[1]/10) : 1 )
+                                                                        } else if ( e.keyCode === keymap.down ) {
+                                                                            state_translate_selection( 0, shifted ? -Math.floor(shape[1]/10) : -1 )
+                                                                        } else if ( e.keyCode === keymap.left ) {
+                                                                            state_translate_selection( shifted ? -Math.floor(shape[0]/10) : -1, 0 )
+                                                                        } else if ( e.keyCode === keymap.right ) {
+                                                                            state_translate_selection( shifted ? Math.floor(shape[0]/10) : 1, 0 )
+                                                                        } else if ( e.keyCode === keymap.copy ) {
+                                                                            state_copy_selection( )
+                                                                        } else if ( e.keyCode === keymap.paste ) {
+                                                                            if ( document._key_state.shift ) {
+                                                                                for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
+                                                                                    for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
+                                                                                        if ( stokes != source._copy_buffer[1][0] ||
+                                                                                             chan != source._copy_buffer[1][1] )
+                                                                                            state_paste_selection( curmasks( [ stokes, chan ] ) )
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                                                                state_paste_selection( )
+                                                                            }
+                                                                        }
+                                                                    }                                              // no control key
+                                                            } else {                                               // no option key
+                                                                    // option key first pressed
+                                                                    if ( e.keyCode === keymap.option ) {
+                                                                        document._key_state.option = true
+                                                                        if ( document._key_state.control !== true ) state_initialize_cursor( )
+                                                                    }
+                                                                    else if ( e.keyCode === keymap.control ) {
+                                                                        document._key_state.control = true
+                                                                    }
+                                                            }                                                  // no option key
+                                                          } )
+                                               document.addEventListener( 'keyup',
+                                                   (e) => { // option key released
+                                                            if ( e.keyCode === keymap.option ) {
+                                                                document._key_state.option = false
+                                                                state_clear_cursor( )
+                                                            } else if ( e.keyCode === keymap.control ) {
+                                                                document._key_state.control = false
+                                                                if ( document._key_state.option === true )
+                                                                    state_initialize_cursor( )
+                                                            } else if ( e.keyCode === keymap.shift ) {
+                                                                document._key_state.shift = false
+                                                            }
+                                                          } )
                                            }'''
                         }
 
@@ -459,8 +599,9 @@ class cube_mask:
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'],
                                                   init_script=CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids ),
-                                                                        code='let source = cb_obj;' + self._js['image-init'] + self._js['keymap-init'] +
-                                                                             self._js['func-curmasks']( ) + self._js['func-states'] +
+                                                                        code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
+                                                                             self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
+                                                                             self._js['setup-key-mgmt'] +
                                                                              """// This function is called to collect the masks and/or stop
                                                                                 source.done = ( ) => {
                                                                                     function done_close_window( msg ) {
@@ -471,117 +612,6 @@ class cube_mask:
                                                                                     ctrl.send( ids['done'],
                                                                                                collect_masks( ),
                                                                                                done_close_window )
-                                                                                }
-                                                                                if ( typeof(document._key_state) === 'undefined' ) {
-                                                                                    document._key_state = { option: false, control: false, shift: false }
-                                                                                    document.addEventListener( 'keydown',
-                                                                                         (e) => { if ( e.keyCode === keymap.shift ) {
-                                                                                                      // shift key is independent of the control/option state
-                                                                                                      document._key_state.shift = true
-                                                                                                  } else if ( document._key_state.option === true ) {       // option key
-                                                                                                      if ( document._key_state.control === true ) {  // control key
-                                                                                                          // arrow (no opt key) up moves through channels
-                                                                                                          if ( e.keyCode === keymap.up ) {
-                                                                                                              const prev_masks = curmasks( )
-                                                                                                              let cur_masks = null
-                                                                                                              if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
-                                                                                                                  // wrap round to the first channel
-                                                                                                                  source.channel( 0, source.cur_chan[0] )
-                                                                                                                  cur_masks = curmasks( [ source.cur_chan[0], 0 ] )
-                                                                                                              } else {
-                                                                                                                  // advance to the next channel
-                                                                                                                  source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
-                                                                                                                  cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
-                                                                                                              }
-                                                                                                              // curmasks( ) will only report the new updated channel after
-                                                                                                              // the round-trip to python... so we need to use the updated
-                                                                                                              // indexes from here...
-                                                                                                              state_update_chan_state( prev_masks, cur_masks )
-                                                                                                          } else if ( e.keyCode === keymap.down ) {
-                                                                                                              if ( source.cur_chan[1] - 1 >= 0 ) {
-                                                                                                                  // advance to the prev channel
-                                                                                                                  source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
-                                                                                                              } else {
-                                                                                                                  // wrap round to the last channel
-                                                                                                                  source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
-                                                                                                              }
-                                                                                                          }
-                                                                                                      }                                              // control key
-                                                                                                      else {                                         // no control key
-                                                                                                          const shape = source.image_source.shape
-                                                                                                          const shifted = document._key_state.shift
-                                                                                                          if ( e.keyCode === keymap.control ) {
-                                                                                                              let cm = curmasks( )
-                                                                                                              if ( document._key_state.option )
-                                                                                                                  state_clear_cursor( cm )
-                                                                                                              document._key_state.control = true
-                                                                                                              state_clear_cursor( cm )
-                                                                                                          } else if ( e.keyCode === keymap.next ) {
-                                                                                                              state_next_cursor( )
-                                                                                                          } else if ( e.keyCode === keymap.prev ) {
-                                                                                                              state_prev_cursor( )
-                                                                                                          } else if ( e.keyCode === keymap.space ) {
-                                                                                                              let cm = curmasks( )
-                                                                                                              state_cursor_to_selection( cm )
-                                                                                                              //state_next_cursor( cm )
-                                                                                                          } else if ( e.keyCode === keymap.escape ) {
-                                                                                                              state_clear_selection( )
-                                                                                                          } else if ( e.keyCode === keymap.delete ) {
-                                                                                                              // remove cursor mask from channel
-                                                                                                              state_remove_mask( )
-                                                                                                          } else if ( e.keyCode === keymap.up ) {
-                                                                                                              state_translate_selection( 0, shifted ? Math.floor(shape[1]/10) : 1 )
-                                                                                                          } else if ( e.keyCode === keymap.down ) {
-                                                                                                              state_translate_selection( 0, shifted ? -Math.floor(shape[1]/10) : -1 )
-                                                                                                          } else if ( e.keyCode === keymap.left ) {
-                                                                                                              state_translate_selection( shifted ? -Math.floor(shape[0]/10) : -1, 0 )
-                                                                                                          } else if ( e.keyCode === keymap.right ) {
-                                                                                                              state_translate_selection( shifted ? Math.floor(shape[0]/10) : 1, 0 )
-                                                                                                          } else if ( e.keyCode === keymap.copy ) {
-                                                                                                              state_copy_selection( )
-                                                                                                          } else if ( e.keyCode === keymap.paste ) {
-                                                                                                              if ( document._key_state.shift ) {
-                                                                                                                  for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
-                                                                                                                      for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
-                                                                                                                          if ( stokes != source._copy_buffer[1][0] ||
-                                                                                                                               chan != source._copy_buffer[1][1] )
-                                                                                                                              state_paste_selection( curmasks( [ stokes, chan ] ) )
-                                                                                                                          else
-                                                                                                                              console.log(`NOT PASTING TO [${stokes},${chan}]`)
-                                                                                                                      }
-                                                                                                                  }
-                                                                                                              } else {
-                                                                                                                  state_paste_selection( )
-                                                                                                              }
-                                                                                                          }
-                                                                                                      }                                              // no control key
-                                                                                                  }                                                  // option key
-                                                                                                  else {                                             // no option key
-                                                                                                      // option key first pressed
-                                                                                                      if ( e.keyCode === keymap.option ) {
-                                                                                                          document._key_state.option = true
-                                                                                                          if ( document._key_state.control !== true ) state_initialize_cursor( )
-                                                                                                      }
-                                                                                                      else if ( e.keyCode === keymap.control ) {
-                                                                                                          //state_clear_cursor( curmasks( ) )
-                                                                                                          document._key_state.control = true
-                                                                                                      }
-                                                                                                  }             // no option key
-                                                                                                } )
-                                                                                document.addEventListener( 'keyup',
-                                                                                                           (e) => { // option key released
-                                                                                                                    if ( e.keyCode === keymap.option ) {
-                                                                                                                        document._key_state.option = false
-                                                                                                                        state_clear_cursor( )
-                                                                                                                    } else if ( e.keyCode === keymap.control ) {
-                                                                                                                        document._key_state.control = false
-                                                                                                                        if ( document._key_state.option === true )
-                                                                                                                            state_initialize_cursor( )
-                                                                                                                    } else if ( e.keyCode === keymap.shift ) {
-                                                                                                                        document._key_state.shift = false
-                                                                                                                    }
-
-                                                                                                                  } )
                                                                                 }""") )
 
             self._image_fig = figure( output_backend="webgl",
@@ -603,12 +633,10 @@ class cube_mask:
             self._image_fig.plot_height = 400
             self._image_fig.plot_width = 400
 
-
-            self._image_fig.js_on_event( Press, CustomJS( code="""console.log('>>>>>>---------->> press event received')""" ) )
             self._image_fig.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
                                                               annotations=self._annotations ),
-                                                   code=self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['image-init'] +
+                                                   code=self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['mask-state-init'] +
                                                         """let cm = curmasks( )
                                                            const geometry = cb_obj['geometry']
                                                            if ( geometry.type === 'rect' ) {
@@ -670,28 +698,7 @@ class cube_mask:
         self._slider.js_on_change( 'value', self._cb['slider'] )
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
                                                                code=self._js['func-curmasks']('cb_obj') +
-                                                                    '''slider.value = cb_obj.cur_chan[1]
-                                                                       const cur_masks = curmasks( )
-                                                                       const prev_masks = curmasks(cb_obj._cur_chan_prev)
-                                                                       prev_masks[0].forEach( (i) => {                                  // RESET ANNOTATIONS FROM OLD CHANNEL
-                                                                           cb_obj._annotations[i].xs = [ ];                             // clear Xs for annotations used by prev
-                                                                           cb_obj._annotations[i].ys = [ ]                              // clear Ys for annotations used by prev
-                                                                           cb_obj._annotations[i].line_color = null                     // clear line color
-                                                                           cb_obj._annotations[i].fill_color = cb_obj._default_color    // set default mask fill
-                                                                       } )
-                                                                       cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
-                                                                           const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
-                                                                           const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
-
-                                                                           // set Xs for the current annotation add any X translation from current poly
-                                                                           mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
-                                                                           // set Ys for the current annotation add any Y translation from current poly
-                                                                           mask_annotation.ys = mask_poly.geometry.ys.reduce( (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
-
-                                                                           // restore selections for this channel
-                                                                           if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
-                                                                       } )
-                                                                       cb_obj._cur_chan_prev = cb_obj.cur_chan''' ) )
+                                                                    self._js['add-polygon'] ) )
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This
