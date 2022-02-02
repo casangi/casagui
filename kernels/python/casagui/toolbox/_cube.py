@@ -203,6 +203,23 @@ class cube_mask:
                                                return result
                                            }''',
                      ### functions for updating the polygon/annotation state in response to key presses
+                     ### ------------------------------------------------------------------------------------------
+                     ###   state_update_cursor       -- move cursor to specified polygon index
+                     ###   state_clear_cursor        -- unset cursor state (e.g. option release or control pressed)
+                     ###   state_next_cursor         -- move the cursor to the next (with wrapping) polygon index
+                     ###   state_prev_cursor         -- move the cursor to the previous (with wrapping) polygon index
+                     ###   state_nonselection_cursor -- move the cursor to another polygon index which is not in the
+                     ###                                selection set (avoid always picking the next index with the
+                     ###                                expectation that the user will be adding more polygons to the
+                     ###                                selection set (and avoiding always going to the one not desired)
+                     ###   state_cursor_to_selection -- add the current cursor polygon to the selection set
+                     ###   state_clear_selection     -- clear selection set
+                     ###   state_initialize_cursor   -- set cursor to its initial value
+                     ###   state_translate_selection -- move all polygons in the selection set by an x/y translation
+                     ###   state_copy_selection      -- replace copy buffer contents with the contents of the selection set
+                     ###   state_paste_selection     -- past the contents of the copy buffer into the current channel
+                     ###                                if the polygons in the copy buffer already exist in the current
+                     ###                                paste polygons with an x/y translation (to avoid pasting on top)
                      'key-state-funcs': '''function state_update_cursor( index, cm = curmasks( ) ) {
                                                if ( index >= 0 && index < cm[0].length ) {
                                                    source._annotations[cm[0][index]].line_color = source._cursor_color
@@ -249,11 +266,6 @@ class cube_mask:
                                                        }
                                                    }
                                                }
-                                               //for (let i = 0; i < cm[0].length; i++) {
-                                               //    if ( ! tried_indexes.includes(i) ) {
-                                               //        return i
-                                               //    }
-                                               //}
                                                return source._cursor
                                            }
                                            function state_cursor_to_selection( cm = curmasks( ) ) {
