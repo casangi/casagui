@@ -234,7 +234,6 @@ class cube_mask:
                                                else
                                                    state_update_cursor( cm[0].length - 1, cm )
                                            }
-                                           function state_update_chan_state( prev, next ) { }     // >>>>>----->> REMOVE
                                            function state_nonselection_cursor( cm = curmasks( ) ) {
                                                let tried_indexes = [ ]
                                                while ( tried_indexes.length < cm[0].length ) {
@@ -461,10 +460,6 @@ class cube_mask:
                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
                                                                             cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
                                                                         }
-                                                                        // curmasks( ) will only report the new updated channel after
-                                                                        // the round-trip to python... so we need to use the updated
-                                                                        // indexes from here...
-                                                                        state_update_chan_state( prev_masks, cur_masks )
                                                                     } else if ( e.keyCode === keymap.down ) {
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
