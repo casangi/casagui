@@ -737,6 +737,7 @@ class cube_mask:
                              <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
                              <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
                              <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
+                             <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
                              <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
                              <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
                              <tr><td><b>option</b>-<b>left</b></td><td>move selection one pixel to the left</td></tr>
@@ -752,6 +753,7 @@ class cube_mask:
                              <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
                              <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                              <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
+                             <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
                          </table>''', visible=False, width=650 )
 
     def loop( self ):
