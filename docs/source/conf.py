@@ -17,7 +17,7 @@ sys.path.insert(0, abspath(join(dirname(__file__),'..','..','kernels','python'))
 # -- Project information -----------------------------------------------------
 
 project = 'casagui'
-copyright = '2021, Associated Universities, Inc. Washington DC, USA.'
+copyright = '2021,2022 Associated Universities, Inc. Washington DC, USA.'
 author = 'CASA visualization team'
 
 # The full version, including alpha/beta/rc tags
