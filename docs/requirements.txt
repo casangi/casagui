@@ -1,6 +1,6 @@
 casadata
 casatools
-bokeh
+bokeh>=2.4.1
 websockets
 plotly
 pandas
