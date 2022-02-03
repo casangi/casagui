@@ -5,7 +5,7 @@
 # from the environment for the first two.
 SPHINXOPTS    ?=
 #SPHINXBUILD   ?= sphinx-build
-SPHINXBUILD   ?= python3 -msphinx
+SPHINXBUILD   = python3 -msphinx
 SOURCEDIR     = source
 BUILDDIR      = build
 
