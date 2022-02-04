@@ -144,6 +144,6 @@ def have_network( ):
     except requests.exceptions.RequestException:
         ### some generic error
         return False
-    except Exception:                              # pylint: disable=broad-except
+    except Exception:
         ### reachable?
         return False

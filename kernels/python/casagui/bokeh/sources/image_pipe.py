@@ -117,7 +117,7 @@ class ImagePipe(DataSource):
         ### here for X rather than just the index
         try:
             return { 'x': range(len(result)), 'y': list(result) }
-        except Exception:                              # pylint: disable=broad-except
+        except Exception:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
