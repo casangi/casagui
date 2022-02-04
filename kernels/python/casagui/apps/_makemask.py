@@ -25,6 +25,8 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''implementation of the ``MakeMask`` application for interactive creation
+of channel masks'''
 import asyncio
 from bokeh.layouts import row, column
 from bokeh.plotting import show
@@ -33,7 +35,7 @@ from casagui.toolbox import cube_mask
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
 
-class makemask:
+class MakeMask:
 
     def __init__( self, image ):
         '''create a ``makemask`` object which will display image planes from a CASA
@@ -57,7 +59,7 @@ class makemask:
                              icon=SVGIcon(icon_name='help', size=1.4) )
 
         self._help_text = self._cube.help( )                                          ### cube_mask provides a help table
-        
+
         self._layout = column( self._cube.image( ),
                                row( self._cube.slider( ), self._help, self._done ),
                                self._help_text )
