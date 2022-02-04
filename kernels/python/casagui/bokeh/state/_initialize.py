@@ -25,6 +25,9 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''This contains functions to inject the ``casaguijs`` library into the
+generated HTML that is used to display the Bokeh plots that ``casagui``'s
+applications produce'''
 from ...utils import path_to_url, static_vars, have_network
 from ...resources import VERSION
 from .. import bokeh_version
@@ -91,14 +94,15 @@ def initialize_bokeh( libs=None, dev=0 ):
     casaguijs_url = None
 
     if libs is None:
-        casalib = "casaguijs-v%s.%d-b%s.min.js" % (VERSION,dev,'.'.join(bokeh_version.split('.')[0:2]))
+        bokeh_major_minor = '.'.join(bokeh_version.split('.')[0:2])
+        casalib = f"casaguijs-v{VERSION}.{dev}-b{bokeh_major_minor}.min.js"
         if initialize_bokeh.do_local_subst:
             casaguijs_url = path_to_url( join( dirname(__file__), 'js', casalib ) )
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (VERSION,casalib)
+            casaguijs_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{casalib}"
         casaguijs_libs = [ casaguijs_url ]
     else:
         casaguijs_libs = [ libs ] if type(libs) == str else libs
