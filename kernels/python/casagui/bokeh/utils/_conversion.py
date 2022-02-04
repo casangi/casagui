@@ -25,6 +25,9 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''Contains for conversion of data passed between Python and JavaScript
+via websockets'''
+
 import numpy as np
 from ._serialization import transform_array
 
@@ -50,9 +53,8 @@ def pack_arrays( val ):
         for k, v in val.items( ):
             result[k] = pack_arrays(v)
         return result
-    elif isinstance( val, np.ndarray ):
+    if isinstance( val, np.ndarray ):
         return transform_array(val,force_list=True)
-    elif isinstance( val, range ):
+    if isinstance( val, range ):
         return list(val)
-    else:
-        return val
+    return val
