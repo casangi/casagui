@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021,2022
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,21 +25,23 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''Implementation of ``ImagePipe`` class which provides a ``websockets``
+implementation for CASA images which allows for interacitve display
+of image cube channels in response to user input.'''
+
+import json
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int
+import numpy as np
 from casatools import regionmanager
 from casatools import image as imagetool
 from ..utils import pack_arrays
 from ...utils import partition
-import numpy as np
-
-import asyncio
-import websockets
-import json
 
 class ImagePipe(DataSource):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
+
     image. This is done using a `websocket`. A `ImagePipe` is created with
     the path to the image, and then it is used as the input to an
     `ImageDataSource` or a `SpectraDataSource`. This allows a single CASA
@@ -70,9 +72,9 @@ class ImagePipe(DataSource):
         try:
             self.__im.open(image)
             self.__path = image
-        except:
+        except Exception as ex:
             self.__im = None
-            raise RuntimeError('could not open image: %s' % image)
+            raise RuntimeError(f'could not open image: {image}') from ex
         self.__chan_shape = list(self.__im.shape( )[0:2])
 
     def channel( self, index ):
@@ -103,8 +105,10 @@ class ImagePipe(DataSource):
             the ''stokes'' axis
         """
         index = list(map( lambda i: 0 if i is None else i, index ))
-        if index[0] >= self.shape[0]: index[0] = self.shape[0] - 1
-        if index[1] >= self.shape[1]: index[1] = self.shape[1] - 1
+        if index[0] >= self.shape[0]:
+            index[0] = self.shape[0] - 1
+        if index[1] >= self.shape[1]:
+            index[1] = self.shape[1] - 1
         if self.__im is None:
             raise RuntimeError('no image is available')
         result = np.squeeze( self.__im.getchunk( blc=index + [0],
@@ -113,13 +117,13 @@ class ImagePipe(DataSource):
         ### here for X rather than just the index
         try:
             return { 'x': range(len(result)), 'y': list(result) }
-        except:
+        except Exception:                              # pylint: disable=broad-except
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, stats=False, *args, **kwargs ):
+    def __init__( self, image, *args, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
         self._stats = stats
         self.__open( image )
@@ -136,12 +140,12 @@ class ImagePipe(DataSource):
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
         """
-        def singleton( l ):
+        def singleton( potential_nonlist ):
             # convert a list of a single element to the element
-            return l if len(l) != 1 else l[0]
-        def sort_result( d ):
-            p = partition( lambda s: (s.startswith('trc') or s.startswith('blc')), sorted(d.keys( )) )
-            return { k: d[k] for k in p[1] + p[0] }
+            return potential_nonlist if len(potential_nonlist) != 1 else potential_nonlist[0]
+        def sort_result( unsorted_dictionary ):
+            part = partition( lambda s: (s.startswith('trc') or s.startswith('blc')), sorted(unsorted_dictionary.keys( )) )
+            return { k: unsorted_dictionary[k] for k in part[1] + part[0] }
 
         reg = self.__rg.box( [0,0] + index, self.__chan_shape + index )
         ###
@@ -154,9 +158,9 @@ class ImagePipe(DataSource):
         ia = imagetool( )
         ia.open(self.__path)
         rawstats = ia.statistics( region=reg )
-        return sort_result( { k: singleton([ x.item( ) for x in v ]) if type(v) == np.ndarray else v for k,v in rawstats.items( ) } )
+        return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
 
-    async def process_messages( self, websocket, path ):
+    async def process_messages( self, websocket ):
         """Process messages related to image display updates.
 
         Parameters
@@ -189,4 +193,4 @@ class ImagePipe(DataSource):
                         'message': { 'spectrum': pack_arrays( self.spectra(cmd['index']) ) } }
                 await websocket.send(json.dumps(msg))
             else:
-                print("received messate in python with unknown 'action' value: %s" % cmd)
+                print(f"received messate in python with unknown 'action' value: {cmd}")

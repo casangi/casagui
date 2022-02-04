@@ -28,11 +28,11 @@
 '''This contains functions to inject the ``casaguijs`` library into the
 generated HTML that is used to display the Bokeh plots that ``casagui``'s
 applications produce'''
+from os.path import dirname, join, basename
+from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
 from ...resources import VERSION
 from .. import bokeh_version
-from os.path import dirname, join, basename
-
 
 @static_vars(initialized=False,do_local_subst=not have_network( ))
 def initialize_bokeh( libs=None, dev=0 ):
@@ -105,17 +105,20 @@ def initialize_bokeh( libs=None, dev=0 ):
             casaguijs_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{casalib}"
         casaguijs_libs = [ casaguijs_url ]
     else:
-        casaguijs_libs = [ libs ] if type(libs) == str else libs
+        casaguijs_libs = [ libs ] if isinstance(libs,str) else libs
         casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
 
-    from bokeh import resources
     ###
     ### substitute our function for the Bokeh function that retrieves
     ### the security hashes for the javascript files...
     ###
-    resources.JSResources._old_hashes = resources.JSResources.hashes
+    resources.JSResources._old_hashes = resources.JSResources.hashes     # pylint: disable=protected-access
+                                                                         # could find no other way to add our library
+                                                                         # to the libraries loaded by Bokeh; maintainers
+                                                                         # had no solutions to offer, see:
+                                                                         # https://discourse.bokeh.org/t/pre-built-extensions-without-bokeh-server/7992
     def hashes( self ):
-        result = self._old_hashes
+        result = self._old_hashes                                        # pylint: disable=protected-access
         if casalib is not None and casalib in library_hashes:
             result[casaguijs_url] = library_hashes[casalib]
         return result
@@ -124,18 +127,18 @@ def initialize_bokeh( libs=None, dev=0 ):
     ### substitute our function for the Bokeh function that retrieves
     ### the javascript files...
     ###
-    resources.JSResources._old_js_files = resources.JSResources.js_files
+    resources.JSResources._old_js_files = resources.JSResources.js_files # pylint: disable=protected-access
     def js_files( self ):
         if initialize_bokeh.do_local_subst:
             result = [ ]
-            for url in self._old_js_files:
+            for url in self._old_js_files:                               # pylint: disable=protected-access
                 lib = basename(url)
                 if lib in local_libraries:
                     result.append( path_to_url(local_libraries[lib]) )
                 else:
                     result.append( url )
         else:
-            result = self._old_js_files
+            result = self._old_js_files                                  # pylint: disable=protected-access
         result = result + casaguijs_libs
         return result
 

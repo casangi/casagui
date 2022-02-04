@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021,2022
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,15 +25,13 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-import os
-import numpy as np
+'''Data source for plotting spectra from a CASA image.'''
+
 from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.util.serialization import transform_column_source_data
 from bokeh.core.properties import Instance
 from . import ImagePipe
 
-import json
 
 class SpectraDataSource(ColumnDataSource):
     """Implementation of a ``ColumnDataSource`` customized for spectral lines
@@ -54,4 +52,3 @@ class SpectraDataSource(ColumnDataSource):
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
         self.data = self.image_source.spectra( [ 0, 0, 0 ] )
-
