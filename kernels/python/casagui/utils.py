@@ -25,8 +25,12 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''General utility functions used by the ``casagui`` tools and applications.'''
+
 from socket import socket
 from os import path as __path
+import requests
+
 
 def static_vars(**kwargs):
     '''Initialize static function variables to for use within a function.
@@ -47,8 +51,8 @@ def static_vars(**kwargs):
     Initialized static local variables.
     '''
     def decorate(func):
-        for k in kwargs:
-            setattr(func, k, kwargs[k])
+        for k,v in kwargs.items( ):
+            setattr(func, k, v)
         return func
     return decorate
 
@@ -81,15 +85,15 @@ def path_to_url( path ):
     '''
     return "file://" + __path.abspath(path) if __path.exists(path) else path
 
-def find_ws_address( ip='127.0.0.1' ):
-    '''Find free port on ``ip`` network and return a tuple with ``ip`` and port number
+def find_ws_address( address='127.0.0.1' ):
+    '''Find free port on ``address`` network and return a tuple with ``address`` and port number
 
     This function uses the low level socket function to find a free port and return
     a tuple representing the address plus port number.
 
     Parameters
     ----------
-    ip: str
+    address: str
         network to be probed for an available port
 
     Returns
@@ -98,7 +102,7 @@ def find_ws_address( ip='127.0.0.1' ):
         network address (`str`) and port number (`int`)
     '''
     sock = socket( )
-    sock.bind((ip,0))
+    sock.bind((address,0))
     result = sock.getsockname( )
     sock.close( )
     return result
@@ -125,26 +129,21 @@ def have_network( ):
     ###
     ### see: https://stackoverflow.com/questions/50558000/test-internet-connection-for-python3
     ###
-    import requests
-
     try:
         response = requests.get(have_network.url, timeout=5)
-        if response.status_code == 204:
-            return True
-        else:
-            return False
-    except requests.exceptions.RequestException as err:
-        ### some generic error
-        return False
-    except requests.exceptions.HTTPError as errh:
+        return response.status_code == 204
+    except requests.exceptions.HTTPError:
         ### http error
         return False
-    except requests.exceptions.ConnectionError as errc:
+    except requests.exceptions.ConnectionError:
         ### connection error
         return False
-    except requests.exceptions.Timeout as errt:
+    except requests.exceptions.Timeout:
         ### timeout
         return False
-    except:
+    except requests.exceptions.RequestException:
+        ### some generic error
+        return False
+    except:                    # pylint: disable=bare-except
         ### reachable?
         return False

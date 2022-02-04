@@ -25,4 +25,7 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-version = "0.0.4"
+'''This module has constants and other states, like the casagui version
+number, VERSION.'''
+
+VERSION = "0.0.4"

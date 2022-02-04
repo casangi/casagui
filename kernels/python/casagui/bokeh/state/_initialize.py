@@ -26,7 +26,7 @@
 #
 ########################################################################
 from ...utils import path_to_url, static_vars, have_network
-from ...resources import version
+from ...resources import VERSION
 from .. import bokeh_version
 from os.path import dirname, join, basename
 
@@ -91,14 +91,14 @@ def initialize_bokeh( libs=None, dev=0 ):
     casaguijs_url = None
 
     if libs is None:
-        casalib = "casaguijs-v%s.%d-b%s.min.js" % (version,dev,'.'.join(bokeh_version.split('.')[0:2]))
+        casalib = "casaguijs-v%s.%d-b%s.min.js" % (VERSION,dev,'.'.join(bokeh_version.split('.')[0:2]))
         if initialize_bokeh.do_local_subst:
             casaguijs_url = path_to_url( join( dirname(__file__), 'js', casalib ) )
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (version,casalib)
+            casaguijs_url = "https://casa.nrao.edu/download/javascript/casaguijs/%s/%s" % (VERSION,casalib)
         casaguijs_libs = [ casaguijs_url ]
     else:
         casaguijs_libs = [ libs ] if type(libs) == str else libs

@@ -54,7 +54,7 @@
 #
 #  bash$ git log --pretty=oneline --no-merges 8ce5e80640cd16c9..HEAD bokeh/util/serialization.py
 #  af9183f00dcff18a51a6a5af75099668463e3012 Add support for lazy annotations boilerplate (#11220)
-#  bash$ 
+#  bash$
 #
 #--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
 #  which includes this difference:
@@ -72,8 +72,8 @@
 #  +
 #   import logging # isort:skip
 #   log = logging.getLogger(__name__)
-#   
-#  bash$ 
+#
+#  bash$
 #
 #-----------------------------------------------------------------------------
 '''
@@ -86,6 +86,8 @@ performance and efficiency. The list of supported dtypes is:
 {binary_array_types}
 
 '''
+
+# pylint: skip-file
 
 #-----------------------------------------------------------------------------
 # Boilerplate
@@ -113,6 +115,8 @@ import numpy as np
 #-----------------------------------------------------------------------------
 # Globals and constants
 #-----------------------------------------------------------------------------
+
+#pd = import_optional('pandas')
 
 BINARY_ARRAY_TYPES = {
     np.dtype(np.float32),
@@ -176,7 +180,7 @@ def convert_datetime_array(array):
     elif array.dtype.kind == 'm':
         array = array.astype('timedelta64[us]').astype('int64') / 1000.
 
-    # XXX (bev) special case dates, not great
+    # (bev) special case dates, not great
     elif array.dtype.kind == 'O' and len(array) > 0 and isinstance(array[0], dt.date):
         try:
             array = array.astype('datetime64[us]').astype('int64') / 1000.
@@ -254,10 +258,10 @@ def transform_array_to_list(array):
         transformed[np.isposinf(array)] = 'Infinity'
         transformed[np.isneginf(array)] = '-Infinity'
         return transformed.tolist()
-    elif (array.dtype.kind == 'O' and pd and pd.isnull(array).any()):
-        transformed = array.astype('object')
-        transformed[pd.isnull(array)] = 'NaN'
-        return transformed.tolist()
+    #if (array.dtype.kind == 'O' and pd and pd.isnull(array).any()):
+    #    transformed = array.astype('object')
+    #    transformed[pd.isnull(array)] = 'NaN'
+    #    return transformed.tolist()
     return array.tolist()
 
 def serialize_array(array, force_list=False, buffers=None):
@@ -294,8 +298,7 @@ def serialize_array(array, force_list=False, buffers=None):
         array = np.ascontiguousarray(array)
     if buffers is None:
         return encode_base64_dict(array)
-    else:
-        return encode_binary_dict(array, buffers)
+    return encode_binary_dict(array, buffers)
 
 def encode_binary_dict(array, buffers):
     ''' Send a numpy array as an unencoded binary buffer
