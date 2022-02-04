@@ -25,22 +25,22 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''Implementation of a general purpose event manager between Python and
+JavaScript via ``websockets``. This provides a mechanism like the
+``ImagePipe``. The difference is that ``ImagePipe`` is tuned for use
+with CASA images but ``DataPipe`` can have generic messages.'''
+
+import inspect
+import threading
+import json
+import logging
+import traceback
+
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int
 
 from ..utils import pack_arrays
-
-import inspect
-import threading
-import asyncio
-import websockets
-import json
-
-import numpy as np
-
-import logging
-import traceback
 
 class DataPipe(DataSource):
     """This class allows for communication between Python and the JavaScript implementation
@@ -64,9 +64,9 @@ class DataPipe(DataSource):
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
-        self.__send_queue = dict( )
-        self.__pending = dict( )
-        self.__incoming_callbacks = dict( )
+        self.__send_queue = { }
+        self.__pending = { }
+        self.__incoming_callbacks = { }
         self.__websocket = None
         self.__lock = threading.Lock( )
 
@@ -78,13 +78,9 @@ class DataPipe(DataSource):
             self.__send_queue[ident] = [ { 'cb': callback, 'msg': msg } ]
     def __dequeue_send( self, ident ):
         ### it is assumed that this is called AFTER the lock has been aquired
-        if ident in self.__send_queue:
-            if self.__send_queue[ident]:
-                return self.__send_queue[ident].pop( )
-            else:
-                return None
-        else:
-            return None
+        if ident in self.__send_queue and self.__send_queue[ident]:
+            return self.__send_queue[ident].pop( )
+        return None
     async def __put_pending( self, ident, callback ):
         ### it is assumed that this is called AFTER the lock has been aquired
         ## info about request sent to javascript waits in this queue
@@ -103,8 +99,7 @@ class DataPipe(DataSource):
             result = self.__pending[ident]
             del self.__pending[ident]
             return result
-        else:
-            return None
+        return None
 
     def register( self, ident, callback ):
         """Register a callback to handle all requests coming from JavaScript. The
@@ -154,7 +149,7 @@ class DataPipe(DataSource):
                         await self.__put_pending(ident, callback)
                         await self.__websocket.send(json.dumps( msg ))
 
-    async def process_messages( self, websocket, path ):
+    async def process_messages( self, websocket ):
         """Process messages related to image display updates.
 
         Parameters
@@ -164,7 +159,6 @@ class DataPipe(DataSource):
         path:
             Websocket serve provides a second parameter.
         """
-        count = 1
         try:
             self.__websocket = websocket
             async for message in websocket:
@@ -183,7 +177,7 @@ class DataPipe(DataSource):
                                 cb(msg['message'])
                     else:
                         if msg['id'] not in self.__incoming_callbacks:
-                            raise RuntimeError('incoming js request with no callback: %s' % msg)
+                            raise RuntimeError(f'incoming js request with no callback: {msg}')
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
                         if inspect.isawaitable(result):
                             await self.__websocket.send(json.dumps({ 'id': msg['id'],
@@ -194,7 +188,7 @@ class DataPipe(DataSource):
                             await self.__websocket.send(json.dumps({ 'id': msg['id'],
                                                                      'message': pack_arrays(result),
                                                                      'direction': msg['direction'] }))
-        except Exception as e:
+        except Exception:
             logging.error(traceback.format_exc())
 
         finally:
