@@ -31,7 +31,7 @@ from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance, Tuple, Int, Nullable, String
 from bokeh.models.callbacks import Callback
-from .image_pipe import ImagePipe
+from ._image_pipe import ImagePipe
 
 class ImageDataSource(ColumnDataSource):
     """Implementation of a ``ColumnDataSource`` customized for planes from

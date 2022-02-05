@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2022
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,16 +25,20 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''Implementation of the Bokeh data source extensions provided by
-``casagui``'''
-from __future__ import absolute_import
+'''Functions for session management.'''
+from bokeh.io import output_notebook
 
-__all__ = [ "ImageDataSource",
-            "SpectraDataSource",
-            "ImagePipe",
-            "DataPipe" ]
+def setup_session():
+    '''Configure session for notebook or terminal'''
 
-from ._data_pipe import DataPipe
-from ._image_pipe import ImagePipe
-from ._image_data_source import ImageDataSource
-from ._spectra_data_source import SpectraDataSource
+    #session_settings = {
+    #    "ZMQInteractiveShell": "Running in a Jupyter notebook",
+    #    "TerminalInteractiveShell": "Running in a terminal",
+    #}
+    try:
+        session = get_ipython().__class__.__name__
+    except NameError:
+        session = "Unknown"
+
+    if session == "ZMQInteractiveShell":
+        output_notebook()

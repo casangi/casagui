@@ -55,6 +55,11 @@ def initialize_bokeh( libs=None, dev=0 ):
         Chrome caches the javascript files. This parameter allows for
         specifying `dev` allows for including a development version
         for incremental updates to JavaScript from website.
+
+    Example
+    -------
+    from casagui.bokeh.state import initialize_bokeh
+    initialize_bokeh( "/tmp/casagui/kernels/python/casaguijs/dist/casaguijs.min.js" )
     """
 
     if initialize_bokeh.initialized:
