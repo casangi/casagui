@@ -25,17 +25,13 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-import os
-import numpy as np
+'''Specialization of the Bokeh ``DataSource`` for image cube data.'''
+
 from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.util.serialization import transform_column_source_data
-from bokeh.core.properties import Instance, Tuple, Int, Nullable, String, Nullable
-from .image_pipe import ImagePipe
+from bokeh.core.properties import Instance, Tuple, Int, Nullable, String
 from bokeh.models.callbacks import Callback
-
-
-import json
+from .image_pipe import ImagePipe
 
 class ImageDataSource(ColumnDataSource):
     """Implementation of a ``ColumnDataSource`` customized for planes from
@@ -65,4 +61,3 @@ class ImageDataSource(ColumnDataSource):
         self.data = { 'd': [ self.image_source.channel( [0,0] ) ] }
         self.num_chans = list(self.image_source.shape[-2:])
         self.cur_chan  = [ 0, 0 ]
-

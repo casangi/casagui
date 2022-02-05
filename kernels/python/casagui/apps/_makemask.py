@@ -31,11 +31,11 @@ import asyncio
 from bokeh.layouts import row, column
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS
-from casagui.toolbox import cube_mask
+from casagui.toolbox import CubeMask
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
-
 class MakeMask:
+    '''Class that can be used to launc a makemask GUI with ``MakeMask('test.image')( )``.'''
 
     def __init__( self, image ):
         '''create a ``makemask`` object which will display image planes from a CASA
@@ -46,7 +46,11 @@ class MakeMask:
         image: str
             path to CASA image for which interactive masks will be drawn
         '''
-        self._cube = cube_mask(image)
+        self._cube = CubeMask(image)
+        self._done = None
+        self._help = None
+        self._help_text = None
+        self._layout = None
 
     def _launch_gui( self ):
         '''create and show GUI
@@ -58,14 +62,14 @@ class MakeMask:
         self._help = Button( label="", max_width=width, max_height=height, name='done',
                              icon=SVGIcon(icon_name='help', size=1.4) )
 
-        self._help_text = self._cube.help( )                                          ### cube_mask provides a help table
+        self._help_text = self._cube.help( )                                          ### CubeMask provides a help table
 
         self._layout = column( self._cube.image( ),
                                row( self._cube.slider( ), self._help, self._done ),
                                self._help_text )
 
         self._done.js_on_click( CustomJS( args=dict( obj=self._cube.js_obj( ) ),
-                                          code='''obj.done( )''' ) )                  ### cube_mask should return javascript object which contains
+                                          code='''obj.done( )''' ) )                  ### CubeMask should return javascript object which contains
                                                                                       ### a done function to stop cube masking
         self._help.js_on_click( CustomJS( args=dict( help=self._help_text ),
                                           code='''if ( help.visible == true ) help.visible = false

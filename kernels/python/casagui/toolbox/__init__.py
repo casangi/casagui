@@ -25,6 +25,7 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-__all__ = [ 'cube_vis' ]
+'''Common tools used in creating applications.'''
+__all__ = [ 'CubeMask' ]
 
-from ._cube import cube_mask
+from ._cube import CubeMask

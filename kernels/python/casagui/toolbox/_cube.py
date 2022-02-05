@@ -25,18 +25,28 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+'''This provides an implementation of ``CubeMask`` which allows interactive
+clean and makemask to share a common implementaton. The user calls member
+functions to create widgets which can be placed in the GUI created by the
+calling application. Once all of the widgets have been created. The
+``connect`` member function creates all of the Bokeh/JavaScript callbacks
+that allow the widgets to interact'''
+
 import asyncio
-import websockets
 from uuid import uuid4
-from bokeh.layouts import row
-from bokeh.events import SelectionGeometry, MouseEnter, Press
-from bokeh.models import CustomJS, Slider, BoxAnnotation, PolyAnnotation, Div
+from sys import platform
+import websockets
+from bokeh.events import SelectionGeometry
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div
 from bokeh.plotting import figure
 from casagui.utils import find_ws_address
 from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
+from casagui.bokeh.state import initialize_bokeh
 
 
-class cube_mask:
+class CubeMask:
+    '''Class which provides a common implementation of Bokeh widget behavior for
+    interactive clean and make mask'''
 
     def __init__( self, image ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
@@ -52,17 +62,6 @@ class cube_mask:
             path to CASA image for which interactive masks will be drawn
         '''
 
-        ###
-        ### insure that Bokeh is initialized with our casaguijs URIs...
-        ### if this is done at the file scope (above) the initialization is always
-        ### doneusing the default URIs because then this file scope initialization
-        ### happens when the user does:
-        ###
-        ###    from casagui.bokeh.state import initialize_bokeh
-        ###
-        ### leaving no opportunity to set alternate URIs.
-        ###
-        from casagui.bokeh.state import initialize_bokeh
         initialize_bokeh( )
 
         self._image_path = image	                # path to image cube to be displayed
@@ -95,7 +94,7 @@ class cube_mask:
         self._js = { ### update stats in response to channel changes
                      'slider_w_stats':  '''source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
                      'slider_wo_stats': '''source.channel( slider.value, 0 )''',
-                     ### setup maping of keys to numeric values 
+                     ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
                                                             command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
@@ -591,13 +590,13 @@ class cube_mask:
                 def convert( cresult ):
                     def convert_elem( vec, f=lambda x: x ):
                         result = { }
-                        for c in vec:
-                            result[f(c[0])] = c[1]
+                        for chan_or_poly in vec:
+                            result[f(chan_or_poly[0])] = chan_or_poly[1]
                         return result
-                    return { 'masks': convert_elem(cresult['masks'],lambda x: tuple(x)), 'polys': convert_elem(cresult['polys']) }
+                    return { 'masks': convert_elem(cresult['masks'],tuple), 'polys': convert_elem(cresult['polys']) }
                 self._result = convert( msg['value'] )
                 self.__stop( )
-                return dict( result='stopped', update=dict( ) )
+                return dict( result='stopped', update={ } )
 
             self._init_pipes( )
 
@@ -669,8 +668,8 @@ class cube_mask:
                                                            }
                                                         """ ) )
 
-            for a in self._annotations:
-                self._image_fig.add_layout(a)
+            for annotation in self._annotations:
+                self._image_fig.add_layout(annotation)
 
         return self._image_fig
 
@@ -689,7 +688,7 @@ class cube_mask:
 
         return self._slider
 
-    def spectra( self, create=True ):
+    def spectra( self ):
         '''Return the line graph of spectra from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
         '''
@@ -732,7 +731,8 @@ class cube_mask:
         '''
         return self._result
 
-    def help( self ):
+    @staticmethod
+    def help( ):
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
         set to ``False``, but it can be toggled based on GUI actions.
         '''
@@ -768,11 +768,13 @@ class cube_mask:
                              <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                              <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                              <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
-                         </table>''', visible=False, width=650 )
+                         </table>'''.replace('option','option' if platform == 'darwin' else 'alt'), visible=False, width=650 )
 
     def loop( self ):
-        async def async_loop( f1, f2 ):
-            return await asyncio.gather( f1, f2 )
+        '''Returns an ``asyncio`` eventloop which can be mixed in with an
+        existing eventloop to animate this GUI.'''
+        async def async_loop( loop1, loop2 ):
+            return await asyncio.gather( loop1, loop2 )
         self._image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
         self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
         return async_loop( self._control_server, self._image_server )
