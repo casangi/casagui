@@ -35,7 +35,7 @@ from casagui.toolbox import CubeMask
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 
 class MakeMask:
-    '''Class that can be used to launc a makemask GUI with ``MakeMask('test.image')( )``.'''
+    '''Class that can be used to launch a makemask GUI with ``MakeMask('test.image')( )``.'''
 
     def __init__( self, image ):
         '''create a ``makemask`` object which will display image planes from a CASA
@@ -59,7 +59,7 @@ class MakeMask:
         height = 35
         self._done = Button( label="", button_type="danger", max_width=width, max_height=height, name='done',
                              icon=SVGIcon(icon_name='makemask-done', size=1.4) )
-        self._help = Button( label="", max_width=width, max_height=height, name='done',
+        self._help = Button( label="", max_width=width, max_height=height, name='help',
                              icon=SVGIcon(icon_name='help', size=1.4) )
 
         self._help_text = self._cube.help( )                                          ### CubeMask provides a help table
