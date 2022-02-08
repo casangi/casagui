@@ -26,7 +26,10 @@
 #
 ########################################################################
 '''Functions for coordinate conversion and axis labeling.'''
+import numpy as np
+from astropy.wcs import WCS
 from casatools import image
+
 
 def get_world_coordinates(ia):
     """
@@ -45,7 +48,6 @@ def get_world_coordinates(ia):
     x_axes_labels, y_axes_labels : (dict, dict)
         Dictionary mapping pixel coordinates to world coordinates
     """
-    import numpy as np
     pix = np.zeros([len(ia.shape()), ia.shape()[0]])
     pix[0, :] = range(ia.shape()[0])
     csys = ia.coordsys()
@@ -72,7 +74,6 @@ def get_world_coordinates_wcs(csys: image.coordsys) -> list():
     x_axes_labels, y_axes_labels : (dict, dict)
         Dictionary mapping pixel coordinates to world coordinates
     """
-    from astropy.wcs import WCS
     rad_to_deg = 180/np.pi
     w = WCS(naxis=2)
     w.wcs.crpix = csys.referencepixel()['numeric'][0:2]

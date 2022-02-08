@@ -1,18 +1,21 @@
-#!/usr/bin/env python3
+"""
+plotants module
+"""
+
 import os
+
 import numpy as np
-import plotly.express as px
-
 from bokeh.io import export_png, export_svgs
-from bokeh.models import ColumnDataSource, LabelSet, CustomJSTransform
-from bokeh.models.expressions import PolarTransform
+from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.plotting import figure, show
-from bokeh.transform import transform
-
+from cairosvg import svg2pdf
 from casatools import table, msmetadata, quanta, ms, measures
 
+_FIGURE_PLOT_WIDTH = 450
+_FIGURE_PLOT_HEIGHT = 450
 
-def __getPlotantsObservatoryInfo(msname):
+
+def __get_observatory_info(msname):
     """Extract the observatory information from `msname`.
 
     Parameters
@@ -28,12 +31,12 @@ def __getPlotantsObservatoryInfo(msname):
     metadata = msmetadata()
     metadata.open(msname)
     telescope = metadata.observatorynames()[0]
-    arrayPos = metadata.observatoryposition()
+    positions = metadata.observatoryposition()
     metadata.close()
-    return telescope, arrayPos
+    return telescope, positions
 
 
-def __getPlotantsAntennaInfo(msname, log, exclude, checkbaselines):
+def __get_antenna_info(msname, log, exclude, checkbaselines):
     """Return the antenna position info.
 
     Parameters
@@ -47,29 +50,29 @@ def __getPlotantsAntennaInfo(msname, log, exclude, checkbaselines):
     checkbaselines: boolean
         whether to check baselines in the main table
     """
-    tb = table()
     me = measures()
     qa = quanta()
+    tb = table()
 
-    telescope, arrayPos = __getPlotantsObservatoryInfo(msname)
-    arrayWgs84 = me.measure(arrayPos, "WGS84")
-    arrayLon, arrayLat, arrayAlt = [arrayWgs84[i]["value"] for i in ["m0", "m1", "m2"]]
+    telescope, positions = __get_observatory_info(msname)
+    positions_wgs84 = me.measure(positions, "WGS84")
+    array_lon, array_lat, = [positions_wgs84[i]["value"] for i in ["m0", "m1", "m2"]]
 
     # Open the ANTENNA subtable to get the names of the antennas in this MS and
     # their positions.  Note that the entries in the ANTENNA subtable are pretty
-    # much in random order, so antNames translates between their index and name
+    # much in random order, so antenna_names translates between their index and name
     # (e.g., index 11 = STD155).  We'll need these indices for later, since the
     # main data table refers to the antennas by their indices, not names.
 
     anttabname = msname + "/ANTENNA"
     tb.open(anttabname)
     # Get antenna names from antenna table
-    antNames = np.array(tb.getcol("NAME")).tolist()
-    stationNames = np.array(tb.getcol("STATION")).tolist()
+    antenna_names = np.array(tb.getcol("NAME")).tolist()
+    station_names = np.array(tb.getcol("STATION")).tolist()
     if telescope == "VLBA":  # names = ant@station
-        antNames = ["@".join(antsta) for antsta in zip(antNames, stationNames)]
+        antenna_names = ["@".join(antsta) for antsta in zip(antenna_names, station_names)]
     # Get antenna positions from antenna table
-    antPositions = np.array(
+    antenna_positions = np.array(
         [
             me.position("ITRF", qa.quantity(x, "m"), qa.quantity(y, "m"), qa.quantity(z, "m"))
             for (x, y, z) in tb.getcol("POSITION").transpose()
@@ -77,39 +80,39 @@ def __getPlotantsAntennaInfo(msname, log, exclude, checkbaselines):
     )
     tb.close()
 
-    allAntIds = range(len(antNames))
+    all_ant_ids = range(len(antenna_names))
     if checkbaselines:
         # Get antenna ids from main table; this will add to runtime
         tb.open(msname)
         ants1 = tb.getcol("ANTENNA1")
         ants2 = tb.getcol("ANTENNA2")
         tb.close()
-        antIdsUsed = list(set(np.append(ants1, ants2)))
+        ant_ids_used = list(set(np.append(ants1, ants2)))
     else:
         # use them all!
-        antIdsUsed = allAntIds
+        ant_ids_used = all_ant_ids
 
-    # handle exclude -- remove from antIdsUsed
-    for antId in exclude:
+    # handle exclude -- remove from ant_ids_used
+    for ant_id in exclude:
         try:
-            antNameId = antNames[antId] + " (id " + str(antId) + ")"
-            antIdsUsed.remove(antId)
-            casalog.post("Exclude antenna " + antNameId)
+            ant_name_id = antenna_names[ant_id] + " (id " + str(ant_id) + ")"
+            ant_ids_used.remove(ant_id)
+            casalog.post("Exclude antenna " + ant_name_id)
         except ValueError:
-            casalog.post("Cannot exclude antenna " + antNameId + ": not in main table", "WARN")
+            casalog.post("Cannot exclude antenna " + ant_name_id + ": not in main table", "WARN")
 
-    # apply antIdsUsed mask
-    antNames = [antNames[i] for i in antIdsUsed]
-    antPositions = [antPositions[i] for i in antIdsUsed]
-    stationNames = [stationNames[i] for i in antIdsUsed]
+    # apply ant_ids_used mask
+    antenna_names = [antenna_names[i] for i in ant_ids_used]
+    antenna_positions = [antenna_positions[i] for i in ant_ids_used]
+    station_names = [station_names[i] for i in ant_ids_used]
 
-    nAnts = len(antIdsUsed)
-    # casalog.post("Number of points being plotted: " + str(nAnts))
-    if nAnts == 0:  # excluded all antennas
-        return telescope, antNames, [], [], []
+    n_ants = len(ant_ids_used)
+    # casalog.post("Number of points being plotted: " + str(n_ants))
+    if n_ants == 0:  # excluded all antennas
+        return telescope, antenna_names, [], [], [], []
 
     # Get the names, indices, and lat/lon/alt coords of "good" antennas.
-    antWgs84s = np.array([me.measure(pos, "WGS84") for pos in antPositions])
+    ant_wgs84s = np.array([me.measure(pos, "WGS84") for pos in antenna_positions])
 
     # Convert from lat, lon, alt to X, Y, Z (unless VLBA)
     # where X is east, Y is north, Z is up,
@@ -117,15 +120,15 @@ def __getPlotantsAntennaInfo(msname, log, exclude, checkbaselines):
     # Note: this conversion is NOT exact, since it doesn't take into account
     # Earth's ellipticity!  But it's close enough.
     if telescope == "VLBA" and not log:
-        antLons, antLats = [[pos[i] for pos in antWgs84s] for i in ["m0", "m1"]]
-        antXs = [qa.convert(lon, "deg")["value"] for lon in antLons]
-        antYs = [qa.convert(lat, "deg")["value"] for lat in antLats]
+        ant_lons, ant_lats = [[pos[i] for pos in ant_wgs84s] for i in ["m0", "m1"]]
+        ant_xs = [qa.convert(lon, "deg")["value"] for lon in ant_lons]
+        ant_ys = [qa.convert(lat, "deg")["value"] for lat in ant_lats]
     else:
-        antLons, antLats = [np.array([pos[i]["value"] for pos in antWgs84s]) for i in ["m0", "m1"]]
-        radE = 6370000.0
-        antXs = (antLons - arrayLon) * radE * np.cos(arrayLat)
-        antYs = (antLats - arrayLat) * radE
-    return telescope, antNames, antIdsUsed, antXs, antYs, stationNames
+        ant_lons, ant_lats = [np.array([pos[i]["value"] for pos in ant_wgs84s]) for i in ["m0", "m1"]]
+        rade = 6370000.0 # radE
+        ant_xs = (ant_lons - array_lon) * rade * np.cos(array_lat)
+        ant_ys = (ant_lats - array_lat) * rade
+    return telescope, antenna_names, ant_ids_used, ant_xs, ant_ys, station_names
 
 
 def __plot_antennas_log(telescope, names, ids, xpos, ypos, antindex, stations, title):
@@ -145,12 +148,14 @@ def __plot_antennas(telescope, names, ids, xpos, ypos, antindex, stations, title
             units = " (km)"
         labelx = "X" + units
         labely = "Y" + units
+    if antindex:
+        names = [f"{name} ({idx})" for name, idx in zip(names, ids)]
     source = ColumnDataSource(data=dict(x=[], y=[], labels=[]))
     source.data = dict(x=xpos, y=ypos, labels=names)
-    labels = LabelSet(x="x", y="y", text="labels", x_offset=5, y_offset=5, source=source)
-    plot = figure(plot_height=400, plot_width=400)
+    labels = LabelSet(x="x", y="y", text="labels", x_offset=5, y_offset=5, source=source, text_font_size="10pt")
+    plot = figure(plot_height=_FIGURE_PLOT_HEIGHT, plot_width=_FIGURE_PLOT_WIDTH)
     plot.scatter("x", "y", source=source, size=5, line_color="red", fill_color="red", fill_alpha=0.5)
-    plot.title.text = telescope
+    plot.title.text = title
     plot.xaxis[0].axis_label = labelx
     plot.yaxis[0].axis_label = labely
     plot.add_layout(labels)
@@ -186,9 +191,8 @@ def plotants(vis, figfile="", antindex=False, logpos=False, exclude=[], checkbas
     title: string, default: ''
         Title written along top of plot
     """
-
     if os.path.exists(vis) is False:
-        raise Exception("Visibility file %s does not exist" % vis)  # could be a print + return
+        raise Exception(f"Visibility file {vis} does not exist")  # could be a print + return
     # remove trailing / for title basename
     if vis.endswith("/"):
         vis = vis[:-1]
@@ -200,14 +204,14 @@ def plotants(vis, figfile="", antindex=False, logpos=False, exclude=[], checkbas
         errmsg = str(rterr)
         errmsg = errmsg.replace("specificion", "specification")
         errmsg = errmsg.replace("Antenna Expression: ", "")
-        raise RuntimeError("Exclude selection error: " + errmsg)
+        raise RuntimeError("Exclude selection error: " + errmsg) from rterr
 
     # Get the antenna positions
-    telescope, names, ids, xpos, ypos, stations = __getPlotantsAntennaInfo(vis, logpos, exclude, checkbaselines)
+    telescope, names, ids, xpos, ypos, stations = __get_antenna_info(vis, logpos, exclude, checkbaselines)
     if not names:
         raise ValueError("No antennas selected. Exiting plotants.")
 
-    if title != "":
+    if title == "":
         msname = os.path.basename(vis)
         title = "Antenna Positions for "
         if len(msname) > 55:
@@ -229,8 +233,6 @@ def plotants(vis, figfile="", antindex=False, logpos=False, exclude=[], checkbas
             fig.output_backend = "svg"
             export_svgs(fig, filename=figfile)
         elif figfile.endswith(".pdf"):
-            from cairosvg import svg2pdf
-
             fig.output_backend = "svg"
             export_svgs(fig, filename=figfile.replace(".pdf", ".svg"))
             svg2pdf(url=figfile.replace(".pdf", ".svg"), write_to=figfile)

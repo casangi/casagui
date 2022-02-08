@@ -28,8 +28,8 @@
 '''End user applications supplied by ``casagui``.'''
 
 __all__ = ["plotants", "plotbandpass", 'MakeMask']
-from .plotants import plotants
-from .plotbandpass import plotbandpass
+from ._plotants import plotants
+from ._plotbandpass import plotbandpass
 from ._makemask import MakeMask
 from ..bokeh.state import setup_session
 
