@@ -47,7 +47,7 @@ Building portions of CASA are supported by Anaconda environment files (this will
 ## Steps to build casatools on M1 w/ macos 11 (using emulator) and Xcode 12.0 or x86 w/ macos 10.15 and Xcode 11.7:
 ```
 bash$ conda env create -f ~/casa6-macos.yml
-bash$ conda activate casa6
+bash$ conda activate casa6-macos
 bash$ autoconf
 bash$ ./configure --enable-system-grpc
 bash$ ./setup.py --debug bdist_wheel
@@ -56,7 +56,7 @@ bash$ ./setup.py --debug bdist_wheel
 ##  Steps to build casatools on RHEL8:
 ```
 bash$ conda env create -f casa6-linux.yml
-bash$ conda activate casa6
+bash$ conda activate casa6-linux
 bash$ autoconf
 bash$ ./configure --enable-system-grpc
 bash$ ./setup.py --debug bdist_wheel
