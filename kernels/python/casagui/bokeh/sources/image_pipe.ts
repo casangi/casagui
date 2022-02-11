@@ -1,6 +1,7 @@
 import { DataSource } from "@bokehjs/models/sources/data_source"
 import * as p from "@bokehjs/core/properties"
 import { is_NDArray_ref, decode_NDArray } from "@bokehjs/core/util/serialization"
+import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
@@ -9,6 +10,7 @@ export namespace ImagePipe {
     export type Attrs = p.AttrsOf<Props>
 
     export type Props = DataSource.Props & {
+        init_script: p.Property<CallbackLike0<DataSource> | null>;
         shape: p.Property<[number,number,number,number]>
         address: p.Property<[string,number]>
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
@@ -81,6 +83,10 @@ export class ImagePipe extends DataSource {
     }
     initialize(): void {
         super.initialize();
+        const execute = () => {
+            if ( this.init_script != null ) this.init_script!.execute( this )
+        }
+        execute( )
     }
     // fetch channel
     //    index: [ stokes index, spectral plane ]
@@ -131,7 +137,8 @@ export class ImagePipe extends DataSource {
     }
 
     static init_ImagePipe( ): void {
-        this.define<ImagePipe.Props>(({ Tuple, String, Number }) => ({
+        this.define<ImagePipe.Props>(({ Tuple, String, Number, Any }) => ({
+            init_script: [ Any ],
             address: [Tuple(String,Number)],
             shape: [Tuple(Number,Number,Number,Number)]
         }));
