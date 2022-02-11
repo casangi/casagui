@@ -8,7 +8,13 @@ import numpy as np
 from bokeh.io import export_png, export_svgs
 from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.plotting import figure, show
-from cairosvg import svg2pdf
+
+try:
+    from cairosvg import svg2pdf
+    _have_svg2pdf = True
+except ImportError:
+    _have_svg2pdf = False
+
 from casatools import table, msmetadata, quanta, ms, measures
 
 _FIGURE_PLOT_WIDTH = 450
@@ -233,9 +239,12 @@ def plotants(vis, figfile="", antindex=False, logpos=False, exclude=[], checkbas
             fig.output_backend = "svg"
             export_svgs(fig, filename=figfile)
         elif figfile.endswith(".pdf"):
-            fig.output_backend = "svg"
-            export_svgs(fig, filename=figfile.replace(".pdf", ".svg"))
-            svg2pdf(url=figfile.replace(".pdf", ".svg"), write_to=figfile)
-            os.system("rm " + figfile.replace(".pdf", ".svg"))
+            if _have_svg2pdf == True:
+                fig.output_backend = "svg"
+                export_svgs(fig, filename=figfile.replace(".pdf", ".svg"))
+                svg2pdf(url=figfile.replace(".pdf", ".svg"), write_to=figfile)
+                os.system("rm " + figfile.replace(".pdf", ".svg"))
+            else:
+                raise RuntimeError("cairosvg is required for generating PDF output, but it is not available")
         else:
             raise ValueError("Invalid output file type.  Must be .png or .svg or .pdf")
