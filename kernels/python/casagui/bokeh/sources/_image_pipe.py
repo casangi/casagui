@@ -30,9 +30,12 @@ implementation for CASA images which allows for interacitve display
 of image cube channels in response to user input.'''
 
 import json
+
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.core.properties import Tuple, String, Int
+from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
+from bokeh.models.callbacks import Callback
+
 import numpy as np
 from casatools import regionmanager
 from casatools import image as imagetool
@@ -54,10 +57,18 @@ class ImagePipe(DataSource):
     address: tuple of string and int
         the string is the IP address for the network that should be used and the
         integer is the port number, see ``casagui.utils.find_ws_address``
+    init_script: JavaScript
+        this javascript is run when this DataPipe object is initialized. init_script
+        is used to run caller JavaScript which needs to be run at initialization time.
+        This is optional and does not need to be set.
     """
     __im_path = None
     __im = None
     __chan_shape = None
+
+    init_script = Nullable(Instance(Callback), help="""
+    JavaScript to be run during initialization of an instance of an DataPipe object.
+    """)
 
     address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
     shape = Tuple( Int, Int, Int, Int, help="shape: [ RA, DEC, Stokes, Spectral ]" )
