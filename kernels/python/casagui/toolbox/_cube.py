@@ -65,7 +65,7 @@ class CubeMask:
         initialize_bokeh( )
 
         self._image_path = image	                # path to image cube to be displayed
-        self._image_fig = None		                # figure displaying cube planes
+        self._image = None		                # figure displaying cube planes
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
         self._image_spectra = None                      # spectra data source
@@ -589,7 +589,7 @@ class CubeMask:
         maxanno: int
             maximum number of masks that can be drawn in each image channel
         '''
-        if self._image_fig is None:
+        if self._image is None:
             async def receive_return_value( msg, self=self ):
                 def convert( cresult ):
                     def convert_elem( vec, f=lambda x: x ):
@@ -629,24 +629,24 @@ class CubeMask:
                                                                                 source.enable_masking = ( ) => source._mask_disabled = false
                                                                     """) )
 
-            self._image_fig = figure( output_backend="webgl",
+            self._image = figure( output_backend="webgl",
                                       tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
                                               "save","reset" ],
                                       tooltips=None )
 
-            self._image_fig.x_range.range_padding = self._image_fig.y_range.range_padding = 0
+            self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 
             shape = self._pipe['image'].shape
-            self._image_fig.image( image="d", x=0, y=0,
+            self._image.image( image="d", x=0, y=0,
                                    dw=shape[0], dh=shape[1],
                                    palette="Spectral11",
                                    level="image", source=self._image_source )
 
-            self._image_fig.grid.grid_line_width = 0.5
-            self._image_fig.plot_height = 400
-            self._image_fig.plot_width = 400
+            self._image.grid.grid_line_width = 0.5
+            self._image.plot_height = 400
+            self._image.plot_width = 400
 
-            self._image_fig.js_on_event( SelectionGeometry,
+            self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
                                                               annotations=self._annotations ),
                                                    code=self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['mask-state-init'] +
@@ -676,9 +676,9 @@ class CubeMask:
                                                         """ ) )
 
             for annotation in self._annotations:
-                self._image_fig.add_layout(annotation)
+                self._image.add_layout(annotation)
 
-        return self._image_fig
+        return self._image
 
     def slider( self ):
         '''Return slider that is used to change the image plane that is
@@ -701,7 +701,7 @@ class CubeMask:
         in response to moving the cursor within the 2D raster display.
         '''
         if self._spectra is None:
-            if self._image_fig is None:
+            if self._image is None:
                 ###
                 ### an exception is raised instead of just creating the image display because if we create
                 ### it here [by calling self.image( )], the user will silently lose the ability to set the
@@ -767,9 +767,9 @@ class CubeMask:
 
             self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
 
-            self._image_fig.js_on_event('mouseenter',self._cb['impos'])
-            self._image_fig.js_on_event('tap',self._cb['impos'])
-            self._image_fig.add_tools(self._hover['image'])
+            self._image.js_on_event('mouseenter',self._cb['impos'])
+            self._image.js_on_event('tap',self._cb['impos'])
+            self._image.add_tools(self._hover['image'])
 
         return self._spectra
 
@@ -783,6 +783,7 @@ class CubeMask:
             ### the user is using statistics until connect( ) is called...
             ### ... BUT we also need to handle statistics WITHOUT a slider... hmmm....
             ### ... NEED TO switch statistics updates to use _image_source.cur_chan instead...
+            ### ... ALSO statistics would be based upon the SELECTION SET...
             ###
             self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
                                                       stats_source=self._stats_source ),
