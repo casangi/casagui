@@ -88,7 +88,6 @@ disable=raw-checker-failed,
         use-symbolic-message-instead,
         too-many-ancestors,
         no-member,
-        broad-except,
         too-many-instance-attributes
 
 # Enable the message, report, category or checker with the given id(s). You can
