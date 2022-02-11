@@ -597,6 +597,7 @@ class InteractiveClean:
                                       ),
                                       self._fig['image'] ),
                                   #self._cube.statistics( )
+                                  self._cube.spectra( ),
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
                                   self._status['log'] )

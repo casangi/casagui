@@ -37,10 +37,10 @@ from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool
 from bokeh.plotting import figure
 from casagui.utils import find_ws_address
-from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
+from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 
 
@@ -68,10 +68,15 @@ class CubeMask:
         self._image_fig = None		                # figure displaying cube planes
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
+        self._image_spectra = None                      # spectra data source
         self._image_source = None	                # ImageDataSource
         self._stats_source = None
         self._pipe = { 'image': None, 'control': None } # data pipes
         self._ids = { 'done': str(uuid4( )) }           # ids used for control messages
+
+        self._fig = { }
+        self._hover = { 'spectra': None, 'image': None }# HoverTools which are used to synchronize image/spectra
+                                                        # movement/taps and and corresponding display
 
         self._result = None                             # result to be filled in from Bokeh
 
@@ -425,8 +430,7 @@ class CubeMask:
                                                paste( addition[1] )
                                            }''',
                      ### add a polygon after one is drawn by the user via the Bokeh annotation tools
-                     'add-polygon':     '''slider.value = cb_obj.cur_chan[1]
-                                           const cur_masks = curmasks( )
+                     'add-polygon':     '''const cur_masks = curmasks( )
                                            const prev_masks = curmasks(cb_obj._cur_chan_prev)
                                            prev_masks[0].forEach( (i) => {                                  // RESET ANNOTATIONS FROM OLD CHANNEL
                                                cb_obj._annotations[i].xs = [ ];                             // clear Xs for annotations used by prev
@@ -627,10 +631,8 @@ class CubeMask:
 
             self._image_fig = figure( output_backend="webgl",
                                       tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
-                                              #self._hover['image'],
                                               "save","reset" ],
-                                      tooltips=None
-                                     )
+                                      tooltips=None )
 
             self._image_fig.x_range.range_padding = self._image_fig.y_range.range_padding = 0
 
@@ -682,14 +684,15 @@ class CubeMask:
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
         '''
-        self._init_pipes( )
-        shape = self._pipe['image'].shape
-        slider_end = shape[-1]-1
-        self._slider = Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
-                               title="Channel" )
-        if slider_end == 0:
-            # for a cube with one channel, a slider is of no use
-            self._slider.disabled = True
+        if self._slider is None:
+            self._init_pipes( )
+            shape = self._pipe['image'].shape
+            slider_end = shape[-1]-1
+            self._slider = Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
+                                   title="Channel" )
+            if slider_end == 0:
+                # for a cube with one channel, a slider is of no use
+                self._slider.disabled = True
 
         return self._slider
 
@@ -697,19 +700,98 @@ class CubeMask:
         '''Return the line graph of spectra from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
         '''
+        if self._spectra is None:
+            if self._image_fig is None:
+                ###
+                ### an exception is raised instead of just creating the image display because if we create
+                ### it here [by calling self.image( )], the user will silently lose the ability to set the
+                ### maximum number of annotations per channel (along with other future parameters)
+                ###
+                raise RumtimeError('spectra( ) requires an image cube display, but one has not yet been created')
+
+            self._image_spectra = SpectraDataSource(image_source=self._pipe['image'])
+
+            self._sp_span = Span( location=-1,
+                                  dimension='height',
+                                  line_color='slategray',
+                                  line_width=2,
+                                  visible=False )
+
+            self._cb['sppos'] = CustomJS( args=dict(span=self._sp_span),
+                                          code = """var geometry = cb_data['geometry'];
+                                                            var x_pos = Math.round(geometry.x);
+                                                            var y_pos = Math.round(geometry.y);
+                                                            if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                                span.visible = true
+                                                                span.location = x_pos
+                                                            } else {
+                                                                span.visible = false
+                                                                span.location = -1
+                                                            }""" )
+
+            self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
+
+            self._spectra = figure( plot_height=180, plot_width=800,
+                                                   title="Spectrum", tools=[ self._hover['spectra'] ] )
+            self._spectra.add_layout(self._sp_span)
+
+            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source ),
+                                          code = '''if ( span.location >= 0 ) {
+                                                        source.channel( span.location, source.cur_chan[0] )
+                                                        //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
+                                                    }''' )
+
+            self._spectra.js_on_event('tap', self._cb['sptap'])
+
+            self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
+            self._spectra.line( x='x', y='y', source=self._image_spectra )
+            self._spectra.grid.grid_line_width = 0.5
+
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra,
+                                                     state=dict(frozen=False) ),
+                                          code = """if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
+                                                        var geometry = cb_data['geometry'];
+                                                        var x_pos = Math.floor(geometry.x);
+                                                        var y_pos = Math.floor(geometry.y);
+                                                        specds.spectra(x_pos,y_pos)
+                                                        if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                            specfig.title.text = `Spectrum (${x_pos},${y_pos})`
+                                                        } else {
+                                                            specfig.title.text = 'Spectrum'
+                                                        }
+                                                    } else if ( cb_obj.event_name === 'mouseenter' ) {
+                                                        state.frozen = false
+                                                    } else if ( cb_obj.event_name === 'tap' ) {
+                                                        state.frozen = true
+                                                    }""" )
+
+            self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
+
+            self._image_fig.js_on_event('mouseenter',self._cb['impos'])
+            self._image_fig.js_on_event('tap',self._cb['impos'])
+            self._image_fig.add_tools(self._hover['image'])
+
         return self._spectra
 
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
         '''
-        self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
-                                                  stats_source=self._stats_source ),
-                                       code=self._js['slider_w_stats'] if self._stats_source else self._js['slider_wo_stats'] )
-        self._slider.js_on_change( 'value', self._cb['slider'] )
+        if self._slider:
+            ###
+            ### this code is here instead of in `def slider(...)` because we do not know if
+            ### the user is using statistics until connect( ) is called...
+            ### ... BUT we also need to handle statistics WITHOUT a slider... hmmm....
+            ### ... NEED TO switch statistics updates to use _image_source.cur_chan instead...
+            ###
+            self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
+                                                      stats_source=self._stats_source ),
+                                           code=self._js['slider_w_stats'] if self._stats_source else self._js['slider_wo_stats'] )
+            self._slider.js_on_change( 'value', self._cb['slider'] )
+
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=self._js['func-curmasks']('cb_obj') +
-                                                                    self._js['add-polygon'] ) )
+                                                               code=('''slider.value = cb_obj.cur_chan[1];''' if self._slider else '') +
+                                                                    self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This
