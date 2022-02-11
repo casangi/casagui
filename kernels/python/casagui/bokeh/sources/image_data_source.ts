@@ -15,7 +15,6 @@ export namespace ImageDataSource {
       image_source: p.Property<ImagePipe>
       num_chans: p.Property<[Number,Number]>          // [ stokes, spectral ]
       cur_chan:  p.Property<[Number,Number]>          // [ stokes, spectral ]
-      init: p.Property<String>
   }
 }
 
@@ -56,12 +55,11 @@ export class ImageDataSource extends ColumnDataSource {
         }, this.imid, [ 0, 0 ] )
     }
     static init_ImageDataSource( ): void {
-        this.define<ImageDataSource.Props>(({ Tuple, Number, String, Ref, Any }) => ({
+        this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
             init_script: [ Any ],
             image_source: [ Ref(ImagePipe) ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],
-            init: [ String ],
         }));
     }
 }

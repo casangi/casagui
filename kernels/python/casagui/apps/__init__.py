@@ -27,10 +27,11 @@
 ########################################################################
 '''End user applications supplied by ``casagui``.'''
 
-__all__ = ["plotants", "plotbandpass", 'MakeMask']
+__all__ = ["plotants", "plotbandpass", 'MakeMask','InteractiveClean']
 from ._plotants import plotants
 from ._plotbandpass import plotbandpass
 from ._makemask import MakeMask
+from ._interactiveclean import InteractiveClean
 from ..bokeh.state import setup_session
 
 setup_session()

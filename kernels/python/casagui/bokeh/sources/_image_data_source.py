@@ -29,7 +29,7 @@
 
 from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
-from bokeh.core.properties import Instance, Tuple, Int, Nullable, String
+from bokeh.core.properties import Instance, Tuple, Int, Nullable
 from bokeh.models.callbacks import Callback
 from ._image_pipe import ImagePipe
 
@@ -52,7 +52,6 @@ class ImageDataSource(ColumnDataSource):
     image_source = Instance(ImagePipe)
     num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
     cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
-    init = String( )
 
     __implementation__ = TypeScript("")
 

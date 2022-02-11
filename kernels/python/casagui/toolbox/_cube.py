@@ -82,7 +82,7 @@ class CubeMask:
         self._cb = { }
         self._annotations = [ ]		                # statically allocate fixed poly annotations for (re)use
                                                         # on successive image cube planes
-        self._pipes_initialized = False
+
         ###########################################################################################################################
         ### Notes on States                                                                                                     ###
         ###                                                                                                                     ###
@@ -565,9 +565,9 @@ class CubeMask:
     def _init_pipes( self ):
         '''set up websockets
         '''
-        if not self._pipes_initialized:
-            self._pipes_initialized = True
+        if self._pipe['image'] is None:
             self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, address=find_ws_address( ))
+        if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ))
 
     def path( self ):
@@ -618,7 +618,12 @@ class CubeMask:
                                                                                     ctrl.send( ids['done'],
                                                                                                collect_masks( ),
                                                                                                done_close_window )
-                                                                                }""") )
+                                                                                }
+                                                                                // allow masking to be dis/enabled in js
+                                                                                source._mask_disabled = false
+                                                                                source.disable_masking = ( ) => source._mask_disabled = true
+                                                                                source.enable_masking = ( ) => source._mask_disabled = false
+                                                                    """) )
 
             self._image_fig = figure( output_backend="webgl",
                                       tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
@@ -710,7 +715,12 @@ class CubeMask:
         '''return the javascript object that can be used for control. This
         object should contain a ``done`` function which will cause the
         masking GUI to exit and return the masks that have been drawn
+        Also provides JavaScript functions:
+            disable_masking( )
+            enable_masking( )
         '''
+        if not self._image_source:
+            raise RuntimeError('an image widget must be created (with CubeMask.image) before js_obj( ) can be called')
         return self._image_source
 
     def result( self ):
