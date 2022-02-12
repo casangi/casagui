@@ -530,11 +530,11 @@ class InteractiveClean:
                                                   disable( false )
                                                   btns['stop'].button_type = "warning"
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                             { action: 'next',
-                                                               value: { niter: niter.value, cycleniter: cycleniter.value,
-                                                                        threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                        mask: '_mask_clean' in img_src ? img_src._mask_clean : '' } },
-                                                             update_gui )
+                                                                  { action: 'next',
+                                                                    value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                             threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                             mask: '_mask_clean' in img_src ? img_src._mask_clean : '' } },
+                                                                  update_gui )
                                               }
                                               if ( ! state.stopped && state.mode === 'interactive' &&
                                                    cb_obj.origin.name === 'continue' ) {
@@ -544,27 +544,27 @@ class InteractiveClean:
                                                   // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
                                                   // (or even if 'XXX.origin.' is public)...
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                             { action: 'next',
-                                                               value: { niter: niter.value, cycleniter: cycleniter.value,
-                                                                        threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                        mask: '_mask_clean' in img_src ? img_src._mask_clean : '' } },
-                                                             update_gui )
+                                                                  { action: 'next',
+                                                                    value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                             threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                             mask: '_mask_clean' in img_src ? img_src._mask_clean : '' } },
+                                                                  update_gui )
                                               }
                                               if ( state.mode === 'interactive' && cb_obj.origin.name === 'stop' ) {
                                                   disable( true )
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                             { action: 'stop',
-                                                               value: { } },
-                                                             update_gui )
+                                                                  { action: 'stop',
+                                                                    value: { } },
+                                                                  update_gui )
                                               } else if ( state.mode === 'continuous' &&
                                                           cb_obj.origin.name === 'stop' &&
                                                           ! state.awaiting_stop ) {
                                                   disable( true )
                                                   state.awaiting_stop = true
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                             { action: 'status',
-                                                               value: { } },
-                                                             wait_for_tclean_stop )
+                                                                  { action: 'status',
+                                                                    value: { } },
+                                                                  wait_for_tclean_stop )
                                               }''' )
 
         self._control['clean']['continue'].js_on_click( self._cb['clean'] )
@@ -593,10 +593,10 @@ class InteractiveClean:
                                                self._control['clean']['finish'],
                                                self._control['clean']['stop'] ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
-                                          #self._cube.statistics( )
+                                          self._cube.statistics( )
                                       ),
-                                      self._fig['image'] ),
-                                  #self._cube.statistics( )
+                                      self._fig['image']
+                                  ),
                                   self._cube.spectra( ),
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),

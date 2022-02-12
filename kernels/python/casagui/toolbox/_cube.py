@@ -37,8 +37,8 @@ from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool
-from bokeh.plotting import figure
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
+from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
@@ -68,9 +68,10 @@ class CubeMask:
         self._image = None		                # figure displaying cube planes
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
+        self._statistics = None                         # statistics data table
         self._image_spectra = None                      # spectra data source
         self._image_source = None	                # ImageDataSource
-        self._stats_source = None
+        self._statistics_source = None
         self._pipe = { 'image': None, 'control': None } # data pipes
         self._ids = { 'done': str(uuid4( )) }           # ids used for control messages
 
@@ -148,12 +149,12 @@ class CubeMask:
                                                // Primary axis:   stokes
                                                // Secondary axis: frequency                vvvvvvvvvvvvvvvvvvv------ polygons drawn on this channel
                                                //                 [ [ [ANNOTATION-ID, ... ], [ POLY-INDEX, ... ], [ [ dx, dy ], ... ], [ INDEX, ... ], CHAN ], ... ]
-                                               //                   ^^^^^^^^^^^^^^^^^^^^^                       ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^---- selection indexes
-                                               //                                       |                                         |                     (INDEX into previous 3 lists)
-                                               //                                       |                                         +------ x,y delta translation
-                                               //                                       |
-                                               //                                       +--------------------------- annotations in use for this channel
-                                               //                                                                    one for each polygon
+                                               //                     ^^^^^^^^^^^^^^^^^^^^^                       ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^---- selection indexes
+                                               //                                         |                                         |                     (INDEX into previous 3 lists)
+                                               //                                         |                                         +------ x,y delta translation
+                                               //                                         |
+                                               //                                         +--------------------------- annotations in use for this channel
+                                               //                                                                      one for each polygon
                                                //
                                                //                 one-to-one correspondence between annotation and poly indexes
                                                source._chanmasks = [ ]
@@ -336,6 +337,8 @@ class CubeMask:
                                            }
                                            function state_copy_selection( cm = curmasks( ) ) {
                                                source._copy_buffer = [ [ ], [ ].slice.call(source.cur_chan) ]
+                                               //    polygons----------^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----the channel polys were copied from
+                                               // loop over selection indexes and add polygon index + translation
                                                cm[3].forEach( idx => { source._copy_buffer[0].push( [ cm[1][idx], [ ].slice.call(cm[2][idx]) ] ) } )
                                            }
                                            function state_paste_selection( cm = curmasks( ) ) {
@@ -773,6 +776,22 @@ class CubeMask:
 
         return self._spectra
 
+    def statistics( self ):
+        '''retrieve a DataTable which is updated in response to changes in the
+        image cube display
+        '''
+        if self._statistics is None:
+            image_stats = self._pipe['image'].statistics( [0,0] )
+            self._statistics_source = ColumnDataSource( { 'labels': list(image_stats.keys( )),
+                                                     'values': list(image_stats.values( )) } )
+
+            stats_column = [ TableColumn(field='labels', title='Statistics', width=75),
+                             TableColumn(field='values', title='Values') ]
+
+            self._statistics = DataTable(source=self._statistics_source, columns=stats_column, width=400, height=200, autosize_mode='none')
+
+        return self._statistics
+
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
@@ -786,8 +805,8 @@ class CubeMask:
             ### ... ALSO statistics would be based upon the SELECTION SET...
             ###
             self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
-                                                      stats_source=self._stats_source ),
-                                           code=self._js['slider_w_stats'] if self._stats_source else self._js['slider_wo_stats'] )
+                                                      stats_source=self._statistics_source ),
+                                           code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
