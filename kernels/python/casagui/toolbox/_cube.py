@@ -170,6 +170,21 @@ class CubeMask:
                      ### point to our 'source' object
                      'func-curmasks': lambda source="source": '''
                                            function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
+                                           function collect_channel_selection( cur=source.cur_chan ) {
+                                               const cm = curmasks( cur )
+                                               var details = [ ]
+                                               var polys = new Set( )
+                                               cm[3].forEach( s => {
+                                                   details.push( { p: cm[1][s], d: [ ].slice.call(cm[2][s]) } )
+                                                   polys.add( cm[1][s] )
+                                               } )
+                                               return { masks: [ [ [ ].slice.call(cur), details ] ],
+                                                        polys: Array.from(polys).reduce( (acc,p) => {
+                                                                     acc.push([ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ])
+                                                                     //            ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
+                                                                     return acc
+                                                                 }, [ ] ) }
+                                           }
                                            function collect_masks( ) {
                                                var polys = new Set( )
                                                var details = [ ]
@@ -179,7 +194,7 @@ class CubeMask:
                                                        let cur_chan_details = [ ]
                                                        for ( var poly=0; poly < source._chanmasks[stokes][chan][1].length; ++poly ) {
                                                            cur_chan_details.push( { p: source._chanmasks[stokes][chan][1][poly],
-                                                                                    d: source._chanmasks[stokes][chan][2][poly] } )
+                                                                                    d: [ ].slice.call(source._chanmasks[stokes][chan][2][poly]) } )
                                                            polys.add( source._chanmasks[stokes][chan][1][poly] )
                                                        }
                                                        details.push( [[stokes,chan],cur_chan_details] )
@@ -187,10 +202,10 @@ class CubeMask:
                                                }
                                                var poly_result = [ ]
                                                polys.forEach( p => {
-                                                   let cur = source._polys[p]
-                                                   poly_result.push( [ p, { type: cur.type, geometry: cur.geometry } ] )
+                                                   poly_result.push( [ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ] )
+                                                   //                     ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
                                                } )
-                                               return { action: 'done', value: { masks: details, polys: poly_result } }
+                                               return { masks: details, polys: poly_result }
                                            }'''.replace('source',source),
                      ### create a new polygon -- create state and establish a correspondence between the polygon and the
                      ###                         annotation that will be used to represent it for this particular channel
@@ -623,7 +638,7 @@ class CubeMask:
                                                                                         }
                                                                                     }
                                                                                     ctrl.send( ids['done'],
-                                                                                               collect_masks( ),
+                                                                                               { action: 'done', value: collect_masks( ) },
                                                                                                done_close_window )
                                                                                 }
                                                                                 // allow masking to be dis/enabled in js
