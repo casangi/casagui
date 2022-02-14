@@ -28,4 +28,4 @@
 '''This module has constants and other states, like the casagui version
 number, VERSION.'''
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
