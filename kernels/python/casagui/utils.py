@@ -147,3 +147,11 @@ def have_network( ):
     except Exception:
         ### reachable?
         return False
+
+def convert_js_masks( jsresult ):
+    def convert_elem( vec, f=lambda x: x ):
+        result = { }
+        for chan_or_poly in vec:
+            result[f(chan_or_poly[0])] = chan_or_poly[1]
+        return result
+    return { 'masks': convert_elem(jsresult['masks'],tuple), 'polys': convert_elem(jsresult['polys']) }

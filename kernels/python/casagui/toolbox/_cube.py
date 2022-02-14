@@ -39,7 +39,7 @@ import websockets
 from bokeh.events import SelectionGeometry
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.utils import find_ws_address
+from casagui.utils import find_ws_address, convert_js_masks
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 
@@ -171,6 +171,9 @@ class CubeMask:
                      'func-curmasks': lambda source="source": '''
                                            function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
                                            function collect_channel_selection( cur=source.cur_chan ) {
+                                               if ( typeof(cur) == 'number' ) {
+                                                   cur = [ source.cur_chan[0], cur ]    // accept just channel (with stokes implied)
+                                               }
                                                const cm = curmasks( cur )
                                                var details = [ ]
                                                var polys = new Set( )
@@ -178,12 +181,13 @@ class CubeMask:
                                                    details.push( { p: cm[1][s], d: [ ].slice.call(cm[2][s]) } )
                                                    polys.add( cm[1][s] )
                                                } )
-                                               return { masks: [ [ [ ].slice.call(cur), details ] ],
-                                                        polys: Array.from(polys).reduce( (acc,p) => {
-                                                                     acc.push([ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ])
-                                                                     //            ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
-                                                                     return acc
-                                                                 }, [ ] ) }
+                                               return polys.size == 0 ? { masks: [ ], polys: [ ] } :
+                                                                        { masks: [ [ [ ].slice.call(cur), details ] ],
+                                                                          polys: Array.from(polys).reduce( (acc,p) => {
+                                                                              acc.push([ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ])
+                                                                              //            ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
+                                                                              return acc
+                                                                          }, [ ] ) }
                                            }
                                            function collect_masks( ) {
                                                var polys = new Set( )
@@ -609,14 +613,7 @@ class CubeMask:
         '''
         if self._image is None:
             async def receive_return_value( msg, self=self ):
-                def convert( cresult ):
-                    def convert_elem( vec, f=lambda x: x ):
-                        result = { }
-                        for chan_or_poly in vec:
-                            result[f(chan_or_poly[0])] = chan_or_poly[1]
-                        return result
-                    return { 'masks': convert_elem(cresult['masks'],tuple), 'polys': convert_elem(cresult['polys']) }
-                self._result = convert( msg['value'] )
+                self._result = convert_js_masks( msg['value'] )
                 self.__stop( )
                 return dict( result='stopped', update={ } )
 
