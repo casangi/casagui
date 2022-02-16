@@ -27,6 +27,7 @@
 ########################################################################
 '''General utility functions used by the ``casagui`` tools and applications.'''
 
+from itertools import groupby, chain
 from socket import socket
 from os import path as __path
 import requests
@@ -148,10 +149,60 @@ def have_network( ):
         ### reachable?
         return False
 
-def convert_js_masks( jsresult ):
-    def convert_elem( vec, f=lambda x: x ):
-        result = { }
-        for chan_or_poly in vec:
-            result[f(chan_or_poly[0])] = chan_or_poly[1]
-        return result
-    return { 'masks': convert_elem(jsresult['masks'],tuple), 'polys': convert_elem(jsresult['polys']) }
+def convert_js_masks( jsresult, coord='world', format='crtf', result_type='str' ):
+    if format == 'raw':
+        def convert_elem( vec, f=lambda x: x ):
+            result = { }
+            for chan_or_poly in vec:
+                result[f(chan_or_poly[0])] = chan_or_poly[1]
+            return result
+        return { 'masks': convert_elem(jsresult['masks'],tuple), 'polys': convert_elem(jsresult['polys']) }
+    if format == 'crtf' and coord == 'pixel':
+        unique_polygons={ }
+        ###
+        ### collect masks ordered by (poly_index,dx,dy)
+        ###
+        for [index,mask] in jsresult['masks']:
+            for poly in mask:
+                unique_poly = tuple([poly['p']] + poly['d'])
+                if unique_poly in unique_polygons:
+                    unique_polygons[unique_poly] += [ index ]
+                else:
+                    unique_polygons[unique_poly] = [ index ]
+
+        polygon_definitions = { index: poly for [ index, poly ] in jsresult['polys'] }
+
+        ###
+        ### collect channels into contiguous channel ranges
+        ###
+        def ranges(i):
+            for a, b in groupby(enumerate(sorted(i)), lambda pair: pair[1] - pair[0]):
+                b = list(b)
+                yield b[0][1], b[-1][1]
+
+        ###
+        ### create a region list given the index of the polygon used, the x/y translation, and the
+        ### channels the region should be found on
+        ###
+        def create_regions( poly_index, xlate, channels ):
+            if polygon_definitions[poly_index]['type'] == 'poly':
+                poly_pts = ','.join( [ f"[{x+xlate[0]}pix,{y+xlate[1]}pix]"
+                                       for x in polygon_definitions[poly_index]['geometry']['xs']
+                                       for y in polygon_definitions[poly_index]['geometry']['ys'] ] )
+                return [ f"poly[{poly_pts}],range=[{r[0]}chan,{r[1]}chan]" for r in ranges([c[1] for c in channels]) ]
+            if polygon_definitions[poly_index]['type'] == 'rect':
+                xs = polygon_definitions[poly_index]['geometry']['xs']
+                ys = polygon_definitions[poly_index]['geometry']['ys']
+                box_pts = f"[{min(xs)}pix,{min(ys)}pix],[{max(xs)}pix,{max(ys)}pix]"
+                return [ f"box[{box_pts}],range=[{r[0]}chan,{r[1]}chan]" for r in ranges([c[1] for c in channels]) ]
+
+        ###
+        ### generate CFTF
+        ###
+        result = [ create_regions( index[0], index[1:], channels ) for index,channels in unique_polygons.items( ) ]
+        if result_type == 'str':
+            return '\n'.join(chain.from_iterable(result))
+        if result_type == 'list':
+            return result
+        raise RuntimeError(f"unknown result_type ({result_type})")
+    raise RuntimeError(f"invalid format ({format}), or coord ({coord})")
