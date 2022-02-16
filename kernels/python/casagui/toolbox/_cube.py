@@ -373,7 +373,7 @@ class CubeMask:
                                                                                                                        //     (position in channel poly list)
                                                                               cm[1].push(idx[0])                       // add poly index (index may occur
                                                                                                                        //     more than once)
-                                                                              cm[2].push(idx[1])                       // store x/y translation
+                                                                              cm[2].push([].slice.call(idx[1]))        // store x/y translation
                                                                               const poly = source._polys[idx[0]]
                                                                               if ( cm[4][0] == source.cur_chan[0] && cm[4][1] == source.cur_chan[1] ) {
                                                                                   const anno = source._annotations[anno_id]
