@@ -39,7 +39,7 @@ import websockets
 from bokeh.events import SelectionGeometry
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.utils import find_ws_address, convert_js_masks
+from casagui.utils import find_ws_address
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 
@@ -105,7 +105,13 @@ class CubeMask:
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
                                                             command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
                      ### initialize mask state
-                     'mask-state-init': '''if ( typeof(source._cur_chan_prev) === 'undefined' ) {
+                     ###
+                     ### mask breadcrumbs
+                     ###    '
+                     'mask-state-init': '''if ( typeof(source._mask_breadcrumbs) === 'undefined' ) {
+                                               source._mask_breadcrumbs = ''
+                                           }
+                                           if ( typeof(source._cur_chan_prev) === 'undefined' ) {
                                                source._cur_chan_prev = source.cur_chan
                                            }
                                            if ( typeof(source._polys) === 'undefined' ) {
@@ -169,6 +175,9 @@ class CubeMask:
                      ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
                      ### point to our 'source' object
                      'func-curmasks': lambda source="source": '''
+                                           function register_mask_change( code ) {
+                                               source._mask_breadcrumbs += code
+                                           }
                                            function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
                                            function collect_channel_selection( cur=source.cur_chan ) {
                                                if ( typeof(cur) == 'number' ) {
@@ -325,6 +334,7 @@ class CubeMask:
                                                state_update_cursor( 0, curmasks( ) )
                                            }
                                            function state_remove_mask( cm = curmasks( ) ) {
+                                               register_mask_change('D')
                                                const cursor = source._cursor
                                                const index = cm[3].indexOf(cursor);
                                                if ( index > -1 ) {
@@ -340,6 +350,7 @@ class CubeMask:
                                                state_initialize_cursor( )
                                            }
                                            function state_translate_selection( dx, dy, cm = curmasks( ) ) {
+                                               register_mask_change('T')
                                                const shape = source.image_source.shape
                                                for ( const s of cm[3] ) {
                                                    if ( dx > 0 && (Math.ceil(Math.max( ...source._annotations[cm[0][s]].xs )) + dx) >= shape[0] ) return;
@@ -540,6 +551,7 @@ class CubeMask:
                                                                             state_copy_selection( )
                                                                         } else if ( e.keyCode === keymap.paste ) {
                                                                             if ( document._key_state.shift ) {
+                                                                                register_mask_change('V')
                                                                                 for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
                                                                                     for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
                                                                                         if ( stokes != source._copy_buffer[1][0] ||
@@ -548,6 +560,7 @@ class CubeMask:
                                                                                     }
                                                                                 }
                                                                             } else {
+                                                                                register_mask_change('v')
                                                                                 state_paste_selection( )
                                                                             }
                                                                         }
@@ -601,6 +614,14 @@ class CubeMask:
         '''
         return self._image_papth
 
+    def jsmask_to_raw( self, jsmask ):
+        '''The CubeMask raw format uses tuples for dictionary keys but tuples are not a type that can be
+        created in javascript...
+        '''
+        def convert_elem( vec, f=lambda x: x ):
+            return { f(chan_or_poly[0]): chan_or_poly[1] for chan_or_poly in vec }
+        return { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
+
     def image( self, maxanno=50 ):
         '''Create the 2D raster display which displays image planes. This widget is should be
         created for all ``cube_mask`` objects because this is the GUI component that ties
@@ -613,7 +634,7 @@ class CubeMask:
         '''
         if self._image is None:
             async def receive_return_value( msg, self=self ):
-                self._result = convert_js_masks( msg['value'] )
+                self._result = self.jsmask_to_raw( msg['value'] )
                 self.__stop( )
                 return dict( result='stopped', update={ } )
 
@@ -638,10 +659,12 @@ class CubeMask:
                                                                                                { action: 'done', value: collect_masks( ) },
                                                                                                done_close_window )
                                                                                 }
-                                                                                // allow masking to be dis/enabled in js
-                                                                                source._mask_disabled = false
-                                                                                source.disable_masking = ( ) => source._mask_disabled = true
-                                                                                source.enable_masking = ( ) => source._mask_disabled = false
+                                                                                // exported functions -- enable/disable masking and retrieve masks
+                                                                                source._masking_enabled = true
+                                                                                source.disable_masking = ( ) => source._masking_enabled = false
+                                                                                source.enable_masking = ( ) => source._masking_enabled = true
+                                                                                source.masks = ( ) => collect_masks( )
+                                                                                source.breadcrumbs = ( ) => source._mask_breadcrumbs
                                                                     """) )
 
             self._image = figure( output_backend="webgl",
@@ -665,30 +688,33 @@ class CubeMask:
                                          CustomJS( args=dict( source=self._image_source,
                                                               annotations=self._annotations ),
                                                    code=self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['mask-state-init'] +
-                                                        """let cm = curmasks( )
-                                                           const geometry = cb_obj['geometry']
-                                                           if ( geometry.type === 'rect' ) {
-                                                               let poly = newpoly( cm )
-                                                               if ( poly !== null ) {
-                                                                   poly[1].type = 'rect'
-                                                                   poly[1].geometry.xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
-                                                                   poly[1].geometry.ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
-                                                                   poly[0].xs = poly[1].geometry.xs
-                                                                   poly[0].ys = poly[1].geometry.ys
+                                                        """if ( source._masking_enabled ) {
+                                                               let cm = curmasks( )
+                                                               const geometry = cb_obj['geometry']
+                                                               if ( geometry.type === 'rect' ) {
+                                                                   let poly = newpoly( cm )
+                                                                   if ( poly !== null ) {
+                                                                       register_mask_change('r')
+                                                                       poly[1].type = 'rect'
+                                                                       poly[1].geometry.xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
+                                                                       poly[1].geometry.ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
+                                                                       poly[0].xs = poly[1].geometry.xs
+                                                                       poly[0].ys = poly[1].geometry.ys
+                                                                       cm[2].push( [0,0] )                               // translation for this polygon
+                                                                   }
+                                                               } else if ( geometry.type === 'poly' && cb_obj.final ) {
+                                                                   let poly = newpoly( cm )
+                                                                   if ( poly !== null ) {
+                                                                       register_mask_change('p')
+                                                                       poly[1].type = 'poly'
+                                                                       poly[1].geometry.xs = [ ].slice.call(geometry.x)
+                                                                       poly[1].geometry.ys = [ ].slice.call(geometry.y)
+                                                                       poly[0].xs = poly[1].geometry.xs
+                                                                       poly[0].ys = poly[1].geometry.ys
+                                                                       cm[2].push( [0,0] )
+                                                                   }
                                                                }
-                                                               cm[2].push( [0,0] )                               // translation for this polygon
-                                                           } else if ( geometry.type === 'poly' && cb_obj.final ) {
-                                                               let poly = newpoly( cm )
-                                                               if ( poly !== null ) {
-                                                                   poly[1].type = 'poly'
-                                                                   poly[1].geometry.xs = [ ].slice.call(geometry.x)
-                                                                   poly[1].geometry.ys = [ ].slice.call(geometry.y)
-                                                                   poly[0].xs = poly[1].geometry.xs
-                                                                   poly[0].ys = poly[1].geometry.ys
-                                                               }
-                                                               cm[2].push( [0,0] )
-                                                           }
-                                                        """ ) )
+                                                           }""" ) )
 
             for annotation in self._annotations:
                 self._image.add_layout(annotation)

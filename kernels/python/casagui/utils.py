@@ -27,6 +27,7 @@
 ########################################################################
 '''General utility functions used by the ``casagui`` tools and applications.'''
 
+import inspect
 from itertools import groupby, chain
 from socket import socket
 from os import path as __path
@@ -149,20 +150,50 @@ def have_network( ):
         ### reachable?
         return False
 
-def convert_js_masks( jsresult, coord='world', format='crtf', result_type='str' ):
-    if format == 'raw':
-        def convert_elem( vec, f=lambda x: x ):
-            result = { }
-            for chan_or_poly in vec:
-                result[f(chan_or_poly[0])] = chan_or_poly[1]
-            return result
-        return { 'masks': convert_elem(jsresult['masks'],tuple), 'polys': convert_elem(jsresult['polys']) }
+def ranges(iterable, order=sorted, key=lambda x: x):
+    '''collect elements of ``iterable`` into tuple ranges where each tuple represents
+    a concesecutive range within the iterable. ``key`` can be used to provide ranges
+    for other objects where ``key(element)`` returns the key to be used for sorting
+    into ranges'''
+    for a, b in groupby( enumerate( order(iterable,key=key) if 'key' in inspect.getfullargspec(order).kwonlyargs else order(iterable) ), lambda pair: key(pair[1]) - pair[0] ):
+        b = list(b)
+        yield b[0][1], b[-1][1]
+
+
+def index_to_stokes(index):
+    '''convert stokes axis index to alphabetic value'''
+    STOKES_MAP = [ 'I', 'Q', 'U', 'V' ]
+    try:
+        return [ STOKES_MAP[i] for i in index ]
+    except TypeError:
+        return STOKES_MAP[index]
+
+def contiguous_ranges(iterable, order=sorted, key=lambda x: x):
+    '''split iterable into contiguous index sequence, i.e. reduce consecutive index runs
+    to a tuple containing the first and last. ``iterable`` can be a sequence of values that
+    can be subtracted or a list of more complex values where the function ``key`` returns
+    the key to be used for ordering. ``iterable`` is ordered by ``order`` which by default
+    sorts ``iterable``.'''
+    unique = list(set(iterable))
+    for a, b in groupby( enumerate( order(unique,key=key) if 'key' in inspect.getfullargspec(order).kwonlyargs else order(unique) ), lambda pair: key(pair[1]) - pair[0] ):
+        b = list(b)
+        yield b[0][1], b[-1][1]
+
+def expand_range_incl(r):
+    '''expand the tuple supplied as ``r`` into a range which *includes* the first
+    and last element ``r``'''
+    if r[0] == r[1]:
+        return [0]
+    else:
+        return range(r[0],r[1]+1)
+
+def convert_masks( masks, format='crtf', coord='pixel', type='str' ):
     if format == 'crtf' and coord == 'pixel':
         unique_polygons={ }
         ###
         ### collect masks ordered by (poly_index,dx,dy)
         ###
-        for [index,mask] in jsresult['masks']:
+        for index,mask in masks['masks'].items( ):
             for poly in mask:
                 unique_poly = tuple([poly['p']] + poly['d'])
                 if unique_poly in unique_polygons:
@@ -170,39 +201,34 @@ def convert_js_masks( jsresult, coord='world', format='crtf', result_type='str' 
                 else:
                     unique_polygons[unique_poly] = [ index ]
 
-        polygon_definitions = { index: poly for [ index, poly ] in jsresult['polys'] }
-
-        ###
-        ### collect channels into contiguous channel ranges
-        ###
-        def ranges(i):
-            for a, b in groupby(enumerate(sorted(i)), lambda pair: pair[1] - pair[0]):
-                b = list(b)
-                yield b[0][1], b[-1][1]
+        polygon_definitions = { index: poly for index, poly in masks['polys'].items( ) }
 
         ###
         ### create a region list given the index of the polygon used, the x/y translation, and the
         ### channels the region should be found on
         ###
         def create_regions( poly_index, xlate, channels ):
+            def create_result( shape, points ):
+                return [ f"{shape}[{points}],range=[{chan_range[0]}chan,{chan_range[1]}chan],corr=[{','.join(index_to_stokes(expand_range_incl(stokes_range)))}]"
+                         for chan_range in contiguous_ranges([c[1] for c in channels]) for stokes_range in contiguous_ranges([c[0] for c in channels]) ]
             if polygon_definitions[poly_index]['type'] == 'poly':
                 poly_pts = ','.join( [ f"[{x+xlate[0]}pix,{y+xlate[1]}pix]"
                                        for x in polygon_definitions[poly_index]['geometry']['xs']
                                        for y in polygon_definitions[poly_index]['geometry']['ys'] ] )
-                return [ f"poly[{poly_pts}],range=[{r[0]}chan,{r[1]}chan]" for r in ranges([c[1] for c in channels]) ]
+                return create_result( 'poly', poly_pts )
             if polygon_definitions[poly_index]['type'] == 'rect':
                 xs = polygon_definitions[poly_index]['geometry']['xs']
                 ys = polygon_definitions[poly_index]['geometry']['ys']
-                box_pts = f"[{min(xs)}pix,{min(ys)}pix],[{max(xs)}pix,{max(ys)}pix]"
-                return [ f"box[{box_pts}],range=[{r[0]}chan,{r[1]}chan]" for r in ranges([c[1] for c in channels]) ]
+                box_pts = f"[{min(xs)+xlate[0]}pix,{min(ys)+xlate[1]}pix],[{max(xs)+xlate[0]}pix,{max(ys)+xlate[1]}pix]"
+                return create_result( 'box', box_pts )
 
         ###
         ### generate CFTF
         ###
         result = [ create_regions( index[0], index[1:], channels ) for index,channels in unique_polygons.items( ) ]
-        if result_type == 'str':
+        if type == 'str':
             return '\n'.join(chain.from_iterable(result))
-        if result_type == 'list':
+        if type == 'list':
             return result
-        raise RuntimeError(f"unknown result_type ({result_type})")
+        raise RuntimeError(f"unknown type ({type})")
     raise RuntimeError(f"invalid format ({format}), or coord ({coord})")
