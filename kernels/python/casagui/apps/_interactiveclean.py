@@ -347,6 +347,7 @@ class InteractiveClean:
                                                        }
                                                    }
                                                } else if ( msg.result === 'error' ) {
+                                                   img_src.drop_breadcrumb('E')
                                                    if ( 'cmd' in msg ) {
                                                        log.text = log.text + msg.cmd
                                                    }

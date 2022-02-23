@@ -659,12 +659,13 @@ class CubeMask:
                                                                                                { action: 'done', value: collect_masks( ) },
                                                                                                done_close_window )
                                                                                 }
-                                                                                // exported functions -- enable/disable masking and retrieve masks
+                                                                                // exported functions -- enable/disable masking, retrieve masks etc.
                                                                                 source._masking_enabled = true
                                                                                 source.disable_masking = ( ) => source._masking_enabled = false
                                                                                 source.enable_masking = ( ) => source._masking_enabled = true
                                                                                 source.masks = ( ) => collect_masks( )
                                                                                 source.breadcrumbs = ( ) => source._mask_breadcrumbs
+                                                                                source.drop_breadcrumb = ( code ) => register_mask_change( code )
                                                                     """) )
 
             self._image = figure( output_backend="webgl",
