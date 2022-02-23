@@ -406,6 +406,8 @@ class InteractiveClean:
                         new_mask = self._cube.jsmask_to_raw(msg['value']['mask'])
                         self._mask_history.append(new_mask)
                         msg['value']['mask'] = convert_masks(new_mask,'crtf','pixel','str')
+                        print(f"mask:\t\t{msg['value']['mask']}")
+                        print(f"breadcrumbs:\t{self._last_mask_breadcrumbs}")
                     else:
                         msg['value']['mask'] = ''
                 else:
