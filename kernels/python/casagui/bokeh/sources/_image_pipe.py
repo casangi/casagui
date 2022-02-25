@@ -140,6 +140,13 @@ class ImagePipe(DataSource):
         self.__open( image )
         self.shape = list(self.__im.shape( ))
 
+    def coorddesc( self ):
+        ia = imagetool( )
+        ia.open(self.__path)
+        csys = ia.coordsys( )
+        ia.close( )
+        return { 'csys': csys, 'shape': tuple(self.shape) }
+
     def statistics( self, index ):
         """Retrieve statistics for one channel from the image cube. The `index`
         should be a two element list of integers. The first integer is the
@@ -169,6 +176,7 @@ class ImagePipe(DataSource):
         ia = imagetool( )
         ia.open(self.__path)
         rawstats = ia.statistics( region=reg )
+        ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
 
     async def process_messages( self, websocket ):
