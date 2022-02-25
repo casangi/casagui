@@ -815,6 +815,9 @@ class CubeMask:
 
         return self._spectra
 
+    def coorddesc( self ):
+        return self._pipe['image'].coorddesc( )
+
     def statistics( self ):
         '''retrieve a DataTable which is updated in response to changes in the
         image cube display
