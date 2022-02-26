@@ -32,6 +32,11 @@ from itertools import groupby, chain
 from socket import socket
 from os import path as __path
 import requests
+try:
+    from casatools import regionmanager
+    __have_casatools = True
+except ImportError:
+    __have_casatools = False
 
 
 def static_vars(**kwargs):
@@ -187,22 +192,90 @@ def expand_range_incl(r):
     else:
         return range(r[0],r[1]+1)
 
-def convert_masks( masks, format='crtf', coord='pixel', type='str' ):
+def convert_masks( masks, format='crtf', coord='pixel', ret_type='str', cdesc=None ):
+    '''Convert masks in standard format (as defined by ``CubeMask.jsmask_to_raw``) into
+    other formats like list of CRTF, single region, etc.
+
+    Parameters
+    ----------
+    masks: dict
+        Dictionary containing ``masks`` and ``polys`` keys. The values for ``masks`` are the polygon
+        references for each channel and the values for ``polys`` contain the points making up each
+        polygon.
+    format: str
+        Format string that indicates the format that should be returned. Allowed values are
+        'region' or 'crtf'.
+    coord: str
+        Coordinate system that should be used in the returned masks. Allowed values are 'pixel'.
+    ret_type: str
+        Data structure that should be returned the allowed values are 'str', 'list', 'singleton'
+    cdesc: dict
+        Dictionary containing ``csys`` and ``shape`` which describes the coordinate system to be
+        used for creating world coordinate coordinates. The ``shape`` is required along with the
+        coordinate system for coordinate conversion.
+    '''
+    if format == 'region':
+        if __have_casatools == False:
+            raise RuntimeError('casatools is not available, cannot create CASA regions')
+        if cdesc is None or 'csys' not in cdesc or 'shape' not in cdesc:
+            raise RuntimeError('region operations requires a coordinate description (cdesc parameter)')
+        else:
+            if not isinstance( cdesc['shape'], tuple ):
+                raise RuntimeError("coordinate description must contain a 'shape' element of type 'tuple'")
+            if isinstance( cdesc['csys'], dict ):
+                csys_dict = cdesc['csys']
+            else:
+                csys_dict = cdesc['csys'].torecord( )
+
+    unique_polygons={ }
+    ###
+    ### collect masks ordered by (poly_index,dx,dy)
+    ###
+    for index,mask in masks['masks'].items( ):
+        for poly in mask:
+            unique_poly = tuple([poly['p']] + poly['d'])
+            if unique_poly in unique_polygons:
+                unique_polygons[unique_poly] += [ index ]
+            else:
+                unique_polygons[unique_poly] = [ index ]
+
+    polygon_definitions = { index: poly for index, poly in masks['polys'].items( ) }
+
+    if format == 'region' and coord == 'pixel':
+        rg = regionmanager( )
+        rg.setcoordinates(csys_dict)
+        ###
+        ### create a region list given the index of the polygon used, the x/y translation, and the
+        ### channels the region should be found on
+        ###
+        def create_regions( poly_index, xlate, channels ):
+            def create_result( shape, points ):
+                return [ rg.fromtext(f"{shape}[{points}],range=[{chan_range[0]}chan,{chan_range[1]}chan],corr=[{','.join(index_to_stokes(expand_range_incl(stokes_range)))}]", shape=list(cdesc['shape']) )
+                         for chan_range in contiguous_ranges([c[1] for c in channels]) for stokes_range in contiguous_ranges([c[0] for c in channels]) ]
+            if polygon_definitions[poly_index]['type'] == 'poly':
+                poly_pts = ','.join( [ f"[{x+xlate[0]}pix,{y+xlate[1]}pix]"
+                                       for x in polygon_definitions[poly_index]['geometry']['xs']
+                                       for y in polygon_definitions[poly_index]['geometry']['ys'] ] )
+                return create_result( 'poly', poly_pts )
+            if polygon_definitions[poly_index]['type'] == 'rect':
+                xs = polygon_definitions[poly_index]['geometry']['xs']
+                ys = polygon_definitions[poly_index]['geometry']['ys']
+                box_pts = f"[{min(xs)+xlate[0]}pix,{min(ys)+xlate[1]}pix],[{max(xs)+xlate[0]}pix,{max(ys)+xlate[1]}pix]"
+                return create_result( 'box', box_pts )
+        ### flatten list of unique polygon regions
+        result = list(chain.from_iterable([ create_regions( index[0], index[1:], channels ) for index, channels in unique_polygons.items( ) ]))
+        if ret_type == 'singleton':
+            if len(result) == 0:
+                raise RuntimeError("no regions created")
+            if len(result) == 1:
+                return result[0]
+            ###return dict(enumerate(result)))          ## see: CAS-13764
+            return rg.makeunion(dict(map( lambda t: (str(t[0]),t[1]), list(enumerate(result)) )))
+        if ret_type == 'list':
+            return result
+        raise RuntimeError(f"unknown ret_type for region format ({ret_type})")
+
     if format == 'crtf' and coord == 'pixel':
-        unique_polygons={ }
-        ###
-        ### collect masks ordered by (poly_index,dx,dy)
-        ###
-        for index,mask in masks['masks'].items( ):
-            for poly in mask:
-                unique_poly = tuple([poly['p']] + poly['d'])
-                if unique_poly in unique_polygons:
-                    unique_polygons[unique_poly] += [ index ]
-                else:
-                    unique_polygons[unique_poly] = [ index ]
-
-        polygon_definitions = { index: poly for index, poly in masks['polys'].items( ) }
-
         ###
         ### create a region list given the index of the polygon used, the x/y translation, and the
         ### channels the region should be found on
@@ -226,9 +299,9 @@ def convert_masks( masks, format='crtf', coord='pixel', type='str' ):
         ### generate CFTF
         ###
         result = [ create_regions( index[0], index[1:], channels ) for index,channels in unique_polygons.items( ) ]
-        if type == 'str':
+        if ret_type == 'str':
             return '\n'.join(chain.from_iterable(result))
-        if type == 'list':
-            return result
-        raise RuntimeError(f"unknown type ({type})")
+        if ret_type == 'list':
+            return list(chain.from_iterable(result))
+        raise RuntimeError(f"unknown ret_type for crtf format ({ret_type})")
     raise RuntimeError(f"invalid format ({format}), or coord ({coord})")
