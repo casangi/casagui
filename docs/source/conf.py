@@ -10,13 +10,11 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
 # For extensions
 from os.path import dirname, abspath, join
 import sys
 
+sys.path.insert(0, abspath(dirname(__file__)))                         # For links
 sys.path.insert(0, abspath(join(dirname(__file__),'extensions')))      # For xref
 
 # -- Project information -----------------------------------------------------
