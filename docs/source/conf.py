@@ -14,7 +14,6 @@
 from os.path import dirname, abspath, join
 import sys
 
-sys.path.insert(0, abspath(dirname(__file__)))                         # For links
 sys.path.insert(0, abspath(join(dirname(__file__),'extensions')))      # For xref
 
 # -- Project information -----------------------------------------------------
@@ -32,6 +31,9 @@ release = '0.0.1'
 # Import hypertext links for use in the documentation
 #
 sys.path.append(dirname(__file__))
+print('-------------------------------------------------------------------')
+print(sys.path)
+print('-------------------------------------------------------------------')
 from links.link import *
 from links import *
 
