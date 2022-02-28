@@ -494,6 +494,7 @@ class CubeMask:
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
                                                             } else if ( document._key_state.option === true ) {     // option key
+                                                                e.preventDefault()                                  // prevent default key behavior
                                                                 if ( document._key_state.control === true ) {       // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
