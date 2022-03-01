@@ -16,7 +16,7 @@ import sys
 import os
 
 sys.path.insert(0, abspath(join(dirname(__file__),'extensions')))      # For xref
-#sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For autoapi
+sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For autoapi
 #print('----------------------------------------------------------------------------------------------------')
 #print(sys.path)
 #print('----------------------------------------------------------------------------------------------------')
