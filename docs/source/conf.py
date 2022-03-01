@@ -30,7 +30,6 @@ release = '0.0.1'
 #
 # Import hypertext links for use in the documentation
 #
-sys.path.append(dirname(__file__))
 print('-------------------------------------------------------------------')
 print(sys.path)
 print('-------------------------------------------------------------------')
@@ -40,7 +39,21 @@ from links import *
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon','sphinx.ext.todo','xref']
+extensions = [ 'sphinx.ext.autodoc',
+               'sphinx.ext.napoleon',
+               'sphinx.ext.todo',
+               'autoapi.extension',
+               'xref'
+             ]
+
+# configure autoapi
+autoapi_dirs = ['../casagui' ]
+autoapi_add_toctree_entry = False
+autoapi_generate_api_docs = True
+autoapi_root = '_api/autoapi'
+autoapi_options = ['show-module-summary']
+autoapi_template_dir = '_templates'
+autoapi_keep_files = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
