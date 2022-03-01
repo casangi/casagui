@@ -13,11 +13,14 @@
 # For extensions
 from os.path import dirname, abspath, join
 import sys
+import os
 
 sys.path.insert(0, abspath(join(dirname(__file__),'extensions')))      # For xref
 sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For autoapi
 print('----------------------------------------------------------------------------------------------------')
 print(sys.path)
+print('----------------------------------------------------------------------------------------------------')
+os.system('ls ../..')
 print('----------------------------------------------------------------------------------------------------')
 
 # -- Project information -----------------------------------------------------
@@ -34,9 +37,6 @@ release = '0.0.1'
 #
 # Import hypertext links for use in the documentation
 #
-print('-------------------------------------------------------------------')
-print(sys.path)
-print('-------------------------------------------------------------------')
 from links.link import *
 from links import *
 
