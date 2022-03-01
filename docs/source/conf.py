@@ -16,12 +16,12 @@ import sys
 import os
 
 sys.path.insert(0, abspath(join(dirname(__file__),'extensions')))      # For xref
-sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For autoapi
-print('----------------------------------------------------------------------------------------------------')
-print(sys.path)
-print('----------------------------------------------------------------------------------------------------')
-os.system('ls ../..')
-print('----------------------------------------------------------------------------------------------------')
+#sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For autoapi
+#print('----------------------------------------------------------------------------------------------------')
+#print(sys.path)
+#print('----------------------------------------------------------------------------------------------------')
+#os.system('ls ../..')
+#print('----------------------------------------------------------------------------------------------------')
 
 # -- Project information -----------------------------------------------------
 
@@ -51,7 +51,7 @@ extensions = [ 'sphinx.ext.autodoc',
              ]
 
 # configure autoapi
-autoapi_dirs = ['../casagui' ]
+autoapi_dirs = ['../../casagui' ]
 autoapi_add_toctree_entry = False
 autoapi_generate_api_docs = True
 autoapi_root = '_api/autoapi'
