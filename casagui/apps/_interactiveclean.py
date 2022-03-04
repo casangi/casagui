@@ -27,6 +27,7 @@
 ########################################################################
 '''implementation of the ``InteractiveClean`` application for interactive control
 of tclean'''
+import copy
 import asyncio
 import shutil
 import websockets
@@ -144,7 +145,7 @@ class InteractiveClean:
                                start=start, width=width, interpolation=interpolation, gridder=gridder, pblimit=pblimit,
                                deconvolver=deconvolver, niter=niter, threshold=threshold, cycleniter=cycleniter,
                                cyclefactor=cyclefactor, scales=scales,
-                               history_filter= lambda index, arg, history_value: f'mask=mask[{index}]' if arg == 'mask' else history_value )
+                               history_filter= lambda index, arg, history_value: f'mask=masks[{index}]' if arg == 'mask' else history_value )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
@@ -672,3 +673,27 @@ class InteractiveClean:
         '''If InteractiveClean had a return value, it would be filled in as part of the
         GUI dialog between Python and JavaScript and this function would return it'''
         return self._cube.result( )
+
+    def masks( self ):
+        '''Retrieves the masks which were used with interactive clean.
+
+        Returns
+        -------
+        The standard ``casagui`` cube region dictionary which contains two elements
+        ``masks`` and ``polys``.
+
+        The value of the ``masks`` element is a dictionary that is indexed by
+        tuples of ``(stokes,chan)`` and the value of each element is a list
+        whose elements describe the polygons drawn on the channel represented
+        by ``(stokes,chan)``. Each polygon description in this list has a
+        polygon index (``p``) and a x/y translation (``d``).
+
+        The value of the ``polys`` element is a dictionary that is indexed by
+        polygon indexes. The value of each polygon index is a dictionary containing
+        ``type`` (whose value is either ``'rect'`` or ``'poly``) and ``geometry``
+        (whose value is a dictionary containing ``'xs'`` and ``'ys'`` (which are
+        the x and y coordinates that define the polygon).
+
+        This can be converted to other formats with ``casagui.utils.convert_masks``.
+        '''
+        return copy.deepcopy(self._mask_history)    ## don't allow users to change history
