@@ -145,7 +145,7 @@ class InteractiveClean:
                                start=start, width=width, interpolation=interpolation, gridder=gridder, pblimit=pblimit,
                                deconvolver=deconvolver, niter=niter, threshold=threshold, cycleniter=cycleniter,
                                cyclefactor=cyclefactor, scales=scales,
-                               history_filter= lambda index, arg, history_value: f'mask=masks[{index}]' if arg == 'mask' else history_value )
+                               history_filter= lambda index, arg, history_value: f'mask=masks[{len(self._mask_history)-1}]' if arg == 'mask' else history_value )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
