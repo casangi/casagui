@@ -44,6 +44,7 @@ ic = InteractiveClean( vis=ms_path, imagename=img,
 
 if True:
     print( "Result: %s" % ic( ) )
+    print( " Masks: %s" % repr(ic.masks( )) )
 else:
     try:
         asyncio.get_event_loop().run_until_complete(ic.show( ))
@@ -53,4 +54,5 @@ else:
         print('\nInterrupt received, shutting down ...')
         #os.system('rm -rf {output_image}.* *.html *.log'.format(output_image=output_image))
 
-    print( "Result: %s" % ic.result( ) )
+    print( "Result: %s" % repr(ic.result( )) )
+    print( " Masks: %s" % repr(ic.masks( )) )
