@@ -19,6 +19,12 @@ if not os.path.isdir(ms_path):
     tar.extractall()
 
 def main( ):
+    ###
+    ### This results in an infinite loop... the "stopcode" 2 means that it
+    ### the threshold has been reached. Interactive clean depends on this
+    ### behavior, but it's an open question whether a public, stand-alone
+    ### gclean should behave like this...
+    ###
     for rec in gclean( vis='refim_point_withline.ms', imagename='test', niter=20 ):
         print(f'\t>>>>--->> {rec}')
 
