@@ -13,7 +13,15 @@ from casagui import iclean
 ##
 ## demo measurement set to use, from:
 ##
-##       https://casaguides.nrao.edu/index.php?title=M100_Band3_Combine_6.1
+##     https://casaguides.nrao.edu/index.php?title=M100_Band3_Combine_6.1
+##
+## $ wget https://bulk.cv.nrao.edu/almadata/sciver/M100Band3_12m/M100_Band3_12m_CalibratedData.tgz
+## $ wget https://bulk.cv.nrao.edu/almadata/sciver/M100Band3ACA/M100_Band3_7m_CalibratedData.tgz
+## $ tar -xf M100_Band3_12m_CalibratedData.tgz
+## $ tar -xf M100_Band3_7m_CalibratedData.tgz
+## $ ln -s M100_Band3_7m_CalibratedData/M100_Band3_7m_CalibratedData.ms/
+## $ ln -s M100_Band3_12m_CalibratedData/M100_Band3_12m_CalibratedData.ms/
+## $ casa -c "split(vis='M100_Band3_12m_CalibratedData.ms', outputvis='M100_12m_CO.ms',spw='0',field='M100', datacolumn='data',keepflags=False); split(vis='M100_Band3_7m_CalibratedData.ms', outputvis='M100_7m_CO.ms',spw='3,5',field='M100', datacolumn='data',keepflags=False); concat(vis=['M100_12m_CO.ms','M100_7m_CO.ms'], concatvis='M100_combine_CO.ms')"
 ##
 ms_path = 'M100_combine_CO.ms'
 ##

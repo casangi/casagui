@@ -21,10 +21,13 @@ ms_url = "https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline
 img = 'test'
 
 if not os.path.isdir(ms_path):
-    tstream = urllib.request.urlopen(ms_url)
-    tar = tarfile.open(fileobj=tstream, mode="r:gz")
-    tar.extractall()
-
+    try:
+        tstream = urllib.request.urlopen(ms_url)
+        tar = tarfile.open(fileobj=tstream, mode="r:gz")
+        tar.extractall
+    except urllib.error.URLError:
+        print("Failed to open connection to "+ms_url)
+        raise
 
 ic = InteractiveClean( vis=ms_path, imagename=img,
                        imsize=512,
