@@ -199,7 +199,6 @@ class InteractiveClean:
                                                convergence_src._initialized = true
                                                window.addEventListener( 'beforeunload',
                                                                         function (e) {
-                                                                            e.returnValue = ''
                                                                             ctrl_pipe.send( ids['stop'],
                                                                                             { action: 'stop', value: { } },
                                                                                               undefined ) }
