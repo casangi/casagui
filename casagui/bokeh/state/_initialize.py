@@ -34,32 +34,41 @@ from ...utils import path_to_url, static_vars, have_network
 from ...resources import VERSION
 from .. import bokeh_version
 
+CASALIB_VERSION = "0.0.1"
+
 @static_vars(initialized=False,do_local_subst=not have_network( ))
-def initialize_bokeh( libs=None, dev=0 ):
+def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
     The ``casaguijs`` extensions for Bokeh are built into a stand-alone
     external JavaScript file constructed for the specific version of
     Bokeh that is being used. The URL or the local path to a locally
-    built verion must be supplied as the ``libs`` parameter. If ``libs``
+    built verion must be supplied as the ``bokeh`` parameter. If ``bokeh``
     is ``None`` then the default is to use the published verison of
     ``casaguijs`` extensions built and installed for `HTTP` access.
 
     Parameters
     ----------
-    libs: None or str or list of str
-        javascript library to load could be a local path, a URL or None.
+    js: None or str or list of str
+        Bokeh independent javascript library which loaded before any
+        Bokeh libraries. This path could be a local path, a URL or None.
         None is the default in which case it loads the published library
         for the current version of ``casaguijs`` and ``bokeh``
-    dev: int, optional
+    bokeh: None or str or list of str
+        Bokeh dependent javascript library which is loaded after all
+        other Bokeh libraries have been loaded. This path could be a
+        local path, a URL or None. None is the default in which case
+        it loads the published library for the current version of
+        ``casaguijs`` and ``bokeh``
+    bokeh_dev: int, optional
         Chrome caches the javascript files. This parameter allows for
-        specifying `dev` allows for including a development version
-        for incremental updates to JavaScript from website.
+        specifying `bokeh_dev` allows for including a development version
+        for incremental updates to the ``bokeh`` library.
 
     Example
     -------
     from casagui.bokeh.state import initialize_bokeh
-    initialize_bokeh( "/tmp/casagui/kernels/python/casaguijs/dist/casaguijs.min.js" )
+    initialize_bokeh( bokeh="/tmp/casagui/kernels/python/casaguijs/dist/casaguijs.min.js" )
     """
 
     if initialize_bokeh.initialized:
@@ -94,24 +103,49 @@ def initialize_bokeh( libs=None, dev=0 ):
         'bokeh-widgets-2.4.1.min.js':  join( dirname(__file__), 'js', 'bokeh-widgets-2.4.1.min.js' ),
     }
 
-    casalib = None
-    casaguijs_libs = None
-    casaguijs_url = None
+    bokeh_major_minor = '.'.join(bokeh_version.split('.')[0:2])
 
-    if libs is None:
-        bokeh_major_minor = '.'.join(bokeh_version.split('.')[0:2])
-        casalib = f"casaguijs-v{VERSION}.{dev}-b{bokeh_major_minor}.min.js"
+    bokehlib = None
+    bokehlib_libs = None
+    bokehlib_url = None
+
+    ###
+    ### Initialize the Bokeh dependent library(ies)
+    ###
+    if bokeh is None:
+        bokehlib = f"casaguijs-v{VERSION}.{bokeh_dev}-b{bokeh_major_minor}.min.js"
         if initialize_bokeh.do_local_subst:
-            casaguijs_url = path_to_url( join( dirname(__file__), 'js', casalib ) )
+            bokehlib_url = path_to_url( join( dirname(__file__), 'js', bokehlib ) )
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            casaguijs_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{casalib}"
-        casaguijs_libs = [ casaguijs_url ]
+            bokehlib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{bokehlib}"
+        bokehlib_libs = [ bokehlib_url ]
     else:
-        casaguijs_libs = [ libs ] if isinstance(libs,str) else libs
-        casaguijs_libs = list(map( path_to_url, casaguijs_libs ))
+        bokehlib_libs = [ bokeh ] if isinstance(bokeh,str) else bokeh
+        bokehlib_libs = list(map( path_to_url, bokehlib_libs ))
+
+    jslib = None
+    jslib_libs = None
+    jslib_url = None
+
+    ###
+    ### Initialize the Bokeh independent, javascript library(ies)
+    ###
+    if js is None:
+        jslib = f"casalib-v{CASALIB_VERSION}.min.js"
+        if initialize_bokeh.do_local_subst:
+            jslib_url = path_to_url( join( dirname(__file__), 'js', jslib ) )
+        else:
+            ### ------------------------------------------------------------------------------------------
+            ### should potentially find a better download location...
+            ### ------------------------------------------------------------------------------------------
+            jslib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{VERSION}/{jslib}"
+        jslib_libs = [ jslib_url ]
+    else:
+        jslib_libs = [ js ] if isinstance(js,str) else js
+        jslib_libs = list(map( path_to_url, jslib_libs ))
 
     ###
     ### substitute our function for the Bokeh function that retrieves
@@ -124,8 +158,10 @@ def initialize_bokeh( libs=None, dev=0 ):
                                                                          # https://discourse.bokeh.org/t/pre-built-extensions-without-bokeh-server/7992
     def hashes( self ):
         result = self._old_hashes                                        # pylint: disable=protected-access
-        if casalib is not None and casalib in library_hashes:
-            result[casaguijs_url] = library_hashes[casalib]
+        if bokehlib is not None and bokehlib in library_hashes:
+            result[bokehlib_url] = library_hashes[bokehlib]
+        if jslib is not None and jslib in library_hashes:
+            result[jslib_url] = library_hashes[jslib]
         return result
 
     ###
@@ -144,7 +180,7 @@ def initialize_bokeh( libs=None, dev=0 ):
                     result.append( url )
         else:
             result = self._old_js_files                                  # pylint: disable=protected-access
-        result = result + casaguijs_libs
+        result = jslib_libs + result + bokehlib_libs
         return result
 
     resources.JSResources.hashes = property(hashes)
