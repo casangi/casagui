@@ -3,6 +3,8 @@ import * as p from "@bokehjs/core/properties"
 import { is_NDArray_ref, decode_NDArray } from "@bokehjs/core/util/serialization"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 
+declare var object_id: ( obj: { [key: string]: any } ) => string
+
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
 // Each column should be the same length.
@@ -80,6 +82,10 @@ export class ImagePipe extends DataSource {
                 console.log("imagepipe received binary data", event.data.byteLength, "bytes" )
             }
         }
+        let session = object_id(this)
+        this.websocket.onopen = ( ) => {
+            this.websocket.send(JSON.stringify({ action: 'initialize', session }))
+        }
     }
     initialize(): void {
         super.initialize();
@@ -92,7 +98,7 @@ export class ImagePipe extends DataSource {
     //    index: [ stokes index, spectral plane ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
     channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
-        let message = { action: 'channel', index, id }
+        let message = { action: 'channel', index, id, session: object_id(this) }
         if ( id in this.pending ) {
             this.queue[id] = { cb, message, index }
         } else {
@@ -104,7 +110,7 @@ export class ImagePipe extends DataSource {
     //    index: [ RA index, DEC index, stokes index ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
     spectra( index: [number, number, number], cb: (msg:{[key: string]: any}) => any, id: string ) {
-        let message = { action: 'spectra', index, id }
+        let message = { action: 'spectra', index, id, session: object_id(this) }
         if ( id in this.pending ) {
             this.queue[id] = { cb, message, index }
         } else {
@@ -117,7 +123,7 @@ export class ImagePipe extends DataSource {
         let { index } = id in this.position ? this.position[id] : { index: default_index }
         if ( index.length === 2 ) {
             // refreshing channel
-            let message = { action: 'channel', index, id }
+            let message = { action: 'channel', index, id, session: object_id(this) }
             if ( id in this.pending ) {
                 this.queue[id] = { cb, message, index }
             } else {
@@ -126,7 +132,7 @@ export class ImagePipe extends DataSource {
             }
         } else if ( index.length === 3 ) {
             // refreshing spectra
-            let message = { action: 'spectra', index, id }
+            let message = { action: 'spectra', index, id, session: object_id(this) }
             if ( id in this.pending ) {
                 this.queue[id] = { cb, message, index }
             } else {

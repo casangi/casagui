@@ -3,6 +3,9 @@ import * as p from "@bokehjs/core/properties"
 import { is_NDArray_ref, decode_NDArray } from "@bokehjs/core/util/serialization"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 
+// global object_id function supplied by casalib
+declare var object_id: ( obj: { [key: string]: any } ) => string
+
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
 // Each column should be the same length.
@@ -75,7 +78,7 @@ export class DataPipe extends DataSource {
                     } else {
                         if ( id in this.incoming_callbacks ) {
                             let result = this.incoming_callbacks[id](message)
-                            this.websocket.send(JSON.stringify({ id, direction, message: result}))
+                            this.websocket.send( JSON.stringify({ id, direction, message: result, session: object_id(this) }))
                         }
                     }
                 } else {
@@ -85,6 +88,10 @@ export class DataPipe extends DataSource {
             } else {
                 console.log("datapipe received binary data", event.data.byteLength, "bytes" )
             }
+        }
+        let session = object_id(this)
+        this.websocket.onopen = ( ) => {
+            this.websocket.send(JSON.stringify({ id: 'initialize', direction: 'j2p', session }))
         }
     }
     initialize(): void {
@@ -100,7 +107,7 @@ export class DataPipe extends DataSource {
     }
 
     send( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any ): void {
-        let msg = { id, message, direction: 'j2p' }
+        let msg = { id, message, direction: 'j2p', session: object_id(this) }
         if ( id in this.pending ) {
             if ( id in this.send_queue ) {
                 this.send_queue[id].push( { cb, msg } )

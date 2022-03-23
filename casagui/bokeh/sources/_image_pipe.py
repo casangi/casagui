@@ -139,6 +139,7 @@ class ImagePipe(DataSource):
         self._stats = stats
         self.__open( image )
         self.shape = list(self.__im.shape( ))
+        self.__session = None
 
     def coorddesc( self ):
         ia = imagetool( )
@@ -192,6 +193,12 @@ class ImagePipe(DataSource):
         count = 1
         async for message in websocket:
             cmd = json.loads(message)
+            if 'session' not in cmd:
+                await websocket.close( )
+                raise RuntimeError(f'session not in: {cmd}')
+            elif self.__session != None and self.__session != cmd['session']:
+                await websocket.close( )
+                raise RuntimeError(f"session corruption: {cmd['session']} does not equal {self.__session}")
             if cmd['action'] == 'channel':
                 chan = self.channel(cmd['index'])
                 if self._stats:
@@ -211,5 +218,11 @@ class ImagePipe(DataSource):
                 msg = { 'id': cmd['id'],
                         'message': { 'spectrum': pack_arrays( self.spectra(cmd['index']) ) } }
                 await websocket.send(json.dumps(msg))
+            elif cmd['action'] == 'initialize':
+                ###
+                ### initialize session identifier
+                ###
+                if self.__session == None:
+                    self.__session = cmd['session']
             else:
                 print(f"received messate in python with unknown 'action' value: {cmd}")

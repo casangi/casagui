@@ -33,8 +33,6 @@ with CASA images but ``DataPipe`` can have generic messages.'''
 import inspect
 import threading
 import json
-import logging
-import traceback
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
@@ -78,6 +76,7 @@ class DataPipe(DataSource):
         self.__incoming_callbacks = { }
         self.__websocket = None
         self.__lock = threading.Lock( )
+        self.__session = None
 
     def __enqueue_send( self, ident, msg, callback ):
         ### it is assumed that this is called AFTER the lock has been aquired
@@ -172,7 +171,18 @@ class DataPipe(DataSource):
             self.__websocket = websocket
             async for message in websocket:
                 msg = json.loads(message)
+                if 'session' not in msg:
+                    await self.__websocket.close( )
+                    raise RuntimeError(f'session not in: {msg}')
+                elif self.__session != None and self.__session != msg['session']:
+                    await self.__websocket.close( )
+                    raise RuntimeError(f"session corruption: {msg['session']} does not equal {self.__session}")
                 with self.__lock:
+                    ###
+                    ### initialize session identifier
+                    ###
+                    if self.__session == None:
+                        self.__session = msg['session']
                     if msg['direction'] == 'p2j':
                         cb = self.__get_pending(msg['id'])
                         outgo = self.__dequeue_send(msg['id'])
@@ -184,7 +194,10 @@ class DataPipe(DataSource):
                                 await cb(msg['message'])
                             else:
                                 cb(msg['message'])
-                    else:
+                    elif msg['id'] != 'initialize':
+                        ###
+                        ### no cb/reply for initialization of session
+                        ###
                         if msg['id'] not in self.__incoming_callbacks:
                             raise RuntimeError(f'incoming js request with no callback: {msg}')
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
@@ -197,8 +210,5 @@ class DataPipe(DataSource):
                             await self.__websocket.send(json.dumps({ 'id': msg['id'],
                                                                      'message': pack_arrays(result),
                                                                      'direction': msg['direction'] }))
-        except Exception:
-            logging.error(traceback.format_exc())
-
         finally:
             self.__websocket = None
