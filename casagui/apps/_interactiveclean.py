@@ -143,6 +143,12 @@ class InteractiveClean:
         self.__pipes_initialized = False
 
         ###
+        ### color specs
+        ###
+        self._color = { 'residual': 'black',
+                        'flux':     'forestgreen' }
+
+        ###
         ### clean generator
         ###
         self._clean = _gclean( vis=vis, imagename=imagename, imsize=imsize, cell=cell, specmode=specmode, nchan=nchan,
@@ -481,21 +487,21 @@ class InteractiveClean:
                                            output_backend="webgl", plot_height=180, plot_width=800,
                                            tools=[ ],
                                            title='Convergence', x_axis_label='Iteration', y_axis_label='Peak Residual' )
-        self._fig['convergence'].yaxis.axis_label_text_color = 'crimson'
+        self._fig['convergence'].yaxis.axis_label_text_color = self._color['residual']
         self._fig['convergence'].extra_y_ranges = { 'modelFlux': Range1d( min(self._convergence_source.data['modelFlux'])*0.5,
                                                                      max(self._convergence_source.data['modelFlux'])*1.5 ) }
-        self._fig['convergence'].add_layout( LinearAxis( y_range_name='modelFlux', axis_label='Total Flux', axis_label_text_color='forestgreen' ), 'right' )
+        self._fig['convergence'].add_layout( LinearAxis( y_range_name='modelFlux', axis_label='Total Flux', axis_label_text_color=self._color['flux'] ), 'right' )
 
         self._fig['convergence'].circle( x='iterations',
                                          y='peakRes',
-                                         color='crimson',
+                                         color=self._color['residual'],
                                          size=10,
                                          alpha=0.4,
                                          #legend_label='Peak Residual',
                                          source=self._convergence_source )
         self._fig['convergence'].circle( x='iterations',
                                          y='modelFlux',
-                                         color='forestgreen',
+                                         color=self._color['flux'],
                                          size=10,
                                          alpha=0.4,
                                          y_range_name='modelFlux',
@@ -503,12 +509,12 @@ class InteractiveClean:
                                          source=self._convergence_source )
         self._fig['convergence'].line( x='iterations',
                                        y='peakRes',
-                                       color='crimson',
+                                       color=self._color['residual'],
                                        source=self._convergence_source )
 
         self._fig['convergence'].line( x='iterations',
                                        y='modelFlux',
-                                       color='forestgreen',
+                                       color=self._color['flux'],
                                        y_range_name='modelFlux',
                                        source=self._convergence_source )
 
