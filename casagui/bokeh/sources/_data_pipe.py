@@ -32,6 +32,7 @@ with CASA images but ``DataPipe`` can have generic messages.'''
 
 import inspect
 import threading
+import asyncio
 import json
 
 from bokeh.models.sources import DataSource
@@ -69,7 +70,7 @@ class DataPipe(DataSource):
 
     __implementation__ = TypeScript( "" )
 
-    def __init__( self, *args, **kwargs ):
+    def __init__( self, *args, abort=None, **kwargs ):
         super( ).__init__( *args, **kwargs )
         self.__send_queue = { }
         self.__pending = { }
@@ -77,6 +78,10 @@ class DataPipe(DataSource):
         self.__websocket = None
         self.__lock = threading.Lock( )
         self.__session = None
+        self.__abort = abort
+
+        if self.__abort is not None and not callable(self.__abort):
+                raise RuntimeError(f'abort function must be callable ({type(self.__abort)} is not)')
 
     def __enqueue_send( self, ident, msg, callback ):
         ### it is assumed that this is called AFTER the lock has been aquired
@@ -173,10 +178,21 @@ class DataPipe(DataSource):
                 msg = json.loads(message)
                 if 'session' not in msg:
                     await self.__websocket.close( )
-                    raise RuntimeError(f'session not in: {msg}')
+                    err = RuntimeError(f'session not in: {msg}')
+                    if self.__abort is not None:
+                        self.__abort( asyncio.get_running_loop( ), err )
+                    else:
+                        raise err
+                    return
                 elif self.__session != None and self.__session != msg['session']:
                     await self.__websocket.close( )
-                    raise RuntimeError(f"session corruption: {msg['session']} does not equal {self.__session}")
+                    err = RuntimeError(f"session corruption: {msg['session']} does not equal {self.__session}")
+                    if self.__abort is not None:
+                        self.__abort( asyncio.get_running_loop( ), err )
+                    else:
+                        raise err
+                    return
+
                 with self.__lock:
                     ###
                     ### initialize session identifier

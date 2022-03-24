@@ -30,6 +30,7 @@ implementation for CASA images which allows for interacitve display
 of image cube channels in response to user input.'''
 
 import json
+import asyncio
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
@@ -134,12 +135,16 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, *args, stats=False, **kwargs ):
+    def __init__( self, image, *args, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
         self._stats = stats
         self.__open( image )
         self.shape = list(self.__im.shape( ))
         self.__session = None
+        self.__abort = abort
+
+        if self.__abort is not None and not callable(self.__abort):
+            raise RuntimeError('abort function must be callable')
 
     def coorddesc( self ):
         ia = imagetool( )
@@ -195,10 +200,21 @@ class ImagePipe(DataSource):
             cmd = json.loads(message)
             if 'session' not in cmd:
                 await websocket.close( )
-                raise RuntimeError(f'session not in: {cmd}')
+                err = RuntimeError(f'session not in: {cmd}')
+                if self.__abort is not None:
+                    self.__abort( asyncio.get_running_loop( ), err )
+                else:
+                    raise err
+                return
             elif self.__session != None and self.__session != cmd['session']:
                 await websocket.close( )
-                raise RuntimeError(f"session corruption: {cmd['session']} does not equal {self.__session}")
+                err = RuntimeError(f"session corruption: {cmd['session']} does not equal {self.__session}")
+                if self.__abort is not None:
+                    self.__abort( asyncio.get_running_loop( ), err )
+                else:
+                    raise err
+                return
+
             if cmd['action'] == 'channel':
                 chan = self.channel(cmd['index'])
                 if self._stats:

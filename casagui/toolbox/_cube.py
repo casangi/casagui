@@ -48,7 +48,7 @@ class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image ):
+    def __init__( self, image, abort=None ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -60,6 +60,9 @@ class CubeMask:
         ----------
         image: str
             path to CASA image for which interactive masks will be drawn
+        abort: function
+            If provided, the ``abort`` function will be called to exit the
+            event loop in the case of an error.
         '''
 
         initialize_bokeh( )
@@ -88,6 +91,11 @@ class CubeMask:
         self._cb = { }
         self._annotations = [ ]		                # statically allocate fixed poly annotations for (re)use
                                                         # on successive image cube planes
+
+        self.__abort = abort
+
+        if self.__abort is not None and not callable(self.__abort):
+            raise RuntimeError('abort function must be callable')
 
         ###########################################################################################################################
         ### Notes on States                                                                                                     ###
@@ -606,9 +614,9 @@ class CubeMask:
         '''set up websockets
         '''
         if self._pipe['image'] is None:
-            self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, address=find_ws_address( ))
+            self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, abort=self.__abort, address=find_ws_address( ))
         if self._pipe['control'] is None:
-            self._pipe['control'] = DataPipe(address=find_ws_address( ))
+            self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 
     def path( self ):
         '''return path to CASA image

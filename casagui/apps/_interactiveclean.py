@@ -129,6 +129,10 @@ class InteractiveClean:
         if self._converge_server is not None and self._converge_server.ws_server.is_serving( ):
             loop.stop( )
 
+    def _abort_handler( self, loop, err ):
+        self._error_result = err
+        self.__stop( )
+
     def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
                   niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[] ):
@@ -369,7 +373,11 @@ class InteractiveClean:
                    }
 
 
-        self._cube = CubeMask(self._image_path)
+        self._cube = CubeMask( self._image_path, abort=self._abort_handler )
+        ###
+        ### error or exception result
+        ###
+        self._error_result = None
 
         ###
         ### websocket servers
@@ -380,8 +388,8 @@ class InteractiveClean:
     def _init_pipes( self ):
         if not self.__pipes_initialized:
             self.__pipes_initialized = True
-            self._pipe['control'] = DataPipe( address=find_ws_address( ) )
-            self._pipe['converge'] = DataPipe(address=find_ws_address( ))
+            self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
+            self._pipe['converge'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
 
     def _launch_gui( self ):
         '''create and show GUI
@@ -671,6 +679,10 @@ class InteractiveClean:
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
         GUI dialog between Python and JavaScript and this function would return it'''
+        if isinstance(self._error_result,Exception):
+            raise self._error_result
+        elif self._error_result is not None:
+            return self._error_result
         return self._cube.result( )
 
     def masks( self ):
