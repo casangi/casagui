@@ -1,5 +1,6 @@
 #from casagui.bokeh.state import initialize_bokeh
-#initialize_bokeh( ".../casagui/casaguijs/dist/casaguijs.min.js" )        ### local build
+#initialize_bokeh( ".../casagui/casalib/dist/esbuild/casalib-v0.0.1.min.js",
+#                  ".../casagui/casaguijs/dist/casaguijs.js" )                ### local build
 import os
 import asyncio
 import urllib
@@ -28,6 +29,9 @@ if not os.path.isdir(ms_path):
     except urllib.error.URLError:
         print("Failed to open connection to "+ms_url)
         raise
+
+if not os.path.isdir(ms_path):
+    raise  RuntimeError("Failed to fetch measurement set")
 
 ic = InteractiveClean( vis=ms_path, imagename=img,
                        imsize=512,
