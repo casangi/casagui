@@ -8,6 +8,14 @@ If you need to build ``casatools`` use these instructions:
 
 1. [Install Anaconda](https://www.anaconda.com/) if it is not already installed (check by running ``conda --version``)
 1. Setup a casatools build environment using either the [macos or linux build environment file](https://github.com/casangi/casagui/blob/main/devel/anaconda3/c_dev.md#environment) (_first row of table_)
+1. Switch anaconda to not automatically activate the base environment
+    ```
+    bash$ conda config --set auto_activate_base false
+    ```
+1. Open a new shell and activate casatools environment
+    ```
+    bash$ conda activate casa6-linux
+    ```
 1. Clone casa6 repository with ``git clone --recursive https://open-bitbucket.nrao.edu/scm/casa/casa6``
 1. Build casatools with:
     ```
