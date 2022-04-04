@@ -7,6 +7,9 @@ This document describes setting up interactive clean.
 If you need to build ``casatools`` use these instructions:
 
 1. [Install Anaconda](https://www.anaconda.com/) if it is not already installed (check by running ``conda --version``)
+    ```
+    bash$ conda env create -f ../casa6-linux.yml
+    ```
 1. Setup a casatools build environment using either the [macos or linux build environment file](https://github.com/casangi/casagui/blob/main/devel/anaconda3/c_dev.md#environment) (_first row of table_)
 1. Switch anaconda to not automatically activate the base environment
     ```
