@@ -49,7 +49,7 @@ If you need to build ``casatools`` use these instructions:
 1. Run Interactive Clean Demo
     ```
     bash$ cd casagui/tests/manual/iclean-demo
-    bash$ PYTHONPATH=../../../casagui python3 ./run-iclean.py
+    bash$ PYTHONPATH=../../..:../../../../casa6/casatasks/build/lib.linux-x86_64-3.8:../../../../casa6/casatools/build/lib.linux-x86_64-3.8 python3 ./run-iclean.py
     ```
 
 ## Notes
