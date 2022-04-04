@@ -40,3 +40,9 @@ If you need to build ``casatools`` use these instructions:
     bash$ cd casagui/tests/manual/iclean-demo
     bash$ PYTHONPATH=../../../casagui python3 ./run-iclean.py
     ```
+
+## Notes
+
+1. I had to fetch the test MS by hand from the unix command line, ``wget https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz``. I don't know what goes wrong in the ``run-iclean.py`` code which **should** fetch it.
+
+1. Bokeh does **not** work with the _Konqueror_ browser
