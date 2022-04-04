@@ -11,7 +11,7 @@ If you need to build ``casatools`` use these instructions:
     ```
     bash$ conda env create -f ../casa6-linux.yml
     ```
-1. Switch anaconda to not automatically activate the base environment
+1. Switch anaconda to not automatically activate the base environment (_unless you would prefer to have anaconda activated upon login_)
     ```
     bash$ conda config --set auto_activate_base false
     ```
