@@ -47,10 +47,16 @@ If you need to build ``casatools`` use these instructions:
     bash$ conda install -c anaconda requests
     ```
 1. Run Interactive Clean Demo
-    ```
-    bash$ cd casagui/tests/manual/iclean-demo
-    bash$ PYTHONPATH=../../..:../../../../casa6/casatasks/build/lib.linux-x86_64-3.8:../../../../casa6/casatools/build/lib.linux-x86_64-3.8 python3 ./run-iclean.py
-    ```
+    * Linux
+        ```
+        bash$ cd casagui/tests/manual/iclean-demo
+        bash$ PYTHONPATH=../../..:../../../../casa6/casatasks/build/lib.linux-x86_64-3.8:../../../../casa6/casatools/build/lib.linux-x86_64-3.8 python3 ./run-iclean.py
+        ```
+    * macos
+        ```
+        bash$ cd casagui/tests/manual/iclean-demo
+        bash$ PYTHONPATH=../../..:../../../../casa6/casatasks/build/lib.macosx-10.9-x86_64-3.8:../../../../casa6/casatools/build/lib.macosx-10.9-x86_64-3.8 python3 ./run-iclean.py
+        ```
 
 ## Notes
 
