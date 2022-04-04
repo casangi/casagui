@@ -57,3 +57,18 @@ If you need to build ``casatools`` use these instructions:
 1. I had to fetch the test MS by hand from the unix command line, ``wget https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz``. I don't know what goes wrong in the ``run-iclean.py`` code which **should** fetch it.
 
 1. Bokeh does **not** work with the _Konqueror_ browser
+
+1. This mod is required for ``task_plotants.py`` on the CAS-6692 branch:
+    ```
+    --- a/casatasks/src/private/task_plotants.py
+    +++ b/casatasks/src/private/task_plotants.py
+    @@ -348,7 +348,7 @@ def plotAntennas(telescope, names, ids, xpos, ypos, antindex, stations, showplot
+                             # set alignment and rotation angle (for VLA)
+                             valign, halign, angle = getAntennaLabelProps(telescope, station)
+                             # adjust so text is not on the circle:
+    -                        if halign is 'center':
+    +                        if halign == 'center':
+                                     y -= 10
+                             ax.text(x, y, ' '+name, size=8, va=valign, ha=halign, rotation=angle,
+                                     weight='semibold')
+    ```
