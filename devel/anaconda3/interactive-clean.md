@@ -26,8 +26,8 @@ If you need to build ``casatools`` use these instructions:
     bash$ cd ../..
     bash$ git clone https://github.com/casangi/casagui
     ```
-1. Install Bokeh, Websockets and Requests
-    Requests only used by ``casagui/utils.py`` so maybe it should be substituted by something else...
+1. Install Bokeh, Websockets and Requests --
+    (_requests only used by ``casagui/utils.py`` so maybe it should be substituted by something else..._)
     ```
     bash$ conda install -c conda-forge 'bokeh>=2.4.0'
     bash$ conda install -c conda-forge matplotlib
