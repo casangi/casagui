@@ -62,7 +62,7 @@ If you need to build ``casatools`` use these instructions:
 
 1. Bokeh does **not** work with the _Konqueror_ browser
 
-1. This mod is required for ``task_plotants.py`` on the CAS-6692 branch:
+1. This mod is required for ``task_plotants.py`` on the CAS-6692 branch of casa6:
     ```
     --- a/casatasks/src/private/task_plotants.py
     +++ b/casatasks/src/private/task_plotants.py
