@@ -54,7 +54,11 @@ If you need to build ``casatools`` use these instructions:
 
 ## Notes
 
-1. I had to fetch the test MS by hand from the unix command line, ``wget https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz``. I don't know what goes wrong in the ``run-iclean.py`` code which **should** fetch it.
+1. I don't know what goes wrong in the ``run-iclean.py`` code (_which **should** fetch it_), but I had to fetch the test MS by hand from the unix command line:
+    ```
+    bash$ wget https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz
+    bash$ tar zxf refim_point_withline-ms.tar.gz
+    ```
 
 1. Bokeh does **not** work with the _Konqueror_ browser
 
