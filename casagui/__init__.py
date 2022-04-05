@@ -31,6 +31,7 @@ applications turn-key applications'''
 
 from __future__ import absolute_import
 
-__all__ = ["plotants"]
+__all__ = ["plotants","VERSION"]
+from ._resources import VERSION
 
 from .apps._plotants import plotants
