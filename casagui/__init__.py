@@ -31,7 +31,6 @@ applications turn-key applications'''
 
 from __future__ import absolute_import
 
-__all__ = ["plotants", "iclean"]
+__all__ = ["plotants"]
 
 from .apps._plotants import plotants
-from .proc.imaging import iclean

@@ -35,9 +35,16 @@ from uuid import uuid4
 from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
-from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-from casagui.toolbox import CubeMask
+
+try:
+    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+except:
+    _gclean = None
+    from casagui.utils import warn_import
+    warn_import('casatasks')
+
 from casagui.utils import find_ws_address, convert_masks
+from casagui.toolbox import CubeMask
 from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
 from casagui.bokeh.sources import DataPipe
 
@@ -151,6 +158,9 @@ class InteractiveClean:
         ###
         ### clean generator
         ###
+        if _gclean is None:
+            raise RuntimeError('casatasks gclean interface is not available')
+
         self._clean = _gclean( vis=vis, imagename=imagename, imsize=imsize, cell=cell, specmode=specmode, nchan=nchan,
                                start=start, width=width, interpolation=interpolation, gridder=gridder, pblimit=pblimit,
                                deconvolver=deconvolver, niter=niter, threshold=threshold, cycleniter=cycleniter,

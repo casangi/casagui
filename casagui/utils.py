@@ -31,7 +31,10 @@ import inspect
 from itertools import groupby, chain
 from socket import socket
 from os import path as __path
-import requests
+import urllib.request
+import urllib.error
+import sys
+
 try:
     from casatools import regionmanager
     __have_casatools = True
@@ -126,6 +129,29 @@ def partition(pred, iterable):
             falses.append(item)
     return trues, falses
 
+def error_msg( *args, **kwargs):
+    '''standard method for reporting errors which do not result in aborting out of python
+
+    This function takes the standard set of arguments that the python ``print`` function takes.
+    The primary difference is that the output will go to ``stderr`` and perhaps other error
+    logs.
+    '''
+    print( *args, file=sys.stderr, **kwargs )
+
+@static_vars(msgs=dict(
+        casatasks='{package} is not available so interactive clean will not work'
+    ), reported={} )
+def warn_import( package ):
+    '''standard method for reporting (optional) package import failure
+
+    Parameters
+    ----------
+    package: str
+        name of a package whose attempted import failed
+    '''
+    if package not in warn_import.reported:
+        warn_import.reported[package] = True
+        error_msg( "warning, %s" % warn_import.msgs[package].format(package=package) )
 
 @static_vars(url='http://clients3.google.com/generate_204')
 def have_network( ):
@@ -137,22 +163,16 @@ def have_network( ):
     ### see: https://stackoverflow.com/questions/50558000/test-internet-connection-for-python3
     ###
     try:
-        response = requests.get(have_network.url, timeout=5)
-        return response.status_code == 204
-    except requests.exceptions.HTTPError:
+        with urllib.request.urlopen(have_network.url) as response:
+            return response.status == 204
+    except urllib.error.HTTPError:
         ### http error
         return False
-    except requests.exceptions.ConnectionError:
-        ### connection error
+    except urllib.error.URLError:
         return False
-    except requests.exceptions.Timeout:
-        ### timeout
-        return False
-    except requests.exceptions.RequestException:
-        ### some generic error
+    except urllib.error.ContentTooShortError:
         return False
     except Exception:
-        ### reachable?
         return False
 
 def ranges(iterable, order=sorted, key=lambda x: x):
