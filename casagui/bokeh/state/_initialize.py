@@ -31,8 +31,8 @@ applications produce'''
 from os.path import dirname, join, basename
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
-from casagui import VERSION
-from .. import bokeh_version
+from casagui import __version__ as VERSION
+from bokeh import __version__ as bokeh_version
 
 CASALIB_VERSION = "0.0.1"
 

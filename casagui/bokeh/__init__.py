@@ -27,6 +27,3 @@
 ########################################################################
 '''This module contains the extensions and additions to the functionality
 provided by Bokeh'''
-
-__all__ = [ 'bokeh_version' ]
-from bokeh import __version__ as bokeh_version

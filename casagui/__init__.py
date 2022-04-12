@@ -29,9 +29,4 @@
 used to build GUI applications for astronomy. It also contains some
 applications turn-key applications'''
 
-from __future__ import absolute_import
-
-__all__ = ["plotants","VERSION"]
-from ._resources import VERSION
-
-from .apps._plotants import plotants
+from ._resources import VERSION as __version__

@@ -45,7 +45,7 @@ except:
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask
-from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
+from casagui.bokeh.components import SVGIcon
 from casagui.bokeh.sources import DataPipe
 
 class InteractiveClean:

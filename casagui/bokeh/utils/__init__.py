@@ -27,9 +27,6 @@
 ########################################################################
 '''Functions use in the implementation of casagui's Bokeh extensions.'''
 
-__all__ = [ #'get_world_coordinates',
-            'pack_arrays' ]
-
 from ._conversion import pack_arrays
 ###
 ### axes_labels has errors on import

@@ -1,3 +1,30 @@
+########################################################################
+#
+# Copyright (C) 2022
+# Associated Universities, Inc. Washington DC, USA.
+#
+# This script is free software; you can redistribute it and/or modify it
+# under the terms of the GNU Library General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This library is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Library General Public
+# License for more details.
+#
+# You should have received a copy of the GNU Library General Public License
+# along with this library; if not, write to the Free Software Foundation,
+# Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
+#
+# Correspondence concerning AIPS++ should be adressed as follows:
+#        Internet email: aips2-request@nrao.edu.
+#        Postal address: AIPS++ Project Office
+#                        National Radio Astronomy Observatory
+#                        520 Edgemont Road
+#                        Charlottesville, VA 22903-2475 USA
+#
+########################################################################
 """
 plotants module
 """
@@ -14,6 +41,13 @@ try:
     _have_svg2pdf = True
 except ImportError:
     _have_svg2pdf = False
+
+try:
+    import casatools as ct
+except:
+    ct = None
+    from casagui.utils import warn_import
+    warn_import('casatools')
 
 from casatools import table, msmetadata, quanta, ms, measures
 
@@ -34,7 +68,7 @@ def __get_observatory_info(msname):
     ( string, list )
         string is the telescope name and the list is the array position
     """
-    metadata = msmetadata()
+    metadata = ct.msmetadata()
     metadata.open(msname)
     telescope = metadata.observatorynames()[0]
     positions = metadata.observatoryposition()
@@ -56,9 +90,12 @@ def __get_antenna_info(msname, log, exclude, checkbaselines):
     checkbaselines: boolean
         whether to check baselines in the main table
     """
-    me = measures()
-    qa = quanta()
-    tb = table()
+    if ct is None:
+        raise RuntimeError('casatools is not available')
+
+    me = ct.measures()
+    qa = ct.quanta()
+    tb = ct.table()
 
     telescope, positions = __get_observatory_info(msname)
     positions_wgs84 = me.measure(positions, "WGS84")
@@ -203,7 +240,7 @@ def plotants(vis, figfile="", antindex=False, logpos=False, exclude=[], checkbas
     if vis.endswith("/"):
         vis = vis[:-1]
 
-    myms = ms()
+    myms = ct.ms()
     try:
         exclude = myms.msseltoindex(vis, baseline=exclude)["antenna1"].tolist()
     except RuntimeError as rterr:  # MSSelection failed

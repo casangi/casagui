@@ -27,6 +27,6 @@
 ########################################################################
 '''Bokeh state management functions (both within the Bokeh distribution
 and with the Bokeh extensions found in ``casagui.bokeh``.'''
-__all__ = [ 'initialize_bokeh' ]
+
 from ._initialize import initialize_bokeh
-from ._session import setup_session
+from ._session import setup_session as initialize_session

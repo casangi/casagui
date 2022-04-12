@@ -32,7 +32,7 @@ from bokeh.layouts import row, column
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS
 from casagui.toolbox import CubeMask
-from casagui.bokeh.components.custom_icon.svg_icon import SVGIcon
+from casagui.bokeh.components import SVGIcon
 
 class MakeMask:
     '''Class that can be used to launch a makemask GUI with ``MakeMask('test.image')( )``.'''

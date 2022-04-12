@@ -27,12 +27,6 @@
 ########################################################################
 '''Implementation of the Bokeh data source extensions provided by
 ``casagui``'''
-from __future__ import absolute_import
-
-__all__ = [ "ImageDataSource",
-            "SpectraDataSource",
-            "ImagePipe",
-            "DataPipe" ]
 
 from ._data_pipe import DataPipe
 from ._image_pipe import ImagePipe
