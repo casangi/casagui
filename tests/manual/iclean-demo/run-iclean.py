@@ -25,7 +25,7 @@ if not os.path.isdir(ms_path):
     try:
         tstream = urllib.request.urlopen(ms_url)
         tar = tarfile.open(fileobj=tstream, mode="r:gz")
-        tar.extractall
+        tar.extractall( )
     except urllib.error.URLError:
         print("Failed to open connection to "+ms_url)
         raise
