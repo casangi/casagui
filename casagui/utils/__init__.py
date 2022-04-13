@@ -325,3 +325,23 @@ def convert_masks( masks, format='crtf', coord='pixel', ret_type='str', cdesc=No
             return list(chain.from_iterable(result))
         raise RuntimeError(f"unknown ret_type for crtf format ({ret_type})")
     raise RuntimeError(f"invalid format ({format}), or coord ({coord})")
+
+def set_attributes( obj, **kw ):
+    '''Given an object and a set of keyword arguments, set the attributes
+    in the object that correspond to the keywords to the specified values.
+
+    Parameters
+    ----------
+    obj: object
+        Object whose attributes should be set
+    kw: keyword and object
+        Attributes to be set
+
+    Returns
+    -------
+    object
+        ``obj`` parameter
+    '''
+    for k,v in kw.items( ):
+        setattr( obj, k, v )
+    return obj
