@@ -173,9 +173,9 @@ class InteractiveClean:
         self._status = { }
         self._stopcode, self._convergence_data = next(self._clean)
         self._convergence_id = str(uuid4( ))
-        print(f'convergence:',self._convergence_id)
+        #print(f'convergence:',self._convergence_id)
 
-        self._status['log'] = Div( text="<hr><p>%s</p>" % self._clean.cmds( )[-1] )
+        self._status['log'] = Div( text='''<hr style="width:790px"><p style="width:790px">%s</p>''' % self._clean.cmds( )[-1] )
         self._status['stopcode'] = Div( text="<div>initial image</div>" )
 
         ###
@@ -441,13 +441,13 @@ class InteractiveClean:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=f"<p>{self._clean.cmds( )[-1]}</p>",
+                    return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
                                  convergence=None )
                 else:
-                    return dict( result='update', stopcode=stopcode, cmd=f"<p>{self._clean.cmds( )[-1]}</p>",
+                    return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
                                  convergence=self._convergence_data )
 
-                return dict( result='update', stopcode=stopcode, cmd=f"<p>{self._clean.cmds( )[-1]}</p>",
+                return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
                              convergence=self._convergence_data )
             elif msg['action'] == 'stop':
                 self.__stop( )
@@ -463,7 +463,7 @@ class InteractiveClean:
         self._ids['clean'] = { }
         for btn in "continue", 'finish', 'stop':
             self._ids['clean'][btn] = str(uuid4( ))
-            print("%s: %s" % ( btn, self._ids['clean'][btn] ) )
+            #print("%s: %s" % ( btn, self._ids['clean'][btn] ) )
             self._pipe['control'].register( self._ids['clean'][btn], clean_handler )
 
         ###
@@ -538,6 +538,11 @@ class InteractiveClean:
                                                    icon=SVGIcon(icon_name="iclean-finish", size=2.5) )
         self._control['clean']['stop'] = Button( label="", button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
                                                  icon=SVGIcon(icon_name="iclean-stop", size=2.5) )
+        width = 35
+        height = 35
+        self._control['help'] = Button( label="", max_width=width, max_height=height, name='help',
+                                        icon=SVGIcon(icon_name='help', size=1.4) )
+
 
         self._control['iter'] = TextInput( title="iter", value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
@@ -641,15 +646,29 @@ class InteractiveClean:
                                                self._control['clean']['finish'],
                                                self._control['clean']['stop'] ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
-                                          self._cube.statistics( )
+                                          self._cube.statistics( sizing_mode = "stretch_height" ),
                                       ),
-                                      self._fig['image']
+                                      column( self._fig['image'],
+                                              row( Spacer(height=self._control['help'].height, sizing_mode="scale_width"),
+                                                   self._control['help'],
+                                                   Spacer(height=self._control['help'].height, width=30)
+                                              )
+                                      ),
+                                      self._cube.help( width=450, height=100,
+                                                       rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
+                                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>',
+
+                                                             ]
+                                                     )
                                   ),
                                   self._cube.spectra( ),
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
                                   self._status['log'] )
 
+        self._control['help'].js_on_click( CustomJS( args=dict( help=self._cube.help( ) ),
+                                                     code='''if ( help.visible == true ) help.visible = false
+                                                             else help.visible = true''' ) )
         self._cube.connect( )
         show(self._fig['layout'])
 
