@@ -39,7 +39,7 @@ import websockets
 from bokeh.events import SelectionGeometry
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.utils import find_ws_address
+from casagui.utils import find_ws_address, set_attributes
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 
@@ -72,6 +72,7 @@ class CubeMask:
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
+        self._help = None
         self._image_spectra = None                      # spectra data source
         self._image_source = None	                # ImageDataSource
         self._statistics_source = None
@@ -827,7 +828,7 @@ class CubeMask:
     def coorddesc( self ):
         return self._pipe['image'].coorddesc( )
 
-    def statistics( self ):
+    def statistics( self, **kw ):
         '''retrieve a DataTable which is updated in response to changes in the
         image cube display
         '''
@@ -839,7 +840,9 @@ class CubeMask:
             stats_column = [ TableColumn(field='labels', title='Statistics', width=75),
                              TableColumn(field='values', title='Values') ]
 
-            self._statistics = DataTable(source=self._statistics_source, columns=stats_column, width=400, height=200, autosize_mode='none')
+            # using set_attributes allows the user to override defaults like 'width=400'
+            self._statistics = set_attributes( DataTable( source=self._statistics_source, columns=stats_column,
+                                                          width=400, height=200, autosize_mode='none' ), **kw )
 
         return self._statistics
 
@@ -894,44 +897,48 @@ class CubeMask:
         '''
         return self._result
 
-    @staticmethod
-    def help( ):
+    def help( self, rows=[ ], **kw ):
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
         set to ``False``, but it can be toggled based on GUI actions.
         '''
-        return Div( text='''<style>
-                               #makemaskhelp td, #makemaskhelp th {
-                                   border: 1px solid #ddd;
-                                   text-align: left;
-                                   padding: 8px;
-                               }
-                               #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
-                           </style>
-                           <table id="makemaskhelp">
-                             <tr><th>buttons/key(s)</th><th>description</th></tr>
-                             <tr><td><i>red check button</i></td><td>clicking the red check button will close the dialog and return masks to python</td></tr>
-                             <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                             <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
-                             <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
-                             <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
-                             <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
-                             <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
-                             <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
-                             <tr><td><b>option</b>-<b>left</b></td><td>move selection one pixel to the left</td></tr>
-                             <tr><td><b>option</b>-<b>right</b></td><td>move selection one pixel to the right</td></tr>
-                             <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
-                             <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
-                             <tr><td><b>option</b>-<b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
-                             <tr><td><b>option</b>-<b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
-                             <tr><td><b>option</b>-<b>control</b>-<b>up</b></td><td>to next channel</td></tr>
-                             <tr><td><b>option</b>-<b>control</b>-<b>down</b></td><td>to previous channel</td></tr>
-                             <tr><td><b>option</b>-<b>control</b>-<b>right</b></td><td>to next stokes axis</td></tr>
-                             <tr><td><b>option</b>-<b>control</b>-<b>left</b></td><td>to previous stokes axis</td></tr>
-                             <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
-                             <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
-                             <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
-                             <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
-                         </table>'''.replace('option','option' if platform == 'darwin' else 'alt'), visible=False, width=650 )
+        if self._help is None:
+            # using set_attributes allows the user to override defaults like 'width=650'
+            self._help =set_attributes(
+                Div( text='''<style>
+                                 #makemaskhelp td, #makemaskhelp th {
+                                     border: 1px solid #ddd;
+                                     text-align: left;
+                                     padding: 8px;
+                                 }
+                                 #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
+                             </style>
+                             <table id="makemaskhelp">
+                               <tr><th>buttons/key(s)</th><th>description</th></tr>
+                               EXTRAROWS
+                               <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
+                               <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
+                               <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
+                               <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
+                               <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
+                               <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
+                               <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
+                               <tr><td><b>option</b>-<b>left</b></td><td>move selection one pixel to the left</td></tr>
+                               <tr><td><b>option</b>-<b>right</b></td><td>move selection one pixel to the right</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
+                               <tr><td><b>option</b>-<b>control</b>-<b>up</b></td><td>to next channel</td></tr>
+                               <tr><td><b>option</b>-<b>control</b>-<b>down</b></td><td>to previous channel</td></tr>
+                               <tr><td><b>option</b>-<b>control</b>-<b>right</b></td><td>to next stokes axis</td></tr>
+                               <tr><td><b>option</b>-<b>control</b>-<b>left</b></td><td>to previous stokes axis</td></tr>
+                               <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
+                               <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
+                               <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
+                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt').replace('EXTRAROWS','\n'.join(rows)),
+                     visible=False, width=650 ), **kw )
+        return self._help
 
     def loop( self ):
         '''Returns an ``asyncio`` eventloop which can be mixed in with an
