@@ -632,7 +632,7 @@ class CubeMask:
             return { f(chan_or_poly[0]): chan_or_poly[1] for chan_or_poly in vec }
         return { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
 
-    def image( self, maxanno=50 ):
+    def image( self, maxanno=50, **kw ):
         '''Create the 2D raster display which displays image planes. This widget is should be
         created for all ``cube_mask`` objects because this is the GUI component that ties
         all of the other GUIs together.
@@ -641,6 +641,8 @@ class CubeMask:
         ----------
         maxanno: int
             maximum number of masks that can be drawn in each image channel
+        kw: keyword and value
+            extra keyword/value paramaters passed on to ``figure``
         '''
         if self._image is None:
             async def receive_return_value( msg, self=self ):
@@ -678,10 +680,10 @@ class CubeMask:
                                                                                 source.drop_breadcrumb = ( code ) => register_mask_change( code )
                                                                     """) )
 
-            self._image = figure( output_backend="webgl",
-                                      tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
-                                              "save","reset" ],
-                                      tooltips=None )
+            self._image = set_attributes( figure( output_backend="webgl",
+                                                  tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
+                                                          "save","reset" ],
+                                                  tooltips=None ), **kw )
 
             self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 
@@ -732,25 +734,35 @@ class CubeMask:
 
         return self._image
 
-    def slider( self ):
+    def slider( self, **kw ):
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
+
+        Parameters
+        ----------
+        kw: keyword and value
+            extra keyword/value paramaters passed on to ``Slider``
         '''
         if self._slider is None:
             self._init_pipes( )
             shape = self._pipe['image'].shape
             slider_end = shape[-1]-1
-            self._slider = Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
-                                   title="Channel" )
+            self._slider = set_attributes( Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
+                                                   title="Channel" ), **kw )
             if slider_end == 0:
                 # for a cube with one channel, a slider is of no use
                 self._slider.disabled = True
 
         return self._slider
 
-    def spectra( self ):
+    def spectra( self, **kw ):
         '''Return the line graph of spectra from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
+
+        Parameters
+        ----------
+        kw: keyword and value
+            extra keyword/value paramaters passed on to ``figure``
         '''
         if self._spectra is None:
             if self._image is None:
@@ -783,8 +795,8 @@ class CubeMask:
 
             self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
 
-            self._spectra = figure( plot_height=180, plot_width=800,
-                                                   title="Spectrum", tools=[ self._hover['spectra'] ] )
+            self._spectra = set_attributes( figure( plot_height=180, plot_width=800,
+                                                    title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
             self._spectra.add_layout(self._sp_span)
 
             self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source ),
