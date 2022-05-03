@@ -172,6 +172,8 @@ class InteractiveClean:
         ###
         self._status = { }
         self._stopcode, self._convergence_data = next(self._clean)
+        if len(self._convergence_data.keys()) == 0:
+            raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
         self._convergence_id = str(uuid4( ))
         #print(f'convergence:',self._convergence_id)
 
