@@ -1,6 +1,10 @@
 import weakref
 import atexit
 import asyncio
+import sys
+
+from ._logging import get_logger
+logger = get_logger()
 
 class _ResourceManager:
     """ This class acts as a single place to manage the destruction of system
@@ -34,7 +38,7 @@ class _ResourceManager:
     def stop_asyncio_loop(self):
         """ Calls "stop" on the event_loop and closes any webservers registered
         with reg_webserver. """
-        print("stop_asyncio_loop")
+        logger.debug("stop_asyncio_loop")
         try:
             event_loop = asyncio.get_running_loop()
             self._close_webservers(event_loop)
@@ -49,9 +53,9 @@ class _ResourceManager:
         to wait, blocking until the server has finished closing. """
         instance = server_weakref()
         if (instance == None):
-            print("close_webserver(None)")
+            logger.debug("close_webserver(None)")
             return
-        print(f"close_webserver({instance})")
+        logger.debug(f"close_webserver({instance})")
         instance.close()
         if event_loop != None:
             event_loop.run_until_complete(instance.wait_closed())
@@ -69,14 +73,14 @@ class _ResourceManager:
         """
         instance = ref()
         if instance == None:
-            print('call_on_ref(None)')
+            logger.debug('call_on_ref(None)')
             return
         if not hasattr(instance, fname):
-            print(f"call_on_ref({instance.__class__.__name__}.{fname} == None)")
+            logger.debug(f"call_on_ref({instance.__class__.__name__}.{fname} == None)")
             return
         instance_method = getattr(instance, fname)
         if not callable(instance_method):
-            print(f"call_on_ref(non-callable {instance.__class__.__name__}.{fname})")
+            logger.debug(f"call_on_ref(non-callable {instance.__class__.__name__}.{fname})")
             return
-        print(f"{instance.__class__.__name__}.{fname}()")
+        logger.debug(f"{instance.__class__.__name__}.{fname}()")
         instance_method(*vargs)
