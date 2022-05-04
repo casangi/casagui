@@ -34,12 +34,15 @@ from os import path as __path
 import urllib.request
 import urllib.error
 import sys
+from ._ResourceManager import _ResourceManager
 
 try:
     from casatools import regionmanager
     __have_casatools = True
 except ImportError:
     __have_casatools = False
+
+resource_manager = _ResourceManager()
 
 
 def static_vars(**kwargs):

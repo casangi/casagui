@@ -42,7 +42,7 @@ from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
-
+from ..utils import resource_manager
 
 class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
@@ -64,7 +64,6 @@ class CubeMask:
             If provided, the ``abort`` function will be called to exit the
             event loop in the case of an error.
         '''
-
         initialize_bokeh( )
 
         self._image_path = image	                # path to image cube to be displayed
@@ -605,11 +604,11 @@ class CubeMask:
     def __stop( self ):
         '''stop interactive masking
         '''
-        loop = asyncio.get_running_loop( )
+        resource_manager.stop_asyncio_loop()
         if self._image_server is not None and self._image_server.ws_server.is_serving( ):
-            loop.stop( )
+            resource_manager.stop_asyncio_loop()
         if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            loop.stop( )
+            resource_manager.stop_asyncio_loop()
 
     def _init_pipes( self ):
         '''set up websockets
@@ -959,4 +958,6 @@ class CubeMask:
             return await asyncio.gather( loop1, loop2 )
         self._image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
         self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
+        resource_manager.reg_webserver(self._image_server.ws_server)
+        resource_manager.reg_webserver(self._control_server.ws_server)
         return async_loop( self._control_server, self._image_server )

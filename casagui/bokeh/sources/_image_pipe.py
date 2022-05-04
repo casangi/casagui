@@ -41,7 +41,7 @@ import numpy as np
 from casatools import regionmanager
 from casatools import image as imagetool
 from ..utils import pack_arrays
-from ...utils import partition
+from ...utils import partition, resource_manager
 
 class ImagePipe(DataSource):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
@@ -137,6 +137,7 @@ class ImagePipe(DataSource):
 
     def __init__( self, image, *args, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
+        resource_manager.reg_at_exit(self, '__del__')
         self._stats = stats
         self.__open( image )
         self.shape = list(self.__im.shape( ))
@@ -145,6 +146,12 @@ class ImagePipe(DataSource):
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
+
+    def __del__(self):
+        if (self.__im != None):
+            self.__im.done()
+            self.__im.close()
+            self.__im = None
 
     def coorddesc( self ):
         ia = imagetool( )
