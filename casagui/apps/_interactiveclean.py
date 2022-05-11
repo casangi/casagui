@@ -323,6 +323,7 @@ class InteractiveClean:
                                                                  'zero mask found',
                                                                  'no mask found',
                                                                  'n-sigma or other valid exit criterion',
+                                                                 'major cycle limit hit',
                                                                  'unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
                                                    stopstatus.text = '<div>' +
@@ -340,7 +341,9 @@ class InteractiveClean:
                                                        log.text = log.text + msg.cmd
                                                    }
                                                    refresh( msg )
-                                                   state.stopped = state.stopped || msg.stopcode > 1 || msg.stopcode == 0
+                                                   // stopcode == 1: iteration limit hit
+                                                   // stopcode == 9: major cycle limit hit
+                                                   state.stopped = state.stopped || msg.stopcode > 1 && msg.stopcode < 9 || msg.stopcode == 0
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        btns['stop'].button_type = "danger"
                                                        update_status( 'stopcode' in msg ? msg.stopcode : -1 )
@@ -352,7 +355,7 @@ class InteractiveClean:
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
                                                        if ( ! state.stopped ) {
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                           { action: 'next',
+                                                                           { action: 'finish',
                                                                              value: { niter: niter.value, cycleniter: cycleniter.value,
                                                                                       threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                                       mask: img_src.masks( ),
@@ -421,7 +424,7 @@ class InteractiveClean:
         ### Python-side handler for events from the interactive clean control buttons
         ###
         async def clean_handler( msg, self=self ):
-            if msg['action'] == 'next':
+            if msg['action'] == 'next' or msg['action'] == 'finish':
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
@@ -435,7 +438,7 @@ class InteractiveClean:
                         msg['value']['mask'] = ''
                 else:
                     msg['value']['mask'] = ''
-                self._clean.update(msg['value'])
+                self._clean.update( { **msg['value'], 'nmajor': 1 if msg['action'] == 'next' else -1 } )
                 stopcode, self._convergence_data = await self._clean.__anext__( )
                 if len(self._convergence_data) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
@@ -580,7 +583,7 @@ class InteractiveClean:
                                                   disable( false )
                                                   btns['stop'].button_type = "warning"
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                  { action: 'next',
+                                                                  { action: 'finish',
                                                                     value: { niter: niter.value, cycleniter: cycleniter.value,
                                                                              threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                              mask: img_src.masks( ),
