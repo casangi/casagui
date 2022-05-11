@@ -34,6 +34,8 @@ from os import path as __path
 import urllib.request
 import urllib.error
 import sys
+from ._ResourceManager import _ResourceManager
+from ._logging import get_logger
 
 try:
     from casatools import regionmanager
@@ -41,6 +43,8 @@ try:
 except ImportError:
     __have_casatools = False
 
+logger = get_logger()
+resource_manager = _ResourceManager()
 
 def static_vars(**kwargs):
     '''Initialize static function variables to for use within a function.

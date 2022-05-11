@@ -35,6 +35,7 @@ from uuid import uuid4
 from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
+from ..utils import resource_manager
 
 try:
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
@@ -130,11 +131,11 @@ class InteractiveClean:
 
     '''
     def __stop( self ):
-        loop = asyncio.get_running_loop( )
+        resource_manager.stop_asyncio_loop()
         if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            loop.stop( )
+            resource_manager.stop_asyncio_loop()
         if self._converge_server is not None and self._converge_server.ws_server.is_serving( ):
-            loop.stop( )
+            resource_manager.stop_asyncio_loop()
 
     def _abort_handler( self, loop, err ):
         self._error_result = err
@@ -172,6 +173,8 @@ class InteractiveClean:
         ###
         self._status = { }
         self._stopcode, self._convergence_data = next(self._clean)
+        if len(self._convergence_data.keys()) == 0:
+            raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
         self._convergence_id = str(uuid4( ))
         #print(f'convergence:',self._convergence_id)
 
@@ -681,6 +684,8 @@ class InteractiveClean:
 
         self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
         self._converge_server = websockets.serve( self._pipe['converge'].process_messages, self._pipe['converge'].address[0], self._pipe['converge'].address[1] )
+        resource_manager.reg_webserver(self._control_server.ws_server)
+        resource_manager.reg_webserver(self._converge_server.ws_server)
         return async_loop( self._control_server, self._converge_server, self._cube.loop( ) )
 
     def __call__( self, loop=asyncio.get_event_loop( ) ):
