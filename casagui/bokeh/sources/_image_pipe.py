@@ -31,6 +31,7 @@ of image cube channels in response to user input.'''
 
 import json
 import asyncio
+from enum import Enum
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
@@ -42,6 +43,10 @@ from casatools import regionmanager
 from casatools import image as imagetool
 from ..utils import pack_arrays
 from ...utils import partition, resource_manager
+
+class ImageAccess(Enum):
+    KEEP_OPEN = 1
+    CLOSE_AFTER_ACCESS = 2
 
 class ImagePipe(DataSource):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
@@ -63,9 +68,6 @@ class ImagePipe(DataSource):
         is used to run caller JavaScript which needs to be run at initialization time.
         This is optional and does not need to be set.
     """
-    __im_path = None
-    __im = None
-    __chan_shape = None
 
     init_script = Nullable(Instance(Callback), help="""
     JavaScript to be run during initialization of an instance of an DataPipe object.
@@ -76,18 +78,41 @@ class ImagePipe(DataSource):
 
     __implementation__ = TypeScript( "" )
 
-    def __open( self, image ):
-        if self.__im is not None:
-            self.__im.close( )
-        self.__im = imagetool( )
-        self.__rg = regionmanager( )
-        try:
-            self.__im.open(image)
-            self.__path = image
-        except Exception as ex:
-            self.__im = None
-            raise RuntimeError(f'could not open image: {image}') from ex
-        self.__chan_shape = list(self.__im.shape( )[0:2])
+    def _open( self ):
+        if self.__im is None:
+            self.__im = imagetool( )
+            self.__im.open(self.__path)
+
+    def _shape_close_after_access( self ):
+        if self.__shape is not None:
+            return self.__shape
+        ia = imagetool( )
+        ia.open(self.__path)
+        self.__shape = list(ia.shape( ))
+        ia.close( )
+        ia.done( )
+        return self.__shape
+
+    def _shape_keep_open( self ):
+        if self.__shape is not None:
+            return self.__shape
+        if self.__im is None:
+            self._open( )
+        self.__shape = list(self.__im.shape( ))
+        return self.__shape
+
+    def _getchunk_close_after_access( self, *args, **kwargs ):
+        ia = imagetool( )
+        ia.open(self.__path)
+        result = ia.getchunk( *args, **kwargs )
+        ia.close( )
+        ia.done( )
+        return result
+
+    def _getchunk_keep_open( self, *args, **kwargs ):
+        if self.__im is None:
+            self._open( )
+        return self.__im.getchunk( *args, **kwargs )
 
     def channel( self, index ):
         """Retrieve one channel from the image cube. The `index` should be a
@@ -100,10 +125,8 @@ class ImagePipe(DataSource):
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
         """
-        if self.__im is None:
-            raise RuntimeError('no image is available')
-        return np.squeeze( self.__im.getchunk( blc=[0,0] + index,
-                                               trc=self.__chan_shape + index) ).transpose( )
+        return np.squeeze( self._getchunk( blc=[0,0] + index,
+                                           trc=self.__chan_shape + index) ).transpose( )
     def spectra( self, index ):
         """Retrieve one spectra from the image cube. The `index` should be a
         three element list of integers. The first integer is the ''right
@@ -121,10 +144,8 @@ class ImagePipe(DataSource):
             index[0] = self.shape[0] - 1
         if index[1] >= self.shape[1]:
             index[1] = self.shape[1] - 1
-        if self.__im is None:
-            raise RuntimeError('no image is available')
-        result = np.squeeze( self.__im.getchunk( blc=index + [0],
-                                                 trc=index + [self.shape[-1]] ) )
+        result = np.squeeze( self._getchunk( blc=index + [0],
+                                             trc=index + [self.shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
         try:
@@ -135,12 +156,22 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, *args, abort=None, stats=False, **kwargs ):
+    def __init__( self, image, image_access=ImageAccess.KEEP_OPEN, *args, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
         resource_manager.reg_at_exit(self, '__del__')
+        self.__im = None
+        if image_access == ImageAccess.KEEP_OPEN:
+            self._getchunk = self._getchunk_keep_open
+            self._shape = self._shape_keep_open
+        else:
+            self._getchunk = self._getchunk_close_after_access
+            self._shape = self._shape_close_after_access
+        self.__rg = regionmanager( )
+        self.__path = image
+        self.__shape = None
         self._stats = stats
-        self.__open( image )
-        self.shape = list(self.__im.shape( ))
+        self.shape = self._shape( )
+        self.__chan_shape = list(self._shape( )[0:2])
         self.__session = None
         self.__abort = abort
 
@@ -148,10 +179,9 @@ class ImagePipe(DataSource):
             raise RuntimeError('abort function must be callable')
 
     def __del__(self):
-        if (self.__im != None):
-            self.__im.done()
-            self.__im.close()
-            self.__im = None
+        self.__rg.done( )
+        if self.__im is not None:
+            self.__im.done( )
 
     def coorddesc( self ):
         ia = imagetool( )

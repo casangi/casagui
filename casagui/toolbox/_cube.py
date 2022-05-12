@@ -40,7 +40,7 @@ from bokeh.events import SelectionGeometry
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
-from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
+from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe, ImageAccess
 from casagui.bokeh.state import initialize_bokeh
 from ..utils import resource_manager
 
@@ -614,7 +614,12 @@ class CubeMask:
         '''set up websockets
         '''
         if self._pipe['image'] is None:
-            self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, abort=self.__abort, address=find_ws_address( ))
+            ###
+            ### Opening and closing the image tool for each access results in a SEGV:
+            ###
+            #access = ImageAccess.CLOSE_AFTER_ACCESS
+            access = ImageAccess.KEEP_OPEN
+            self._pipe['image'] = ImagePipe(image=self._image_path, image_access=access, stats=True, abort=self.__abort, address=find_ws_address( ))
         if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 
