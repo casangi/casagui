@@ -48,7 +48,7 @@ class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image, abort=None ):
+    def __init__( self, image, abort=None, mutexes={ }, mutex_map={ } ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -66,6 +66,8 @@ class CubeMask:
         '''
         initialize_bokeh( )
 
+        self._mutexes = mutexes
+        self._mutex_map = mutex_map
         self._image_path = image	                # path to image cube to be displayed
         self._image = None		                # figure displaying cube planes
         self._slider = None		                # slider to move from plane to plane
@@ -619,7 +621,9 @@ class CubeMask:
             ###
             #access = ImageAccess.CLOSE_AFTER_ACCESS
             access = ImageAccess.KEEP_OPEN
-            self._pipe['image'] = ImagePipe(image=self._image_path, image_access=access, stats=True, abort=self.__abort, address=find_ws_address( ))
+            self._pipe['image'] = ImagePipe( image=self._image_path, image_access=access, stats=True,
+                                             abort=self.__abort, address=find_ws_address( ),
+                                             mutexes=self._mutexes, mutex_map=self._mutex_map )
         if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 

@@ -198,6 +198,7 @@ class InteractiveClean:
         ### GUI Elements
         self._imagename = imagename
         self._image_path = "%s.image" % imagename
+        self._residual_path = "%s.residual" % imagename
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -395,7 +396,7 @@ class InteractiveClean:
                    }
 
 
-        self._cube = CubeMask( self._image_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, abort=self._abort_handler, mutexes=self._clean.mutexes( ), mutex_map={ 'getchunk': [ 'restore', 'initminor', 'execminor', 'execmajor' ] } )
         ###
         ### error or exception result
         ###

@@ -104,7 +104,9 @@ class ImagePipe(DataSource):
     def _getchunk_close_after_access( self, *args, **kwargs ):
         ia = imagetool( )
         ia.open(self.__path)
+        self._acquire_mutex( )
         result = ia.getchunk( *args, **kwargs )
+        self._release_mutex( )
         ia.close( )
         ia.done( )
         return result
@@ -112,7 +114,10 @@ class ImagePipe(DataSource):
     def _getchunk_keep_open( self, *args, **kwargs ):
         if self.__im is None:
             self._open( )
-        return self.__im.getchunk( *args, **kwargs )
+        self._acquire_mutex( )
+        result = self.__im.getchunk( *args, **kwargs )
+        self._release_mutex( )
+        return result
 
     def channel( self, index ):
         """Retrieve one channel from the image cube. The `index` should be a
@@ -156,7 +161,8 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, image_access=ImageAccess.KEEP_OPEN, *args, abort=None, stats=False, **kwargs ):
+    def __init__( self, image, image_access=ImageAccess.KEEP_OPEN, mutexes={ }, mutex_map={ },
+                  *args, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
         resource_manager.reg_at_exit(self, '__del__')
         self.__im = None
@@ -166,6 +172,16 @@ class ImagePipe(DataSource):
         else:
             self._getchunk = self._getchunk_close_after_access
             self._shape = self._shape_close_after_access
+        self.__mutexes = mutexes
+        if 'getchunk' in mutex_map:
+            ###
+            ### this will require a more sophisticated locking strategy when acquiring more than one lock
+            ###
+            self._acquire_mutex = lambda: [ self.__mutexes[x].acquire( ) for x in mutex_map['getchunk'] ]
+            self._release_mutex = lambda: [ self.__mutexes[x].release( ) for x in mutex_map['getchunk'] ]
+        else:
+            self._acquire_mutex = lambda: [ ]
+            self._release_mutex = lambda: [ ]
         self.__rg = regionmanager( )
         self.__path = image
         self.__shape = None
