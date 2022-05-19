@@ -810,22 +810,24 @@ class CubeMask:
             self._spectra.line( x='x', y='y', source=self._image_spectra )
             self._spectra.grid.grid_line_width = 0.5
 
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra,
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
                                                      state=dict(frozen=False) ),
-                                          code = """if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
-                                                        var geometry = cb_data['geometry'];
-                                                        var x_pos = Math.floor(geometry.x);
-                                                        var y_pos = Math.floor(geometry.y);
-                                                        specds.spectra(x_pos,y_pos)
-                                                        if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                            specfig.title.text = `Spectrum (${x_pos},${y_pos})`
-                                                        } else {
-                                                            specfig.title.text = 'Spectrum'
+                                          code = """if ( ! specfig.disabled && ! imagefig.disabled ) {
+                                                        if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
+                                                            var geometry = cb_data['geometry'];
+                                                            var x_pos = Math.floor(geometry.x);
+                                                            var y_pos = Math.floor(geometry.y);
+                                                            specds.spectra(x_pos,y_pos)
+                                                            if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                                specfig.title.text = `Spectrum (${x_pos},${y_pos})`
+                                                            } else {
+                                                                specfig.title.text = 'Spectrum'
+                                                            }
+                                                        } else if ( cb_obj.event_name === 'mouseenter' ) {
+                                                            state.frozen = false
+                                                        } else if ( cb_obj.event_name === 'tap' ) {
+                                                            state.frozen = true
                                                         }
-                                                    } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                        state.frozen = false
-                                                    } else if ( cb_obj.event_name === 'tap' ) {
-                                                        state.frozen = true
                                                     }""" )
 
             self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )

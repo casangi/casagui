@@ -197,7 +197,7 @@ class InteractiveClean:
         ###
         ### GUI Elements
         self._imagename = imagename
-        self._image_path = "%s.image" % imagename
+        self._residual_path = "%s.residual" % imagename
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -282,6 +282,9 @@ class InteractiveClean:
                                                cyclefactor.disabled = true
                                                btns['continue'].disabled = true
                                                btns['finish'].disabled = true
+                                               slider.disabled = true
+                                               image_fig.disabled = true
+                                               spectra_fig.disabled = true
                                                if ( with_stop ) {
                                                    btns['stop'].disabled = true
                                                } else {
@@ -297,6 +300,9 @@ class InteractiveClean:
                                                cyclefactor.disabled = false
                                                niter.disabled = false
                                                btns['stop'].disabled = false
+                                               slider.disabled = false
+                                               image_fig.disabled = false
+                                               spectra_fig.disabled = false
                                                if ( ! only_stop ) {
                                                    btns['continue'].disabled = false
                                                    btns['finish'].disabled = false
@@ -326,6 +332,7 @@ class InteractiveClean:
                                                                  'zero mask found',
                                                                  'no mask found',
                                                                  'n-sigma or other valid exit criterion',
+                                                                 'major cycle limit hit',
                                                                  'unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
                                                    stopstatus.text = '<div>' +
@@ -343,7 +350,9 @@ class InteractiveClean:
                                                        log.text = log.text + msg.cmd
                                                    }
                                                    refresh( msg )
-                                                   state.stopped = state.stopped || msg.stopcode > 1 || msg.stopcode == 0
+                                                   // stopcode == 1: iteration limit hit
+                                                   // stopcode == 9: major cycle limit hit
+                                                   state.stopped = state.stopped || msg.stopcode > 1 && msg.stopcode < 9 || msg.stopcode == 0
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        btns['stop'].button_type = "danger"
                                                        update_status( 'stopcode' in msg ? msg.stopcode : -1 )
@@ -355,7 +364,7 @@ class InteractiveClean:
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
                                                        if ( ! state.stopped ) {
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                           { action: 'next',
+                                                                           { action: 'finish',
                                                                              value: { niter: niter.value, cycleniter: cycleniter.value,
                                                                                       threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                                       mask: img_src.masks( ),
@@ -392,7 +401,7 @@ class InteractiveClean:
                    }
 
 
-        self._cube = CubeMask( self._image_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, abort=self._abort_handler )
         ###
         ### error or exception result
         ###
@@ -424,7 +433,7 @@ class InteractiveClean:
         ### Python-side handler for events from the interactive clean control buttons
         ###
         async def clean_handler( msg, self=self ):
-            if msg['action'] == 'next':
+            if msg['action'] == 'next' or msg['action'] == 'finish':
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
@@ -438,7 +447,7 @@ class InteractiveClean:
                         msg['value']['mask'] = ''
                 else:
                     msg['value']['mask'] = ''
-                self._clean.update(msg['value'])
+                self._clean.update( { **msg['value'], 'nmajor': 1 if msg['action'] == 'next' else -1 } )
                 stopcode, self._convergence_data = await self._clean.__anext__( )
                 if len(self._convergence_data) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
@@ -557,6 +566,7 @@ class InteractiveClean:
         self._fig['slider'] = self._cube.slider( )
         self._fig['image'] = self._cube.image( )
         self._fig['image-source'] = self._cube.js_obj( )
+        self._fig['spectra'] = self._cube.spectra( )
 
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
@@ -567,10 +577,11 @@ class InteractiveClean:
                                                  niter=self._control['iter'], cycleniter=self._control['cycleniter'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
                                                  convergence_src=self._convergence_source, convergence_id=self._convergence_id,
-                                                 #slider=self._fig['slider'],
                                                  convergence_fig=self._fig['convergence'],
                                                  log=self._status['log'],
-                                                 #img_fig=self._fig['image'],
+                                                 slider=self._fig['slider'],
+                                                 image_fig=self._fig['image'],
+                                                 spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
                                                  #stat_src=self._stats_source
                                                 ),
@@ -583,7 +594,7 @@ class InteractiveClean:
                                                   disable( false )
                                                   btns['stop'].button_type = "warning"
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                  { action: 'next',
+                                                                  { action: 'finish',
                                                                     value: { niter: niter.value, cycleniter: cycleniter.value,
                                                                              threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                              mask: img_src.masks( ),
@@ -664,7 +675,7 @@ class InteractiveClean:
                                                              ]
                                                      )
                                   ),
-                                  self._cube.spectra( ),
+                                  self._fig['spectra'],
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
                                   self._status['log'] )

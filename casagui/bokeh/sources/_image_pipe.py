@@ -148,7 +148,9 @@ class ImagePipe(DataSource):
             raise RuntimeError('abort function must be callable')
 
     def __del__(self):
-        if (self.__im != None):
+        if self.__rg:
+            self.__rg.done( )
+        if self.__im != None:
             self.__im.done()
             self.__im.close()
             self.__im = None
