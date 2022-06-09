@@ -106,7 +106,14 @@ class CubeMask:
         ###    copy buffer:       global                                                                                        ###
         ###########################################################################################################################
         self._js = { ### update stats in response to channel changes
-                     'slider_w_stats':  '''source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
+                     ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+                     ### slider._scrolling is a flag that indicates if scrolling is in process
+                     ### while scrolling is in process the slider is disabled to prevent
+                     ### an oscillation (slider jumping back and forth between two values) that
+                     ### happened when the slider was moved quickly across multiple values
+                     'slider_w_stats':  '''slider._scrolling = true
+                                           slider.disabled = true
+                                           source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
                      'slider_wo_stats': '''source.channel( slider.value, 0 )''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
@@ -877,7 +884,10 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=('''slider.value = cb_obj.cur_chan[1];''' if self._slider else '') +
+                                                               code=('''slider.value = cb_obj.cur_chan[1]
+                                                                        if ( slider._scrolling ) {
+                                                                            slider.disabled = false
+                                                                            slider._scrolling = false }''' if self._slider else '') +
                                                                     self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
 
     def js_obj( self ):
