@@ -556,7 +556,7 @@ class InteractiveClean:
                                         icon=SVGIcon(icon_name='help', size=1.4) )
 
 
-        self._control['iter'] = TextInput( title="iter", value="%s" % self._params['niter'], width=90 )
+        self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
         self._control['threshold'] = TextInput( title="threshold", value="%s" % self._params['threshold'], width=90 )
         self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
@@ -574,7 +574,7 @@ class InteractiveClean:
                                                  ids=self._ids['clean'],
                                                  img_src=self._fig['image-source'],
                                                  #spec_src=self._image_spectra,
-                                                 niter=self._control['iter'], cycleniter=self._control['cycleniter'],
+                                                 niter=self._control['niter'], cycleniter=self._control['cycleniter'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
                                                  convergence_src=self._convergence_source, convergence_id=self._convergence_id,
                                                  convergence_fig=self._fig['convergence'],
@@ -650,7 +650,7 @@ class InteractiveClean:
         self._fig['layout'] = column(
                                   row(
                                       column(
-                                          row( self._control['iter'],
+                                          row( self._control['niter'],
                                                self._control['cycleniter'],
                                                self._control['cycle_factor'],
                                                self._control['threshold'] ),
