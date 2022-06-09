@@ -959,7 +959,9 @@ class CubeMask:
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                                <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
-                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt').replace('EXTRAROWS','\n'.join(rows)),
+                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
+                                      .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
+                                      .replace('EXTRAROWS','\n'.join(rows)),
                      visible=False, width=650 ), **kw )
         return self._help
 
