@@ -172,7 +172,9 @@ class InteractiveClean:
         ###                         used by ColumnDataSource
         ###
         self._status = { }
-        self._stopcode, self._convergence_data = next(self._clean)
+        stopcode, self._convergence_data = next(self._clean)
+        if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
+            self._clean.finalize()
         if len(self._convergence_data.keys()) == 0:
             raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
         self._convergence_id = str(uuid4( ))
@@ -197,7 +199,7 @@ class InteractiveClean:
         ###
         ### GUI Elements
         self._imagename = imagename
-        self._residual_path = "%s.residual" % imagename
+        self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -352,7 +354,7 @@ class InteractiveClean:
                                                    refresh( msg )
                                                    // stopcode == 1: iteration limit hit
                                                    // stopcode == 9: major cycle limit hit
-                                                   state.stopped = state.stopped || msg.stopcode > 1 && msg.stopcode < 9 || msg.stopcode == 0
+                                                   state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        btns['stop'].button_type = "danger"
                                                        update_status( 'stopcode' in msg ? msg.stopcode : -1 )
@@ -449,6 +451,9 @@ class InteractiveClean:
                     msg['value']['mask'] = ''
                 self._clean.update( { **msg['value'], 'nmajor': 1 if msg['action'] == 'next' else -1 } )
                 stopcode, self._convergence_data = await self._clean.__anext__( )
+                if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
+                    self._clean.finalize()
+                    # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
@@ -647,6 +652,14 @@ class InteractiveClean:
                                                     code='''const pos = img_src.cur_chan;''' +             ### later we will receive the polarity from some widget mechanism...
                                                             self._js['update-converge'] + self._js['slider-update'] ) )
         
+        # Generates the HTML for the controls layout:
+        # niter cycleniter cycle_factor threshold  -----------
+        #                  slider                  -  image  -
+        # goto               continue finish stop  -----------
+        # status: stopcode                  stats         help
+        # spectra
+        # convergence
+        # log
         self._fig['layout'] = column(
                                   row(
                                       column(
