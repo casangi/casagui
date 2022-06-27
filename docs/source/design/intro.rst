@@ -127,3 +127,21 @@ The notebook setting is constrained by the limitations of the Jupyter notebook a
 Most of the individual plots that the casagui Python package is capable of creating should
 display fine within a notebook. The very complicated applications which can be created in the
 application setting will not be available in the notebook setting.
+
+Design Documents
+-------------------
+
+The casagui design documents are available for more detailed discussions about the implementation
+of specific tools and applications.
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Applications:
+
+   applications
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Visualization Component Toolbox:
+
+   components
