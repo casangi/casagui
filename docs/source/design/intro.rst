@@ -138,10 +138,10 @@ of specific tools and applications.
    :maxdepth: 3
    :caption: Applications:
 
-   applications
+   applications/interactive_clean
 
 .. toctree::
    :maxdepth: 3
    :caption: Visualization Component Toolbox:
 
-   components
+   components/cube_mask
