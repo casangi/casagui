@@ -142,6 +142,6 @@ of specific tools and applications.
 
 .. toctree::
    :maxdepth: 3
-   :caption: Visualization Component Toolbox:
+   :caption: Component Toolbox:
 
    components/cube_mask
