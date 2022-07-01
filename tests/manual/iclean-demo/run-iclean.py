@@ -2,6 +2,8 @@
 #initialize_bokeh( ".../casagui/casalib/dist/esbuild/casalib-v0.0.1.min.js",
 #                  ".../casagui/casaguijs/dist/casaguijs.js" )                ### local build
 import os
+import ssl
+import certifi
 import asyncio
 import urllib
 import tarfile
@@ -23,7 +25,8 @@ img = 'test'
 
 if not os.path.isdir(ms_path):
     try:
-        tstream = urllib.request.urlopen(ms_url)
+        context = ssl.create_default_context(cafile=certifi.where())
+        tstream = urllib.request.urlopen(ms_url, context=context, timeout=400)
         tar = tarfile.open(fileobj=tstream, mode="r:gz")
         tar.extractall( )
     except urllib.error.URLError:
