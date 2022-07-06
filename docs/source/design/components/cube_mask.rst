@@ -103,8 +103,8 @@ the spectra display is accessed with the ``spectra`` member function::
 
   print( f"cube exited with {cube.result( )}" )
 
- .. image:: image-slider-spectra.png
-  :width: 600
+.. image:: image-slider-spectra.png
+  :width: 400
   :alt: Image Cube w/ Slider + Spectra
 
  By default, the spectra display is wider, but these components generally support the
