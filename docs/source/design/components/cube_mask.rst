@@ -47,7 +47,9 @@ image display can be used to create regions and move through the channels of the
   :width: 400
   :alt: Image Cube
 
-The image update is managed via the ``asyncio`` event loop.
+The image update is managed via the ``asyncio`` event loop. The tools along the edge
+can be used to draw regions, scroll, pan, zoom, etc. The regions are accessable after
+successful completion of GUI interactions.
 
 Channel Scrolling
 ====================
@@ -72,9 +74,40 @@ and it can be added, assuming the same imports as above, like::
 
 .. image:: image-slider.png
   :width: 400
-  :alt: Image Cube
+  :alt: Image Cube w/ Slider
 
 The component usage is indicated by calling the accessor functions, e.g. ``image`` or
 ``slider`` here, and the call to the ``connect`` member function connects the *behind
 the scenes* connections to make all of the elements (*that are in use*) interact and
 update in response to user input.
+
+Spectra (Z-Axis) Display
+====================
+Another useful component included in ``CubeMask`` is the spectra display. This display
+shows the image spectra along the z-axis of the image cube. As with ``slider`` above
+the spectra display is accessed with the ``spectra`` member function::
+
+  cube = CubeMask( 'g35_sma_usb_12co.image' )
+  layout = column( cube.image( ),
+                   cube.slider( ),
+                   cube.spectra( width=400 ) )
+  cube.connect( )
+  show( layout )
+
+  try:
+      loop = asyncio.get_event_loop( )
+      loop.run_until_complete(cube.loop( ))
+      loop.run_forever( )
+  except KeyboardInterrupt:
+      print('\nInterrupt received, stopping GUI...')
+
+  print( f"cube exited with {cube.result( )}" )
+
+ .. image:: image-slider-spectra.png
+  :width: 600
+  :alt: Image Cube w/ Slider + Spectra
+
+ By default, the spectra display is wider, but these components generally support the
+ same parameters supported by the underlying Bokeh components. In this case, the ``width``
+ is specified.
+
