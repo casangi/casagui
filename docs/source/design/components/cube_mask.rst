@@ -121,7 +121,7 @@ interface can be used to close the GUI, exit the event loop and return control t
 Python::
 
   cube = CubeMask( 'g35_sma_usb_12co.image' )
-  done = Button( label="Done", button_type="danger", name="done" )
+  done = Button( label="Done", width=80, button_type="danger" )
   layout = column( cube.image( ),
                    row( cube.slider( ), done ),
                    cube.spectra( width=400 ) )
@@ -148,3 +148,50 @@ This example adds a button to invoke the completion function of the
 ``js_obj`` function. The ``code`` in this example is JavaScript
 rather than Python code, and the execution takes place in the
 browser displaying our GUI.
+
+Channel Statistics
+====================
+The channel statistics widget provides statistics information about
+the current channel displayed and it updates along with the channel
+displayed in the ``image`` widget. It is incorporated into the
+display just like all of the other elements::
+
+  cube = CubeMask( 'g35_sma_usb_12co.image' )
+  done = Button( label="Done", width=80, button_type="danger" )
+  layout = row( column( cube.image( ),
+                        row( cube.slider( ), done ) ),
+                column( cube.statistics( ),
+                        cube.spectra( width=400 ) ) )
+
+  done.js_on_click( CustomJS( args=dict( obj=cube.js_obj( ) ),
+                              code="obj.done( )" ) )
+  cube.connect( )
+  show( layout )
+
+  try:
+      loop = asyncio.get_event_loop( )
+      loop.run_until_complete(cube.loop( ))
+      loop.run_forever( )
+  except KeyboardInterrupt:
+      print('\nInterrupt received, stopping GUI...')
+
+  print( f"cube exited with {cube.result( )}" )
+
+.. image:: image-slider-spectra-done-stats.png
+  :width: 400
+  :alt: Image Cube w Slider Spectra and Button
+
+Here the elements have been rearranged to so how easy it is to organize
+the display.
+
+Conclusion
+====================
+In addition to the elements shown above there is a ``help`` text box which
+can be used to provide a description of how to interact with the ``CubeMask``
+interfaces. This text box can be added to the GUI and shown and hidden as
+desired.
+
+The goal of the design of ``CubeMask`` is to incorporate added functionality
+that is specific to our use case without interfering with the the integration
+of these elements into Bokeh displays. This means that the Bokeh elements must
+be exposed while also adding our extensions behind the scenes.
