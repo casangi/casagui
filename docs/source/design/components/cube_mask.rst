@@ -105,9 +105,8 @@ the spectra display is accessed with the ``spectra`` member function::
 
 .. image:: image-slider-spectra.png
   :width: 400
-  :alt: Image Cube w/ Slider + Spectra
+  :alt: Image Cube w Slider Spectra
 
- By default, the spectra display is wider, but these components generally support the
- same parameters supported by the underlying Bokeh components. In this case, the ``width``
- is specified.
-
+By default, the spectra display is wider, but these components generally support the
+same parameters supported by the underlying Bokeh components. In this case, the ``width``
+is specified.
