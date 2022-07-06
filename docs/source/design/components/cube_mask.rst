@@ -50,7 +50,10 @@ image display can be used to create regions and move through the channels of the
 
 The image update is managed via the ``asyncio`` event loop. The tools along the edge
 can be used to draw regions, scroll, pan, zoom, etc. The regions are accessable after
-successful completion of GUI interactions.
+successful completion of GUI interactions. The image used in these examples is
+`available for download
+<https://casa.nrao.edu/download/devel/casavis/data/g35-12co-img.tar.gz>`_.
+
 
 Channel Scrolling
 ====================
