@@ -1,7 +1,7 @@
 .. _design-system-design:
 
 ====================
-Cube Mask Design Document
+Cube Mask Design
 ====================
 
 .. currentmodule:: design
@@ -22,6 +22,7 @@ An image cube can be displayed with this code::
   import asyncio
   from bokeh.plotting import show
   from bokeh.layouts import row, column
+  from bokeh.models import Button, CustomJS
   from casagui.toolbox import CubeMask
 
   cube = CubeMask( 'g35_sma_usb_12co.image' )
@@ -110,3 +111,40 @@ the spectra display is accessed with the ``spectra`` member function::
 By default, the spectra display is wider, but these components generally support the
 same parameters supported by the underlying Bokeh components. In this case, the ``width``
 is specified.
+
+Integration with Bokeh
+====================
+While we have already seen some integration with Bokeh models, e.g. ``layout`` above,
+It is also possible to include reactive models. The ``js_obj`` member function provides
+access to control elements of the ``CubeMask`` components. This example shows how this
+interface can be used to close the GUI, exit the event loop and return control to
+Python::
+
+  cube = CubeMask( 'g35_sma_usb_12co.image' )
+  done = Button( label="Done", button_type="danger", name="done" )
+  layout = column( cube.image( ),
+                   row( cube.slider( ), done ),
+                   cube.spectra( width=400 ) )
+  done.js_on_click( CustomJS( args=dict( obj=cube.js_obj( ) ),
+                              code="obj.done( )" ) )
+  cube.connect( )
+  show( layout )
+
+  try:
+      loop = asyncio.get_event_loop( )
+      loop.run_until_complete(cube.loop( ))
+      loop.run_forever( )
+  except KeyboardInterrupt:
+      print('\nInterrupt received, stopping GUI...')
+
+  print( f"cube exited with {cube.result( )}" )
+
+.. image:: image-slider-spectra-done.png
+  :width: 400
+  :alt: Image Cube w Slider Spectra and Button
+
+This example adds a button to invoke the completion function of the
+``CubeMask`` JavaScript control object which is returned by the
+``js_obj`` function. The ``code`` in this example is JavaScript
+rather than Python code, and the execution takes place in the
+browser displaying our GUI.
