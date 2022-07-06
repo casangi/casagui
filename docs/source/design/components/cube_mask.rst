@@ -178,7 +178,7 @@ display just like all of the other elements::
   print( f"cube exited with {cube.result( )}" )
 
 .. image:: image-slider-spectra-done-stats.png
-  :width: 400
+  :width: 600
   :alt: Image Cube w Slider Spectra and Button
 
 Here the elements have been rearranged to so how easy it is to organize
