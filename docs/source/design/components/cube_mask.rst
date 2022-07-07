@@ -53,8 +53,6 @@ can be used to draw regions, scroll, pan, zoom, etc. The regions are accessable 
 successful completion of GUI interactions. The image used in these examples is
 `available for download
 <https://casa.nrao.edu/download/devel/casavis/data/g35-12co-img.tar.gz>`_.
-
-
 Channel Scrolling
 ====================
 The ``CubeMask`` object provides access to other GUI components that are integrated with
@@ -186,6 +184,22 @@ display just like all of the other elements::
 
 Here the elements have been rearranged to so how easy it is to organize
 the display.
+
+Implementation
+====================
+The ``CubeMask`` implementation uses the Bokeh `figure
+<https://docs.bokeh.org/en/latest/docs/reference/plotting/figure.html?highlight=figure#bokeh.plotting.figure>`_
+to implement the image and spectra display. It also uses `Slider
+<https://docs.bokeh.org/en/latest/docs/reference/models/widgets/sliders.html?highlight=slider#bokeh.models.Slider>`_ and
+`DataTable
+<https://docs.bokeh.org/en/latest/docs/reference/models/widgets/tables.html?highlight=datatable#bokeh.models.DataTable>`_.
+These are updated from Python using `websockets
+<https://websockets.readthedocs.io/en/stable/>`_ to request (from GUI) and receive (from Python) the data updates
+for the GUI elements.
+
+Two websockets are used by ``CubeMask``. One websocket is devoted to updating the image and statistics, which
+are both updated with the same message. The other websocket is used for control. Currently, just signaling
+that the GUI should shutdown, but later it may be used for other control messages.
 
 Conclusion
 ====================
