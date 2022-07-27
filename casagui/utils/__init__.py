@@ -274,6 +274,22 @@ def __index_to_stokes(index: int):
     except TypeError:
         return STOKES_MAP[index]
 
+def index_to_stokes(index: int):
+    """Convert stokes axis index to alphabetic value.
+
+    Args:
+        index (int): enumerated index defining stokes value.
+
+    Returns:
+        str: String indicating stokes value. 
+    """
+    STOKES_MAP = ['I', 'Q', 'U', 'V']
+  
+    try:
+        return [STOKES_MAP[i] for i in index]
+    except TypeError:
+        return STOKES_MAP[index]
+
 def __get_center_pixels(params: dict):
     """Get center pixel offset value from dictionary.
 
