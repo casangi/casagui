@@ -41,7 +41,7 @@ Any Python packages you want to use must be installed too. In particular::
 
 Finally, a good way to test your kernel is by installing the `Interact desktop app <https://nteract.io/>`_. Some experimentation may be required. This was the case with installing Python with `macports <https://www.macports.org/>`_ and then getting the `nteract desktop app <https://nteract.io/>`_ to use Python from there.
 
-Developement Notes
+Development Notes
 ------------------
 
 1. `coordinate labeling with casatools <https://github.com/casangi/casagui/blob/main/devel/docs/image-tool-labels.md>`_
