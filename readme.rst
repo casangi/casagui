@@ -1,8 +1,9 @@
 casagui - visualization tools and applications for CASA
-===============
+=======================================================
 
 This is a **pre-alpha** package. It is *not* useful for external users, and all
 applications being built with it are currently in various phases of *prototyping*.
+
 
 Worse, this documentation is out of date and needs updating. It is focused on the
 installation of :code:`casagui` as a desktop app while development has moved toward
@@ -11,7 +12,7 @@ first supporting scripting and visualization from Python using
 stakeholder input are used to shape the interactive clean application.
 
 Installation
----------------
+------------
 
 Developers can build and run casagui with::
 
@@ -41,6 +42,6 @@ Any Python packages you want to use must be installed too. In particular::
 Finally, a good way to test your kernel is by installing the `Interact desktop app <https://nteract.io/>`_. Some experimentation may be required. This was the case with installing Python with `macports <https://www.macports.org/>`_ and then getting the `nteract desktop app <https://nteract.io/>`_ to use Python from there.
 
 Developement Notes
----------------
+------------------
 
-1. `coordinate labeling with casatools <devel/docs/image-tool-labels.md>`_
+1. `coordinate labeling with casatools <https://github.com/casangi/casagui/blob/main/devel/docs/image-tool-labels.md>`_
