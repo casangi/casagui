@@ -3,10 +3,10 @@ name = "casagui"
 dynamic = ["version"]
 description = "visualization toolkit and apps for casa"
 authors = [
-    {name = "Pam Harris", email = "pharris@nrao.edu"},
+    {name = "Darrell Schiebel", email = "darrell@schiebel.us"},
     {name = "Joshua Hoskins", email = "jhoskins@nrao.edu"},
     {name = "Jorge Lopez", email = "jalopez@nrao.edu"},
-    {name = "Darrell Schiebel", email = "darrell@schiebel.us"},
+    {name = "Pam Harris", email = "pharris@nrao.edu"},
 ]
 
 dependencies = [

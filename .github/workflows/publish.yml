@@ -1,0 +1,49 @@
+###
+### This workflows will upload a python package using twine when the casagui
+### main branch is tagged with 'v*' and pushed up
+###
+
+name: Actions for each push or pull
+
+on:
+  create:                            # Workflow runs on push or pull request events but only for the main branch
+
+jobs:
+
+  deploy:
+
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
+    runs-on: ubuntu-latest           # The type of runner that the job will run on
+
+    steps:                           # Steps represent a sequence of tasks that will be executed as part of the job
+
+      - uses: actions/checkout@v2    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Set up python
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.8'
+
+      - name: Install twine
+        run: pip install twine       # Twine is needed to upload to pypi
+
+      - name: Setup pdm
+        uses: pdm-project/setup-pdm@main
+        with:
+          python-version: 3.8        # Version range or exact version of a Python version to use, the same as actions/setup-python
+          architecture: x64          # The target architecture (x86, x64) of the Python interpreter. the same as actions/setup-python
+          #version: 1.4.0            # The version of PDM to install. Leave it as empty to use the latest version from PyPI
+          prerelease: true           # Allow prerelease versions to be installed
+          enable-pep582: true        # Enable PEP 582 package loading globally
+
+      - name: Install dependencies
+        run: pdm install             # install all dependencies
+
+      - name: Build package
+        run: pdm build -v            # build distribution
+
+      - name: Publish package
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: twine upload dist/*
