@@ -29,4 +29,12 @@
 used to build GUI applications for astronomy. It also contains some
 applications turn-key applications'''
 
-from ._resources import VERSION as __version__
+try:
+    from .__version__ import __version__
+except:
+    ###
+    ### __version__.py is generated as part of the build, but if the source tree
+    ### for casagui is used directly for development, no __version__.py will be
+    ### available so set it to a default value...
+    ###
+    __version__ = {}
