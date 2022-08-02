@@ -107,14 +107,19 @@ class CubeMask:
         ###########################################################################################################################
         self._js = { ### update stats in response to channel changes
                      ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-                     ### slider._scrolling is a flag that indicates if scrolling is in process
-                     ### while scrolling is in process the slider is disabled to prevent
-                     ### an oscillation (slider jumping back and forth between two values) that
-                     ### happened when the slider was moved quickly across multiple values
-                     'slider_w_stats':  '''slider._scrolling = true
-                                           slider.disabled = true
+                     ### The slider and the events from the update of the image source are
+                     ### coupled because the image cube channel can be changed outside of the
+                     ### slider context. However, allowing the slider value to be updated via
+                     ### the update to the cube update can cause oscillations when the slider
+                     ### is moved very quickly [slider causes channel change, channel change
+                     ### causes slider value to be set]. To prevent this,
+                     ### slider._processing_count is used to prevent the slider value from
+                     ### being set in response to the channel update when it was the slider
+                     ### that initiated the update chain.
+                     'slider_w_stats':  '''slider._processing_count = slider._processing_count ? slider._processing_count + 1 : 1
                                            source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
-                     'slider_wo_stats': '''source.channel( slider.value, 0 )''',
+                     'slider_wo_stats': '''slider._processing_count = slider._processing_count ? slider._processing_count + 1 : 1
+                                           source.channel( slider.value, 0 )''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
@@ -884,10 +889,9 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=('''slider.value = cb_obj.cur_chan[1]
-                                                                        if ( slider._scrolling ) {
-                                                                            slider.disabled = false
-                                                                            slider._scrolling = false }''' if self._slider else '') +
+                                                               code=('''if ( slider._processing_count > 0 )
+                                                                            slider._processing_count--
+                                                                        else slider.value = cb_obj.cur_chan[1]''' if self._slider else '') +
                                                                     self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
 
     def js_obj( self ):
