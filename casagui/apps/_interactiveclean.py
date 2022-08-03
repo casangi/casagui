@@ -443,8 +443,11 @@ class InteractiveClean:
                         shutil.rmtree(mask_dir)
                         new_mask = self._cube.jsmask_to_raw(msg['value']['mask'])
                         self._mask_history.append(new_mask)
+
+                        msg['value']['mask'] = convert_masks(masks=new_mask, coord='pixel', cdesc=self._cube.coorddesc())
+
                         ##msg['value']['mask'] = convert_masks( new_mask, 'region','pixel','singleton', cdesc=self._cube.coorddesc( ) )
-                        msg['value']['mask'] = convert_masks( new_mask, 'crtf', 'pixel', 'list' )
+                        ##msg['value']['mask'] = convert_masks( new_mask, 'crtf', 'pixel', 'list' )
                     else:
                         msg['value']['mask'] = ''
                 else:

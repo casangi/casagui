@@ -301,7 +301,78 @@ def __get_center_pixels(params: dict):
     """
     return params['d']
 
-def __convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
+def __write_casa_region(region_object: 'astropy.region', coord:str, polygon_shape: str)->list:
+    ''' Convert astropy region to casa region string. 
+
+    Parameters
+    ----------
+    region_objects: astropy region
+        Region definition in pixel or world coordinates
+    coord: str
+        Coordinate system that should be used in the returned masks. Allowed values are 'pixel', 'world'.
+    polygon_shape: str
+        Region shape definition: rect: centerbox/rotbox, poly:poly 
+
+    '''
+    
+    meta_value = []
+    for key, value in region_object.meta.items():
+        if key == 'corr':
+            meta_value.append('{key}=[{pol}]'.format(key=key, pol=value))
+        elif key == 'range':
+            meta_value.append('{key}={range}'.format(key=key, range=str(value)))
+        else:
+            print('Unknown key: {} skipping'.format(key))
+        
+    meta = ', '.join(meta_value)
+
+    if polygon_shape=='rect':
+        if coord=='pixel':
+            return 'centerbox[[{x} pix, {y} pix], [{width} pix, {height} pix]], {meta}'.format(
+                x=region_object.center.x,
+                y=region_object.center.y,
+                width=region_object.width,
+                height=region_object.height,
+                meta=meta
+            )
+  
+        if coord=='world':
+            return 'rotbox[[{ra}, {dec}], [{width}, {height}], {angle}], {meta}'.format(
+                ra=region_object.center.ra,
+                dec=region_object.center.dec,
+                width=region_object.width,
+                height=region_object.height,
+                angle=region_object.angle,
+                meta=meta
+            )
+  
+        else:
+            raise RuntimeError('Unknown coordinate value: {}'.format(coord))
+  
+    if polygon_shape=='poly':    
+        if coord=='pixel':
+            coords_array = []
+            for value in region_object.vertices:
+                coords_array.append('[{x} pix, {y} pix]'.format(x=value.x, y=value.y))
+
+            coords = ', '.join(coords_array)
+
+            return 'poly[{coords}], {meta}'.format(coords=coords, meta=meta)
+
+        if coord=='world':
+            coords_array = []
+            for value in region_object.vertices:
+                coords_array.append('[{ra}, {dec}]'.format(ra=value.ra, dec=value.dec))
+
+            coords = ', '.join(coords_array)
+
+            return 'poly[{coords}], {meta}'.format(coords=coords, meta=meta)
+        else:
+            raise RuntimeError('Unknown coordinate value: {}'.format(coord))
+    else:
+        raise RuntimeError('Unknown polygon shape: {}'.format(polygon_shape))
+
+def convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
     '''Convert masks in standard format (as defined by ``CubeMask.jsmask_to_raw``) into
     other formats like list of CRTF, single region, etc.
 
@@ -327,6 +398,7 @@ def __convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
 
         if isinstance( cdesc['csys'], dict ):
             csys = cdesc['csys']
+
 
     full_mask_params = []
 
@@ -368,22 +440,33 @@ def __convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
                 PixCoord(x=center_pixels[0], y=center_pixels[1]), 
                 width=width, height=height, angle=0*u.deg
         )
-        elif mask_shape=='polygon':
+        elif mask_shape=='poly':
             region = PolygonPixelRegion(
                 vertices=PixCoord(x=xs, y=ys)
         )
 
         else:
             raise RuntimeError('Invalid mask shape: {func}-->mask={mask}'.format(func=__convert_masks.__qualname__, mask=mask_shape))
-    
-        region.meta['corr'] = __index_to_stokes(stokes_index)
-        region.meta['range'] = [min(channel_range), max(channel_range)]
 
-        region_list.append(region.to_sky(wcs) if coord == 'world' else region)
+        if coord=='world':
+            region = region.to_sky(wcs)
+            region.meta = {
+                'corr': __index_to_stokes(stokes_index),
+                'range': [min(channel_range), max(channel_range)]
+            }
+            region_list.append(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
+        if coord=='pixel':
+
+            region.meta = {
+                'corr': __index_to_stokes(stokes_index),
+                'range': [min(channel_range), max(channel_range)]
+            }
+            print(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
+            region_list.append(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
   
     return region_list
 
-def convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=None):
+def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=None):
     '''Convert masks in standard format (as defined by ``CubeMask.jsmask_to_raw``) into
     other formats like list of CRTF, single region, etc.
 
