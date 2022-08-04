@@ -87,6 +87,11 @@ typings/
 # Webpack
 .webpack/
 
+# PDM state
+.pdm.toml
+__pypackages__/
+build/
+
 # Electron-Forge
 out/
 
@@ -95,6 +100,8 @@ dist/
 
 # emacs backup
 *~
+\#*
+.\#*
 
 # python
 __pycache__/
