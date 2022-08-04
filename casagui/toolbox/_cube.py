@@ -36,7 +36,7 @@ import asyncio
 from uuid import uuid4
 from sys import platform
 import websockets
-from bokeh.events import SelectionGeometry
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
@@ -509,12 +509,15 @@ class CubeMask:
                      ### by the state management functions.
                      'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
                                                document._key_state = { option: false, control: false, shift: false }
+                                               window.addEventListener( 'keydown',
+                                                   (e) => { // prevent default behavior when inside image cube area
+                                                            if ( document._inside_image_cube &&
+                                                                 document._key_state.option === true ) e.preventDefault( ) } )
                                                document.addEventListener( 'keydown',
                                                    (e) => { if ( e.keyCode === keymap.shift ) {
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
                                                             } else if ( document._key_state.option === true ) {     // option key
-                                                                e.preventDefault()                                  // prevent default key behavior
                                                                 if ( document._key_state.control === true ) {       // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
@@ -707,6 +710,9 @@ class CubeMask:
             self._image.grid.grid_line_width = 0.5
             self._image.plot_height = 400
             self._image.plot_width = 400
+
+            self._image.js_on_event( MouseEnter, CustomJS( args=dict( ), code='''document._inside_image_cube = true''' ) )
+            self._image.js_on_event( MouseLeave, CustomJS( args=dict( ), code='''document._inside_image_cube = false''' ) )
 
             self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
