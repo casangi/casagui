@@ -36,7 +36,7 @@ import asyncio
 from uuid import uuid4
 from sys import platform
 import websockets
-from bokeh.events import SelectionGeometry
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
@@ -107,14 +107,19 @@ class CubeMask:
         ###########################################################################################################################
         self._js = { ### update stats in response to channel changes
                      ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-                     ### slider._scrolling is a flag that indicates if scrolling is in process
-                     ### while scrolling is in process the slider is disabled to prevent
-                     ### an oscillation (slider jumping back and forth between two values) that
-                     ### happened when the slider was moved quickly across multiple values
-                     'slider_w_stats':  '''slider._scrolling = true
-                                           slider.disabled = true
+                     ### The slider and the events from the update of the image source are
+                     ### coupled because the image cube channel can be changed outside of the
+                     ### slider context. However, allowing the slider value to be updated via
+                     ### the update to the cube update can cause oscillations when the slider
+                     ### is moved very quickly [slider causes channel change, channel change
+                     ### causes slider value to be set]. To prevent this,
+                     ### slider._processing_count is used to prevent the slider value from
+                     ### being set in response to the channel update when it was the slider
+                     ### that initiated the update chain.
+                     'slider_w_stats':  '''slider._processing_count = slider._processing_count ? slider._processing_count + 1 : 1
                                            source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )''',
-                     'slider_wo_stats': '''source.channel( slider.value, 0 )''',
+                     'slider_wo_stats': '''slider._processing_count = slider._processing_count ? slider._processing_count + 1 : 1
+                                           source.channel( slider.value, 0 )''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 78, prev: 80, escape: 27, space: 32,
@@ -504,12 +509,15 @@ class CubeMask:
                      ### by the state management functions.
                      'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
                                                document._key_state = { option: false, control: false, shift: false }
+                                               window.addEventListener( 'keydown',
+                                                   (e) => { // prevent default behavior when inside image cube area
+                                                            if ( document._inside_image_cube &&
+                                                                 document._key_state.option === true ) e.preventDefault( ) } )
                                                document.addEventListener( 'keydown',
                                                    (e) => { if ( e.keyCode === keymap.shift ) {
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
                                                             } else if ( document._key_state.option === true ) {     // option key
-                                                                e.preventDefault()                                  // prevent default key behavior
                                                                 if ( document._key_state.control === true ) {       // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
@@ -703,6 +711,9 @@ class CubeMask:
             self._image.plot_height = 400
             self._image.plot_width = 400
 
+            self._image.js_on_event( MouseEnter, CustomJS( args=dict( ), code='''document._inside_image_cube = true''' ) )
+            self._image.js_on_event( MouseLeave, CustomJS( args=dict( ), code='''document._inside_image_cube = false''' ) )
+
             self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
                                                               annotations=self._annotations ),
@@ -884,10 +895,9 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=('''slider.value = cb_obj.cur_chan[1]
-                                                                        if ( slider._scrolling ) {
-                                                                            slider.disabled = false
-                                                                            slider._scrolling = false }''' if self._slider else '') +
+                                                               code=('''if ( slider._processing_count > 0 )
+                                                                            slider._processing_count--
+                                                                        else slider.value = cb_obj.cur_chan[1]''' if self._slider else '') +
                                                                     self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
 
     def js_obj( self ):
