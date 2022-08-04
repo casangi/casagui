@@ -1,4 +1,4 @@
-########################################################################
+#######################################################################
 #
 # Copyright (C) 2022
 # Associated Universities, Inc. Washington DC, USA.
@@ -518,7 +518,8 @@ class CubeMask:
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
                                                             } else if ( document._key_state.option === true ) {     // option key
-                                                                if ( document._key_state.control === true ) {       // control key
+                                                                if ( document._key_state.control === true &&
+                                                                     document._inside_image_cube ) {                // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
                                                                         const prev_masks = curmasks( )
@@ -545,7 +546,8 @@ class CubeMask:
                                                                 else {                                         // no control key
                                                                     const shape = source.image_source.shape
                                                                     const shifted = document._key_state.shift
-                                                                    if ( e.keyCode === keymap.control ) {
+                                                                    if ( e.keyCode === keymap.control &&
+                                                                         document._inside_image_cube ) {
                                                                         let cm = curmasks( )
                                                                         if ( document._key_state.option )
                                                                             state_clear_cursor( cm )
@@ -593,7 +595,8 @@ class CubeMask:
                                                                     // option key first pressed
                                                                     if ( e.keyCode === keymap.option ) {
                                                                         document._key_state.option = true
-                                                                        if ( document._key_state.control !== true ) state_initialize_cursor( )
+                                                                        if ( document._key_state.control !== true &&
+                                                                             document._inside_image_cube ) state_initialize_cursor( )
                                                                     }
                                                                     else if ( e.keyCode === keymap.control ) {
                                                                         document._key_state.control = true
@@ -711,8 +714,15 @@ class CubeMask:
             self._image.plot_height = 400
             self._image.plot_width = 400
 
-            self._image.js_on_event( MouseEnter, CustomJS( args=dict( ), code='''document._inside_image_cube = true''' ) )
-            self._image.js_on_event( MouseLeave, CustomJS( args=dict( ), code='''document._inside_image_cube = false''' ) )
+            self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''document._inside_image_cube = true
+                                                                                 if ( document._key_state.option &&
+                                                                                      document._key_state.control !== true ) state_initialize_cursor( )''' ) )
+            self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''document._inside_image_cube = false
+                                                                                 if ( document._key_state.option ) state_clear_cursor( )''' ) )
 
             self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
