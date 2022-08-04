@@ -454,6 +454,7 @@ def convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
                 'corr': __index_to_stokes(stokes_index),
                 'range': [min(channel_range), max(channel_range)]
             }
+
             region_list.append(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
         if coord=='pixel':
 
@@ -461,7 +462,7 @@ def convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
                 'corr': __index_to_stokes(stokes_index),
                 'range': [min(channel_range), max(channel_range)]
             }
-            print(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
+
             region_list.append(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
 
     return region_list
