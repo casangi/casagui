@@ -320,7 +320,7 @@ def __write_casa_region(region_object: 'astropy.region', coord:str, polygon_shap
         if key == 'corr':
             meta_value.append('{key}=[{pol}]'.format(key=key, pol=value))
         elif key == 'range':
-            meta_value.append('{key}={range}'.format(key=key, range=str(value)))
+            meta_value.append('{key}=[{lower}chan, {upper}chan]'.format(key=key, lower=str(value[0]), upper=str(value[1])))
         else:
             print('Unknown key: {} skipping'.format(key))
         
@@ -463,7 +463,7 @@ def convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
             }
             print(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
             region_list.append(__write_casa_region(region, coord=coord, polygon_shape=mask_shape))
-  
+
     return region_list
 
 def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=None):

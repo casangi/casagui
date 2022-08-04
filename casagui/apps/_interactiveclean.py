@@ -446,8 +446,6 @@ class InteractiveClean:
 
                         msg['value']['mask'] = convert_masks(masks=new_mask, coord='pixel', cdesc=self._cube.coorddesc())
 
-                        ##msg['value']['mask'] = convert_masks( new_mask, 'region','pixel','singleton', cdesc=self._cube.coorddesc( ) )
-                        ##msg['value']['mask'] = convert_masks( new_mask, 'crtf', 'pixel', 'list' )
                     else:
                         msg['value']['mask'] = ''
                 else:
@@ -456,6 +454,7 @@ class InteractiveClean:
                 stopcode, self._convergence_data = await self._clean.__anext__( )
                 if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
                     self._clean.finalize()
+
                     # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
