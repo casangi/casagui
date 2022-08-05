@@ -166,7 +166,8 @@ class InteractiveClean:
                                start=start, width=width, interpolation=interpolation, gridder=gridder, pblimit=pblimit,
                                deconvolver=deconvolver, niter=niter, threshold=threshold, cycleniter=cycleniter,
                                cyclefactor=cyclefactor, scales=scales,
-                               history_filter= lambda index, arg, history_value: f'mask=masks[{len(self._mask_history)-1}]' if arg == 'mask' else history_value )
+                               history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
+                                                                                  if arg == 'mask' else history_value )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
@@ -772,3 +773,12 @@ class InteractiveClean:
         This can be converted to other formats with ``casagui.utils.convert_masks``.
         '''
         return copy.deepcopy(self._mask_history)    ## don't allow users to change history
+
+    def history( self ):
+        '''Retrieves the commands used during the interactive clean session.
+
+        Returns
+        -------
+        list[str]  tclean calls made during the interactive clean session.
+        '''
+        return self._clean.cmds( )
