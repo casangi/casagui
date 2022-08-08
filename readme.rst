@@ -34,7 +34,7 @@ These experiences have led CASA to begin a multi-year transition from being a la
 C++ framework attached to Python to being a pure-Python framework for processing
 radio astronomy data. This package is visualization portion of that transition.
 
-After an abreviated trade study where we considered a few pure-Python visualization
+After an abbreviated trade study where we considered a few pure-Python visualization
 frameworks, we selected `Bokeh <https://docs.bokeh.org/en/latest/>`_ as the basis
 for creating new visualization infrastructure for CASA. The choice of Bokeh was made
 based upon its extensibility, its community support (including
@@ -48,11 +48,11 @@ application (using `Electron <https://www.electronjs.org/>`_) or as part of a
 `Jupyter Notebook <https://jupyter.org/>`_.
 
 Beyond this architectural flexibility, our intention is to create a toolbox of
-Bokeh based components which can be combined to create a collection of visualizaiton
+Bokeh based components which can be combined to create a collection of visualization
 tools which can be used in each of these settings (Python command line, Notebook
-and desktop app) so that we maintain smaller, reusable tools instead of very large
-monolithic applications. *Interactive clean* is our pathfinder application of this
-approach and is currently the only example available.
+and desktop application) so that we maintain smaller, reusable tools instead of very
+large monolithic applications. *Interactive clean* is our path-finder application of
+this approach and is currently the only example available.
 
 Installation
 ------------
