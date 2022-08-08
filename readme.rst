@@ -69,7 +69,7 @@ Requirements
 Install
 ```````
 
-- :code:`casa-CAS-13743-2-py3.8/bin/pip3 install casagui`
+- :code:`bash$ casa-CAS-13743-2-py3.8/bin/pip3 install casagui`
 
 Caveats
 ```````
@@ -87,7 +87,7 @@ Caveats
   `Firefox <https://www.mozilla.org/en-US/firefox/new/>`_.
 
 Simple Usage Example
-````````````````````
+--------------------
 
 A simple example of the use of interactive clean is::
 
