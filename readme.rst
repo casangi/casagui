@@ -1,47 +1,113 @@
 casagui - visualization tools and applications for CASA
 =======================================================
 
-This is a **pre-alpha** package. It is *not* useful for external users, and all
+This is a **pre-alpha**, **prototype** package. It is *not* useful for external users, and all
 applications being built with it are currently in various phases of *prototyping*.
 
+Introduction
+------------
 
-Worse, this documentation is out of date and needs updating. It is focused on the
-installation of :code:`casagui` as a desktop app while development has moved toward
-first supporting scripting and visualization from Python using
-`Bokeh <https://docs.bokeh.org/en/latest/>`_. It will be updated as testing and
-stakeholder input are used to shape the interactive clean application.
+For some time, the GUIs provided by `CASA <https://casadocs.readthedocs.io/en/latest/>`_ have
+been based upon `Qt <https://www.qt.io/>`_. While Qt works well, the compiled nature of C++
+code made building and distributing the GUIs for each architecture a hurdle. This in turn
+caused the GUIs we developed to tend toward large, monolithic applications which were
+difficult to integrate and control from Python. We first used
+`DBus <https://www.freedesktop.org/wiki/Software/dbus/>`_ to control our Qt application.
+Qt provides a nice interface to DBus, but it became clear that DBus development had slowed
+and that DBus was unlikely to make major inroads outside of the Linux Desktop. At that
+point, we switched to `gRPC <https://grpc.io/>`_. gRPC supports a variety of platforms
+and languages. It also has significant support behind it. However despite the improved
+technology, it was still difficult to incorporate a scripting interface which allowed a
+stand-alone C++/Qt process to be controlled by a separate Python process at a low enough
+level to be practically useful for control at the level of granularity we desire.
+
+Similar to the CASA visualization development experience, the CASA framework as a whole
+has experienced the ups and downs of the large C++ development experience. Experience
+with a Python parallelization trade study which CASA conducted indicated that the loss
+of CPU throughput in a switch from C++ to pure Python can be made up for in gains made
+in the selection of parallelization framework like `Dask <https://www.dask.org/>`_ along
+with just in time compilation with something like `Numba <http://numba.pydata.org/>`_.
+In addition to the focus of the trade study, additional gains are possible by mixing
+in GPU resources.
+
+These experiences have led CASA to begin a multi-year transition from being a large
+C++ framework attached to Python to being a pure-Python framework for processing
+radio astronomy data. This package is visualization portion of that transition.
+
+After an abreviated trade study where we considered a few pure-Python visualization
+frameworks, we selected `Bokeh <https://docs.bokeh.org/en/latest/>`_ as the basis
+for creating new visualization infrastructure for CASA. The choice of Bokeh was made
+based upon its extensibility, its community support (including
+`NumFocus <https://numfocus.org/project/bokeh>`_), and its limited external dependencies
+(just JavaScript and a modern web browser). A stand-alone application can be created
+by using the
+`Bokeh server <https://docs.bokeh.org/en/latest/docs/reference/command/subcommands/serve.html>`_.
+These options allow for GUIs to be created and used interactively from a Python
+command line session, as a stand-alone mini web server, integrated into a desktop
+application (using `Electron <https://www.electronjs.org/>`_) or as part of a
+`Jupyter Notebook <https://jupyter.org/>`_.
+
+Beyond this architectural flexibility, our intention is to create a toolbox of
+Bokeh based components which can be combined to create a collection of visualizaiton
+tools which can be used in each of these settings (Python command line, Notebook
+and desktop app) so that we maintain smaller, reusable tools instead of very large
+monolithic applications. *Interactive clean* is our pathfinder application of this
+approach and is currently the only example available.
 
 Installation
 ------------
 
-Developers can build and run casagui with::
+casagui is available `from PyPI <https://pypi.org/project/casagui/>`_.
 
-  bash$ git clone https://github.com/casangi/casagui.git
-  bash$ cd casagui
-  bash$ npm install
-  bash$ pushd node_modules/zeromq
-  bash$ HOME=~/.electron-gyp ../.bin/node-gyp rebuild --target=12.0.2 --arch=x64 --dist-url=https://electronjs.org/headers
-  bash$ popd
-  bash$ npm start
+Requirements
+````````````
 
-A few standard :code:`npm` packages (:code:`enchannel-zmq-backend`, :code:`jmp`, :code:`jupyter-paths`, :code:`kernelspecs`, and :code:`spawnteract`) are included directly instead of through installed packages to allow for upgrading to the latest :code:`zeromq.js` distribution in the future.
+- Python 3.8 or greater
 
-Currently, it is assumed that you have a working `python3` interpreter in your path that has the `ipykernel` package installed. This package can be installed with::
+- casatools and casatasks built from `CAS-13743 <https://open-jira.nrao.edu/browse/CAS-13743>`_
 
-  bash$ python -m pip install ipykernel
-  bash$ python -m ipykernel install --user
+Install
+```````
 
-You can check to make sure the Jupyter kernel is available with::
+- :code:`casa-CAS-13743-2-py3.8/bin/pip3 install casagui`
 
-  bash$ python3 -m ipykernel_launcher --help
+Caveats
+```````
 
-Any Python packages you want to use must be installed too. In particular::
+- Remote access is slow, later a desktop application will be developed (using the same Bokeh
+  toolbox) to improve this situation, but for now if running remotely, it is best to pre-start
+  your preferred browser on the host where you will be running interactive clean. For example
 
-  bash$ pip install plotly==4.14.3
+  * :code:`bash$ export BROWSER=/opt/local/bin/firefox`
 
-Finally, a good way to test your kernel is by installing the `Interact desktop app <https://nteract.io/>`_. Some experimentation may be required. This was the case with installing Python with `macports <https://www.macports.org/>`_ and then getting the `nteract desktop app <https://nteract.io/>`_ to use Python from there.
+  * :code:`bash$ $BROWSER > /dev/null 2>&1 &`
 
-Development Notes
-------------------
+- `Konqueror <https://apps.kde.org/konqueror/>`_ does **not** work. We only test with
+  `Chrome <https://www.google.com/chrome/>`_ and
+  `Firefox <https://www.mozilla.org/en-US/firefox/new/>`_.
 
-1. `coordinate labeling with casatools <https://github.com/casangi/casagui/blob/main/devel/docs/image-tool-labels.md>`_
+Simple Usage Example
+````````````````````
+
+A simple example of the use of interactive clean is::
+
+  CASA <1>: from casagui.apps import InteractiveClean
+  CASA <2>: InteractiveClean( vis=ms_path, imagename=img, imsize=512, cell='12.0arcsec',
+                    specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz',
+                    width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', threshold='0.001Jy',
+                    niter=50, cycleniter=10, cyclefactor=3, scales=[0,3,10] )( )
+
+
+In general, the :code:`InteractiveClean` constructor takes a subset of parameters accepted
+by `tclean <https://casadocs.readthedocs.io/en/latest/api/tt/casatasks.imaging.tclean.html>`_.
+All of the masks used in running interactive clean are available from the
+:code:`InteractiveClean` object. To get access to the list of masks, you would create
+the object as a separate statement::
+
+  CASA <2>: ic = InteractiveClean( vis=ms_path, imagename=img, imsize=512, cell='12.0arcsec',
+                    specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz',
+                    width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', threshold='0.001Jy',
+                    niter=50, cycleniter=10, cyclefactor=3, scales=[0,3,10] )( )
+  CASA <2>: ic( )
+  CASA <3>: print(ic.masks( ))
+
