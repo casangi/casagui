@@ -122,8 +122,8 @@ class CubeMask:
                                            source.channel( slider.value, 0 )''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
-                                                            option: 18, next: 78, prev: 80, escape: 27, space: 32,
-                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
+                                                            option: 18, next: 33, prev: 34, escape: 27, space: 32,
+                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16, meta: 91};''',
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
@@ -508,16 +508,17 @@ class CubeMask:
                      ### code manages the permitted key combinations while most of the state management is handled
                      ### by the state management functions.
                      'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
-                                               document._key_state = { option: false, control: false, shift: false }
+                                               document._key_state = { option: false, control: false, shift: false, meta: false }
                                                window.addEventListener( 'keydown',
                                                    (e) => { // prevent default behavior when inside image cube area
+
                                                             if ( document._inside_image_cube &&
-                                                                 document._key_state.option === true ) e.preventDefault( ) } )
+                                                                 document._key_state.meta === true ) e.preventDefault(); }) 
                                                document.addEventListener( 'keydown',
                                                    (e) => { if ( e.keyCode === keymap.shift ) {
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
-                                                            } else if ( document._key_state.option === true ) {     // option key
+                                                            } else if ( document._key_state.meta === true ) {     // option key
                                                                 if ( document._key_state.control === true ) {       // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
@@ -547,12 +548,12 @@ class CubeMask:
                                                                     const shifted = document._key_state.shift
                                                                     if ( e.keyCode === keymap.control ) {
                                                                         let cm = curmasks( )
-                                                                        if ( document._key_state.option )
+                                                                        if ( document._key_state.meta )
                                                                             state_clear_cursor( cm )
                                                                             document._key_state.control = true
                                                                             state_clear_cursor( cm )
                                                                         } else if ( e.keyCode === keymap.next ) {
-                                                                            state_next_cursor( )
+                                                                            state_next_cursor( );
                                                                         } else if ( e.keyCode === keymap.prev ) {
                                                                             state_prev_cursor( )
                                                                         } else if ( e.keyCode === keymap.space ) {
@@ -591,8 +592,8 @@ class CubeMask:
                                                                     }                                              // no control key
                                                             } else {                                               // no option key
                                                                     // option key first pressed
-                                                                    if ( e.keyCode === keymap.option ) {
-                                                                        document._key_state.option = true
+                                                                    if ( e.keyCode === keymap.meta ) {
+                                                                        document._key_state.meta = true
                                                                         if ( document._key_state.control !== true ) state_initialize_cursor( )
                                                                     }
                                                                     else if ( e.keyCode === keymap.control ) {
@@ -602,12 +603,12 @@ class CubeMask:
                                                           } )
                                                document.addEventListener( 'keyup',
                                                    (e) => { // option key released
-                                                            if ( e.keyCode === keymap.option ) {
-                                                                document._key_state.option = false
+                                                            if ( e.keyCode === keymap.meta ) {
+                                                                document._key_state.meta = false
                                                                 state_clear_cursor( )
                                                             } else if ( e.keyCode === keymap.control ) {
                                                                 document._key_state.control = false
-                                                                if ( document._key_state.option === true )
+                                                                if ( document._key_state.meta === true )
                                                                     state_initialize_cursor( )
                                                             } else if ( e.keyCode === keymap.shift ) {
                                                                 document._key_state.shift = false
@@ -941,7 +942,7 @@ class CubeMask:
                                  #makemaskhelp td, #makemaskhelp th {
                                      border: 1px solid #ddd;
                                      text-align: left;
-                                     padding: 8px;
+                                     padding: 10px;
                                  }
                                  #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
                              </style>
@@ -949,8 +950,8 @@ class CubeMask:
                                <tr><th>buttons/key(s)</th><th>description</th></tr>
                                EXTRAROWS
                                <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                               <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
-                               <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
+                               <tr><td><b>option</b>-<b>page up</b></td><td>move cursor to next mask</td></tr>
+                               <tr><td><b>option</b>-<b>page down</b></td><td>move cursor to previous mask</td></tr>
                                <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
                                <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
@@ -969,7 +970,7 @@ class CubeMask:
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                                <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
-                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
+                           </table>'''.replace('option','option' if platform == 'darwin' else 'meta')
                                       .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
                                       .replace('EXTRAROWS','\n'.join(rows)),
                      visible=False, width=650 ), **kw )
