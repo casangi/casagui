@@ -173,7 +173,7 @@ of :code:`tclean` executions which will be run during an *interactive clean*
 session:
 
 .. image:: iclean-control-exit.png
-   :width: 150
+   :width: 300
    :alt: Image Control 1
 
 The row of text boxes make up the *input section* which provides values for
@@ -201,7 +201,7 @@ in Python, and the *last set of masks* will be returned. But when the stop butto
 orange:
 
 .. image:: iclean-control-pause.png
-   :width: 400
+   :width: 300
    :alt: Image Control 2
 
 clicking the stop button when it is **yellow** will cause iteration to stop after the
@@ -215,14 +215,14 @@ the convergence quality components are updated. These indicators include the
 *convergence plot*:
 
 .. image:: iclean-convergence-plot.png
-   :width: 400
+   :width: 500
    :alt: Convergence Plot
 
 This plot includes both *Peak Residual* and *Total Flux* plots. The statistics plot
 includes image statistics for the channel currently being displayed:
 
 .. image:: iclean-channel-statistics.png
-   :width: 150
+   :width: 300
    :alt: Channel Statistics
 
 Both of these are updated with the completion of each iteration and when the user
