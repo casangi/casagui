@@ -165,6 +165,15 @@ To implement this, it uses
 component to provide most of the interaction, and adds extra widgets to
 control tclean and display convergence and statistics information.
 
+Overview
+````````
+This diagram provides a view of the overall layout of the interactive clean
+application:
+
+.. image:: iclean-overview.png
+   :width: 600
+   :alt: Layout Overview
+
 Control
 ```````
 
