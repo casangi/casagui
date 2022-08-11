@@ -255,7 +255,7 @@ channel indicated by the vertical cursor tracking line.
 
 Implementation
 ``````````````
-Like the new :code:`MakeMask` app, the :code:`InteractiveClean`app uses the
+Like the new :code:`MakeMask` app, the :code:`InteractiveClean` app uses the
 :code:`CubeMask` component to implement the display and interaction with the
 *dirty image cube* created by :code:`tclean`. The
 :doc:`CubeMask <../components/cube_mask.rst>` provides a collection of widgets
