@@ -163,7 +163,7 @@ provides a simple GUI interface to
 To implement this, it uses
 `CubeMask <https://casagui.readthedocs.io/en/latest/design/components/cube_mask.html>`_
 component to provide most of the interaction, and adds extra widgets to
-control tclean and display convergence and statistics information.
+control :code:`tclean` and display convergence and statistics information.
 
 Overview
 ````````
@@ -301,7 +301,7 @@ started. This eventloop processes the events that are used to update the GUI, co
 
 When the `Bokeh <https://bokeh.org/>`_ framework is used for scripting from the Python prompt
 it creates a GUI with all of the interactions that can be predefined at build time, but updates
-from Python that cannot be pre-determined (without, for example, loading in the whole image cube)
+from Python that cannot be predetermined (without, for example, loading in the whole image cube)
 must be handled outside of Bokeh. Interactions that fall into this category are things like
 updating the channel plot in response to user input or updating the convergence plot with
 convergence information returned by :code:`tclean`. The communication for these updates is
@@ -312,10 +312,10 @@ happens via two websockets:
 
 * _control_ - pause or stop further calls to :code:`tclean`
 
-* _convergece_ - update convergence quality plot
+* _convergence_ - update convergence quality plot
 
 These are two separate websockets to ensure that _control_ messages are not delayed due
-to convergenve information updates from :code:`tclean` executions. More information about
+to convergence information updates from :code:`tclean` executions. More information about
 :code:`CubeMask` is available in the :doc:`its design document <../components/cube_mask`.
 
 In response to control commands from the interactive clean GUI, :code:`tclean` is called
@@ -324,3 +324,15 @@ browser to update the GUI and the process repeats.
 
 Future Work
 ```````````
+The fundamental work that remains for the *interactive clean* application involves using
+the `IPython Jupyter Kernel <https://ipython.readthedocs.io/en/stable/install/kernel_install.html>`_
+as the process which runs :code:`tclean`. This seems like it should be possible with no
+significant, known problems. Early in our abbreviated trade study, we tested this with
+a simpler example (:code:`plotants`) without significant issues. Making this functionality
+available means that interactive clean could be used from a Jupyter Notebook and it could
+be integrated into a stand-alone, desktop app based on `Electron <https://www.electronjs.org/>`_.
+Both of these were tested in the trade study. The final step that was not tested in the
+trade study is :code:`tclean` executing in a **remote** IPython Kernel. The documentation
+indicates that this should be possible. Once this is available, it will be possible to
+start a desktop application which then runs CASA tasks in a remote kernel executing on
+an NRAO cluster (or other compute resource).
