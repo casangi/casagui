@@ -258,6 +258,6 @@ Implementation
 Like the new :code:`MakeMask` app, the :code:`InteractiveClean` app uses the
 :code:`CubeMask` component to implement the display and interaction with the
 *dirty image cube* created by :code:`tclean`. The
-:doc:`CubeMask <../components/cube_mask.rst>` provides a collection of widgets
+:doc:`CubeMask component <../components/cube_mask>` provides a collection of widgets
 centered around image cubes. These widgets can be mixed into different
 applications.
