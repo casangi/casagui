@@ -41,6 +41,7 @@ from links import *
 extensions = [ 'sphinx.ext.autodoc',
                'sphinx.ext.napoleon',
                'sphinx.ext.todo',
+               'sphinx.ext.intersphinx',
                'autoapi.extension',
                'xref'
              ]
