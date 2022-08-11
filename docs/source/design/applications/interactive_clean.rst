@@ -253,11 +253,74 @@ used to go to a specific channel as indicated by the vertical cursor tracking li
 Clicking in the *spectrum display* will cause the channel display to go to the
 channel indicated by the vertical cursor tracking line.
 
-Implementation
-``````````````
+Implementation Details
+``````````````````````
 Like the new :code:`MakeMask` app, the :code:`InteractiveClean` app uses the
 :code:`CubeMask` component to implement the display and interaction with the
 *dirty image cube* created by :code:`tclean`. The
 :doc:`CubeMask component <../components/cube_mask>` provides a collection of widgets
 centered around image cubes. These widgets can be mixed into different
 applications.
+
+The :code:`InteractiveClean` application is available as part of the :code:`casagui`
+Python package. This package is
+`available from PyPI <https://pypi.org/project/casagui/>`_.
+It can be installed like::
+
+  bash$ pip install casagui
+
+To run :code:`InteractiveClean` the :code:`casatasks` package must also be installed.
+
+Once installed, the :code:`InteractiveClean` application can be imported and run from
+the user's Python session like::
+
+  >>> from casagui.apps import InteractiveClean
+  >>> InteractiveClean( vis=ms_path, imagename=img, imsize=512, cell='12.0arcsec',
+                        specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz',
+                        width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', threshold='0.001Jy',
+                        niter=50, cycleniter=10, cyclefactor=3, scales=[0,3,10] )( )
+
+In general, the :code:`InteractiveClean` constructor takes a subset of parameters accepted
+by `tclean <https://casadocs.readthedocs.io/en/latest/api/tt/casatasks.imaging.tclean.html>`_.
+All of the masks used in running interactive clean are available from the
+:code:`InteractiveClean` object. To get access to the list of masks, you would create
+the object as a separate statement::
+
+  >>> ic = InteractiveClean( vis=ms_path, imagename=img, imsize=512, cell='12.0arcsec',
+                    specmode='cube', interpolation='nearest', nchan=5, start='1.0GHz',
+                    width='0.2GHz', pblimit=-1e-05, deconvolver='hogbom', threshold='0.001Jy',
+                    niter=50, cycleniter=10, cyclefactor=3, scales=[0,3,10] )( )
+  >>> ic( )
+  >>> print(ic.masks( ))
+
+In these examples, the :code:`InteractiveClean` function call (e.g. :code:`ic( )`) displays
+the GUI that was specified in the :code:`InteractiveClean` object constructor. It is at this
+point that the `asyncio <https://docs.python.org/3/library/asyncio.html>`_ eventloop is
+started. This eventloop processes the events that are used to update the GUI, control the
+:code:`tclean` invocations and finally stop and return control to the user.
+
+When the `Bokeh <https://bokeh.org/>`_ framework is used for scripting from the Python prompt
+it creates a GUI with all of the interactions that can be predefined at build time, but updates
+from Python that cannot be pre-determined (without, for example, loading in the whole image cube)
+must be handled outside of Bokeh. Interactions that fall into this category are things like
+updating the channel plot in response to user input or updating the convergence plot with
+convergence information returned by :code:`tclean`. The communication for these updates is
+handled with `websockets <https://websockets.readthedocs.io/en/stable/>`_. This is true for the
+*cube display* functionality in :code:`CubeMask` as well as the additional functionality
+that the interactive clean implementation adds. The communication for this added functionality
+happens via two websockets:
+
+* _control_ - pause or stop further calls to :code:`tclean`
+
+* _convergece_ - update convergence quality plot
+
+These are two separate websockets to ensure that _control_ messages are not delayed due
+to convergenve information updates from :code:`tclean` executions. More information about
+:code:`CubeMask` is available in the :doc:`its design document <../components/cube_mask`.
+
+In response to control commands from the interactive clean GUI, :code:`tclean` is called
+in Python when the websocket events are received. The results are then transferred to the
+browser to update the GUI and the process repeats.
+
+Future Work
+```````````
