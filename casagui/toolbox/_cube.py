@@ -523,6 +523,7 @@ class CubeMask:
                                                                 if ( document._key_state.control === true ) {       // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
+                                                                        console.log('up');
                                                                         const prev_masks = curmasks( )
                                                                         let cur_masks = null
                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
@@ -535,6 +536,7 @@ class CubeMask:
                                                                             cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
                                                                         }
                                                                     } else if ( e.keyCode === keymap.down ) {
+                                                                        console.log('down');
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
                                                                             source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
