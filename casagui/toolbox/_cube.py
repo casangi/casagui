@@ -1,4 +1,4 @@
-########################################################################
+#######################################################################
 #
 # Copyright (C) 2022
 # Associated Universities, Inc. Washington DC, USA.
@@ -122,9 +122,8 @@ class CubeMask:
                                            source.channel( slider.value, 0 )''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
-                                                            option: 18, next: 33, prev: 34, escape: 27, space: 32,
-                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16, 
-                                                            insert: 45, meta: 91};''',
+                                                            option: 18, next: 78, prev: 80, escape: 27, space: 32,
+                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
@@ -145,7 +144,7 @@ class CubeMask:
                                                source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
                                                                                 // OPT sets the cursor on the first poly
                                                source._cursor = -1              // OPT-n or OPT-p move the _cursor through polys for current channel
-                                                                                // OPT-INSERT adds cursor to _selections
+                                                                                // OPT-SPACE adds cursor to _selections
                                                                                 // OPT-c copies _selections to the _copy_buffer and clears _selections
                                                                                 // OPT-v pastes _copy_buffer to a new channel
                                                                                 // OPT-SHIFT-v pastes _copy_buffer to ALL channels
@@ -509,18 +508,18 @@ class CubeMask:
                      ### code manages the permitted key combinations while most of the state management is handled
                      ### by the state management functions.
                      'setup-key-mgmt':  '''if ( typeof(document._key_state) === 'undefined' ) {
-                                               document._key_state = { option: false, control: false, shift: false, meta: false }
+                                               document._key_state = { option: false, control: false, shift: false }
                                                window.addEventListener( 'keydown',
                                                    (e) => { // prevent default behavior when inside image cube area
-
                                                             if ( document._inside_image_cube &&
-                                                                 document._key_state.meta === true ) e.preventDefault(); }) 
+                                                                 document._key_state.option === true ) e.preventDefault( ) } )
                                                document.addEventListener( 'keydown',
                                                    (e) => { if ( e.keyCode === keymap.shift ) {
                                                                 // shift key is independent of the control/option state
                                                                 document._key_state.shift = true
-                                                            } else if ( document._key_state.meta === true ) {     // option key
-                                                                if ( document._key_state.control === true ) {       // control key
+                                                            } else if ( document._key_state.option === true ) {     // option key
+                                                                if ( document._key_state.control === true &&
+                                                                     document._inside_image_cube ) {                // control key
                                                                                                                     // arrow (no opt key) up moves through channels
                                                                     if ( e.keyCode === keymap.up ) {
                                                                         const prev_masks = curmasks( )
@@ -547,17 +546,18 @@ class CubeMask:
                                                                 else {                                         // no control key
                                                                     const shape = source.image_source.shape
                                                                     const shifted = document._key_state.shift
-                                                                    if ( e.keyCode === keymap.control ) {
+                                                                    if ( e.keyCode === keymap.control &&
+                                                                         document._inside_image_cube ) {
                                                                         let cm = curmasks( )
-                                                                        if ( document._key_state.meta )
+                                                                        if ( document._key_state.option )
                                                                             state_clear_cursor( cm )
                                                                             document._key_state.control = true
                                                                             state_clear_cursor( cm )
                                                                         } else if ( e.keyCode === keymap.next ) {
-                                                                            state_next_cursor( );
+                                                                            state_next_cursor( )
                                                                         } else if ( e.keyCode === keymap.prev ) {
                                                                             state_prev_cursor( )
-                                                                        } else if ( e.keyCode === keymap.insert ) {
+                                                                        } else if ( e.keyCode === keymap.space ) {
                                                                             let cm = curmasks( )
                                                                             state_cursor_to_selection( cm )
                                                                         } else if ( e.keyCode === keymap.escape ) {
@@ -593,9 +593,10 @@ class CubeMask:
                                                                     }                                              // no control key
                                                             } else {                                               // no option key
                                                                     // option key first pressed
-                                                                    if ( e.keyCode === keymap.meta ) {
-                                                                        document._key_state.meta = true
-                                                                        if ( document._key_state.control !== true ) state_initialize_cursor( )
+                                                                    if ( e.keyCode === keymap.option ) {
+                                                                        document._key_state.option = true
+                                                                        if ( document._key_state.control !== true &&
+                                                                             document._inside_image_cube ) state_initialize_cursor( )
                                                                     }
                                                                     else if ( e.keyCode === keymap.control ) {
                                                                         document._key_state.control = true
@@ -604,12 +605,12 @@ class CubeMask:
                                                           } )
                                                document.addEventListener( 'keyup',
                                                    (e) => { // option key released
-                                                            if ( e.keyCode === keymap.meta ) {
-                                                                document._key_state.meta = false
+                                                            if ( e.keyCode === keymap.option ) {
+                                                                document._key_state.option = false
                                                                 state_clear_cursor( )
                                                             } else if ( e.keyCode === keymap.control ) {
                                                                 document._key_state.control = false
-                                                                if ( document._key_state.meta === true )
+                                                                if ( document._key_state.option === true )
                                                                     state_initialize_cursor( )
                                                             } else if ( e.keyCode === keymap.shift ) {
                                                                 document._key_state.shift = false
@@ -713,8 +714,15 @@ class CubeMask:
             self._image.plot_height = 400
             self._image.plot_width = 400
 
-            self._image.js_on_event( MouseEnter, CustomJS( args=dict( ), code='''document._inside_image_cube = true''' ) )
-            self._image.js_on_event( MouseLeave, CustomJS( args=dict( ), code='''document._inside_image_cube = false''' ) )
+            self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''document._inside_image_cube = true
+                                                                                 if ( document._key_state.option &&
+                                                                                      document._key_state.control !== true ) state_initialize_cursor( )''' ) )
+            self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ), code=self._js['func-curmasks']( ) +
+                                                                              self._js['key-state-funcs'] +
+                                                                              '''document._inside_image_cube = false
+                                                                                 if ( document._key_state.option ) state_clear_cursor( )''' ) )
 
             self._image.js_on_event( SelectionGeometry,
                                          CustomJS( args=dict( source=self._image_source,
@@ -943,7 +951,7 @@ class CubeMask:
                                  #makemaskhelp td, #makemaskhelp th {
                                      border: 1px solid #ddd;
                                      text-align: left;
-                                     padding: 10px;
+                                     padding: 8px;
                                  }
                                  #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
                              </style>
@@ -951,9 +959,9 @@ class CubeMask:
                                <tr><th>buttons/key(s)</th><th>description</th></tr>
                                EXTRAROWS
                                <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                               <tr><td><b>option</b>-<b>page up</b></td><td>move cursor to next mask</td></tr>
-                               <tr><td><b>option</b>-<b>page down</b></td><td>move cursor to previous mask</td></tr>
-                               <tr><td><b>option</b>-<b>insert</b></td><td>add mask to selection set</td></tr>
+                               <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
+                               <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
+                               <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
                                <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
                                <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
@@ -971,7 +979,7 @@ class CubeMask:
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                                <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
-                           </table>'''.replace('option','option' if platform == 'darwin' else 'meta')
+                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
                                       .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
                                       .replace('EXTRAROWS','\n'.join(rows)),
                      visible=False, width=650 ), **kw )
