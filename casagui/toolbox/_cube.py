@@ -123,7 +123,8 @@ class CubeMask:
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
                                                             option: 18, next: 33, prev: 34, escape: 27, space: 32,
-                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16, meta: 91};''',
+                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16, 
+                                                            insert: 45, meta: 91};''',
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
@@ -144,7 +145,7 @@ class CubeMask:
                                                source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
                                                                                 // OPT sets the cursor on the first poly
                                                source._cursor = -1              // OPT-n or OPT-p move the _cursor through polys for current channel
-                                                                                // OPT-SPACE adds cursor to _selections
+                                                                                // OPT-INSERT adds cursor to _selections
                                                                                 // OPT-c copies _selections to the _copy_buffer and clears _selections
                                                                                 // OPT-v pastes _copy_buffer to a new channel
                                                                                 // OPT-SHIFT-v pastes _copy_buffer to ALL channels
@@ -556,7 +557,7 @@ class CubeMask:
                                                                             state_next_cursor( );
                                                                         } else if ( e.keyCode === keymap.prev ) {
                                                                             state_prev_cursor( )
-                                                                        } else if ( e.keyCode === keymap.space ) {
+                                                                        } else if ( e.keyCode === keymap.insert ) {
                                                                             let cm = curmasks( )
                                                                             state_cursor_to_selection( cm )
                                                                         } else if ( e.keyCode === keymap.escape ) {
@@ -952,7 +953,7 @@ class CubeMask:
                                <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
                                <tr><td><b>option</b>-<b>page up</b></td><td>move cursor to next mask</td></tr>
                                <tr><td><b>option</b>-<b>page down</b></td><td>move cursor to previous mask</td></tr>
-                               <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
+                               <tr><td><b>option</b>-<b>insert</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
                                <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
                                <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
