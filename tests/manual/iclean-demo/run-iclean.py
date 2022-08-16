@@ -1,6 +1,7 @@
 #from casagui.bokeh.state import initialize_bokeh
 #initialize_bokeh( "../../../casalib/dist/esbuild/casalib-v0.0.1.min.js",
 #                  "../../../casaguijs/dist/casaguijs.js" )                        ### local build
+#initialize_bokeh( "../../../casalib/dist/esbuild/casalib-v0.0.2.min.js" )
 import os
 import ssl
 import certifi
