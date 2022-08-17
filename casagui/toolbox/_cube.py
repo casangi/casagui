@@ -516,8 +516,14 @@ class CubeMask:
                      ### by the state management functions.
                      'setup-key-mgmt':  '''if ( typeof(document._hotkeys_initialized) === 'undefined' ) {
                                                document._hotkeys_initialized = true
+                                               //****************************************************
+                                               //*** NEED TO IMPLEMENT STOKES TRAVERSAL WITH      ***
+                                               //*** Alt+Shift+Up and Alt+Shift+Down when an      ***
+                                               //*** image with multiple stokes axes is available ***
+                                               //****************************************************
+
                                                // next channel
-                                               window.hotkeys( 'ctrl+alt+up', {scope: 'channel'},
+                                               window.hotkeys( 'alt+up', {scope: 'channel'},
                                                                (e) => { const prev_masks = curmasks( )
                                                                         let cur_masks = null
                                                                         e.preventDefault( )
@@ -531,7 +537,7 @@ class CubeMask:
                                                                             cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
                                                                         } } )
                                                // previous channel
-                                               window.hotkeys( 'ctrl+alt+down', { scope: 'channel'},
+                                               window.hotkeys( 'alt+down', { scope: 'channel'},
                                                                (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
@@ -562,38 +568,38 @@ class CubeMask:
                                                                (e) => { e.preventDefault( )
                                                                         state_remove_mask( ) } )
                                                // move selection set up one pixel
-                                               window.hotkeys( 'alt+up', { scope: 'channel' },
+                                               window.hotkeys( 'up', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_translate_selection( 0, 1 ) } )
                                                // move selection set up several pixel
-                                               window.hotkeys( 'alt+shift+up', { scope: 'channel' },
+                                               window.hotkeys( 'shift+up', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         const shape = source.image_source.shape
                                                                         state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
                                                // move selection set down one pixel
-                                               window.hotkeys( 'alt+down', { scope: 'channel' },
+                                               window.hotkeys( 'down', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_translate_selection( 0, -1 ) } )
                                                // move selection set down several pixel
-                                               window.hotkeys( 'alt+shift+down', { scope: 'channel' },
+                                               window.hotkeys( 'shift+down', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         const shape = source.image_source.shape
                                                                         state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
                                                // move selection set left one pixel
-                                               window.hotkeys( 'alt+left', { scope: 'channel' },
+                                               window.hotkeys( 'left', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_translate_selection( -1, 0 ) } )
                                                // move selection set left several pixel
-                                               window.hotkeys( 'alt+shift+left', { scope: 'channel' },
+                                               window.hotkeys( 'shift+left', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         const shape = source.image_source.shape
                                                                         state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
                                                // move selection set right one pixel
-                                               window.hotkeys( 'alt+right', { scope: 'channel' },
+                                               window.hotkeys( 'right', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_translate_selection( 1, 0 ) } )
                                                // move selection set right several pixel
-                                               window.hotkeys( 'alt+shift+right', { scope: 'channel' },
+                                               window.hotkeys( 'shift+right', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         const shape = source.image_source.shape
                                                                         state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
@@ -978,18 +984,18 @@ class CubeMask:
                                <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
                                <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
-                               <tr><td><b>option</b>-<b>down</b></td><td>move selection set down one pixel</td></tr>
-                               <tr><td><b>option</b>-<b>up</b></td><td>move selection set up one pixel</td></tr>
-                               <tr><td><b>option</b>-<b>left</b></td><td>move selection one pixel to the left</td></tr>
-                               <tr><td><b>option</b>-<b>right</b></td><td>move selection one pixel to the right</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>up</b></td><td>to next channel</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>down</b></td><td>to previous channel</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>right</b></td><td>to next stokes axis</td></tr>
-                               <tr><td><b>option</b>-<b>control</b>-<b>left</b></td><td>to previous stokes axis</td></tr>
+                               <tr><td><b>down</b></td><td>move selection set down one pixel</td></tr>
+                               <tr><td><b>up</b></td><td>move selection set up one pixel</td></tr>
+                               <tr><td><b>left</b></td><td>move selection one pixel to the left</td></tr>
+                               <tr><td><b>right</b></td><td>move selection one pixel to the right</td></tr>
+                               <tr><td><b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
+                               <tr><td><b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
+                               <tr><td><b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
+                               <tr><td><b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
+                               <tr><td><b>option</b>-<b>up</b></td><td>to next channel</td></tr>
+                               <tr><td><b>option</b>-<b>down</b></td><td>to previous channel</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis</td></tr>
                                <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
