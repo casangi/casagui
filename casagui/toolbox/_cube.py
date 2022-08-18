@@ -630,13 +630,13 @@ class CubeMask:
                                                // initialize for cursor operations
                                                window.hotkeys( '*', { keyup: true, scope: 'channel' },
                                                                (e,handler) => { if ( e.type === 'keydown' ) {
-                                                                                    if ( e.key === 'Alt' && ! window.hotkeys.control )
+                                                                                    if ( (e.key === 'Alt' || e.key == 'Meta') && ! window.hotkeys.control )
                                                                                         state_initialize_cursor( )
                                                                                     if ( e.key === 'Control' && window.hotkeys.option )
                                                                                         state_clear_cursor( curmasks( ) )
                                                                                 }
                                                                                 if ( e.type === 'keyup' ) {
-                                                                                    if ( e.key === 'Alt' )
+                                                                                    if ( e.key === 'Alt' || e.key == 'Meta' )
                                                                                         state_clear_cursor( )
                                                                                     if ( e.key === 'Control' && window.hotkeys.option )
                                                                                         state_initialize_cursor( )
