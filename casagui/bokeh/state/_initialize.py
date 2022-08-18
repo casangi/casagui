@@ -120,7 +120,12 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            bokehlib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{bokehlib}"
+            ### poor availablity (fails to load, server not available etc (even from NRAO network):
+            #bokehlib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{bokehlib}"
+            ### does not work at all (CERT issue?):
+            #bokehlib_url = f"https://raw.githubusercontent.com/casangi/casagui-js/main/runtime/{CASAGUIJS_VERSION}/{bokehlib}"
+            bokehlib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{bokehlib}"
+
         bokehlib_libs = [ bokehlib_url ]
     else:
         bokehlib_libs = [ bokeh ] if isinstance(bokeh,str) else bokeh
@@ -141,7 +146,11 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
             ### ------------------------------------------------------------------------------------------
-            jslib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{jslib}"
+            ### poor availablity (fails to load, server not available etc (even from NRAO network):
+            #jslib_url = f"https://casa.nrao.edu/download/javascript/casaguijs/{CASAGUIJS_VERSION}/{jslib}"
+            ### does not work at all (CERT issue?):
+            #jslib_url = f"https://raw.githubusercontent.com/casangi/casagui-js/main/runtime/{CASAGUIJS_VERSION}/{jslib}"
+            jslib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{jslib}"
         jslib_libs = [ jslib_url ]
     else:
         jslib_libs = [ js ] if isinstance(js,str) else js
