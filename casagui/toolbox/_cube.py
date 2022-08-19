@@ -556,7 +556,7 @@ class CubeMask:
                                                                (e) => { e.preventDefault( )
                                                                         state_prev_cursor( )} )
                                                // add region to selection
-                                               window.hotkeys( 'alt+space', { scope: 'channel' },
+                                               window.hotkeys( 'alt+space,alt+/', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_cursor_to_selection( curmasks( ) ) } )
                                                // clear selection
