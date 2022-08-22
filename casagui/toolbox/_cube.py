@@ -525,17 +525,13 @@ class CubeMask:
 
                                                // next channel
                                                window.hotkeys( 'alt+up', {scope: 'channel'},
-                                                               (e) => { const prev_masks = curmasks( )
-                                                                        let cur_masks = null
-                                                                        e.preventDefault( )
+                                                               (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
                                                                             // wrap round to the first channel
                                                                             source.channel( 0, source.cur_chan[0] )
-                                                                            cur_masks = curmasks( [ source.cur_chan[0], 0 ] )
                                                                         } else {
                                                                             // advance to the next channel
                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
-                                                                            cur_masks = curmasks( [ source.cur_chan[0], source.cur_chan[1] + 1 ] )
                                                                         } } )
                                                // previous channel
                                                window.hotkeys( 'alt+down', { scope: 'channel'},
@@ -546,6 +542,27 @@ class CubeMask:
                                                                         } else {
                                                                             // wrap round to the last channel
                                                                             source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
+                                                                        } } )
+
+                                               // next polarization/stokes
+                                               window.hotkeys( 'alt+right', {scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
+                                                                        if ( source.cur_chan[0] + 1 >= source.num_chans[0] ) {
+                                                                            // wrap round to the first channel
+                                                                            source.channel( source.cur_chan[1], 0 )
+                                                                        } else {
+                                                                            // advance to the next channel
+                                                                            source.channel( source.cur_chan[1], source.cur_chan[0] + 1 )
+                                                                        } } )
+                                               // previous polarization/stokes
+                                               window.hotkeys( 'alt+left', { scope: 'channel'},
+                                                               (e) => { e.preventDefault( )
+                                                                        if ( source.cur_chan[0] - 1 >= 0 ) {
+                                                                            // advance to the prev channel
+                                                                            source.channel( source.cur_chan[1], source.cur_chan[0] - 1 )
+                                                                        } else {
+                                                                            // wrap round to the last channel
+                                                                            source.channel( source.cur_chan[1], source.num_chans[0] - 1)
                                                                         } } )
 
                                                // next region
