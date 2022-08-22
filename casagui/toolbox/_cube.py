@@ -548,15 +548,15 @@ class CubeMask:
                                                                         } } )
 
                                                // next region
-                                               window.hotkeys( 'alt+n', { scope: 'channel' },
+                                               window.hotkeys( 'alt+]', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_next_cursor( )} )
                                                // prev region
-                                               window.hotkeys( 'alt+p', { scope: 'channel' },
+                                               window.hotkeys( 'alt+[', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_prev_cursor( )} )
                                                // add region to selection
-                                               window.hotkeys( 'alt+space,alt+/', { scope: 'channel' },
+                                               window.hotkeys( 'alt+space, alt+/', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_cursor_to_selection( curmasks( ) ) } )
                                                // clear selection
@@ -980,9 +980,9 @@ class CubeMask:
                                <tr><th>buttons/key(s)</th><th>description</th></tr>
                                EXTRAROWS
                                <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                               <tr><td><b>option</b>-<b>n</b></td><td>move cursor to next mask</td></tr>
-                               <tr><td><b>option</b>-<b>p</b></td><td>move cursor to previous mask</td></tr>
-                               <tr><td><b>option</b>-<b>space</b></td><td>add mask to selection set</td></tr>
+                               <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
+                               <tr><td><b>option</b>-<b>[</b></td><td>move cursor to previous mask</td></tr>
+                               <tr><td><b>option</b>-<b>/</b></td><td>add mask to selection set</td></tr>
                                <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
                                <tr><td><b>down</b></td><td>move selection set down one pixel</td></tr>
                                <tr><td><b>up</b></td><td>move selection set up one pixel</td></tr>
