@@ -116,15 +116,15 @@ class CubeMask:
                      ###
                      ### to fix a problem where moving the slider very quickly caused oscillation between
                      ### two slider values (slider would just cycle back and forth) these two related
-                     ### updates are separated by document._inside_image_cube. When the cursor is inside,
-                     ### hotkeys are active (and slider is updated). When outside, the slider updates
-                     ### the channel.
+                     ### updates are separated by the hotkeys scope. When the scope is 'channel' then
+                     ### the cursor is inside, hotkeys are active (and slider is updated). When outside
+                     ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
-                     'slider_w_stats':  '''if ( ! document._inside_image_cube ) {
+                     'slider_w_stats':  '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
                                            }
                                            ''',
-                     'slider_wo_stats': '''if ( ! document._inside_image_cube ) {
+                     'slider_wo_stats': '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, 0 )
                                            }''',
                      ### setup maping of keys to numeric values
@@ -501,15 +501,16 @@ class CubeMask:
                                            cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
                                                const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
                                                const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
-
-                                               // set Xs for the current annotation add any X translation from current poly
-                                               mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
-                                               // set Ys for the current annotation add any Y translation from current poly
-                                               mask_annotation.ys = mask_poly.geometry.ys.reduce( 
-                                                                        (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
-                                                                        // restore selections for this channel
-                                                                        if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
-                                                                    } )
+                                               if ( mask_poly ) {                                           // sometimes this is undefined when
+                                                                                                            //    releasing the option key
+                                                   // set Xs for the current annotation add any X translation from current poly
+                                                   mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
+                                                   // set Ys for the current annotation add any Y translation from current poly
+                                                   mask_annotation.ys = mask_poly.geometry.ys.reduce(
+                                                                            (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
+                                                                            // restore selections for this channel
+                                                                            if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
+                                               } } )
                                                cb_obj._cur_chan_prev = cb_obj.cur_chan''',
                      ### invoke key state management functions in response to keyboard events in the document. this
                      ### code manages the permitted key combinations while most of the state management is handled
@@ -564,7 +565,7 @@ class CubeMask:
                                                                (e) => { e.preventDefault( )
                                                                         state_clear_selection( ) } )
                                                // delete region identified by cursor
-                                               window.hotkeys( 'alt+del', { scope: 'channel' },
+                                               window.hotkeys( 'alt+del,alt+backspace', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         state_remove_mask( ) } )
                                                // move selection set up one pixel
@@ -928,7 +929,7 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=( '''if ( document._inside_image_cube ) slider.value = cb_obj.cur_chan[1]''' if
+                                                               code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                       self._slider else '') + self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
 
     def js_obj( self ):
