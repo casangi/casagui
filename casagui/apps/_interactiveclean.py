@@ -699,6 +699,46 @@ class InteractiveClean:
         self._control['help'].js_on_click( CustomJS( args=dict( help=self._cube.help( ) ),
                                                      code='''if ( help.visible == true ) help.visible = false
                                                              else help.visible = true''' ) )
+
+        self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
+                                                                          slider=self._fig['slider'],
+                                                                          status=self._status['stopcode'] ),
+                                                               code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
+                                                                       if ( values.length > 2 ) {
+                                                                         status._error_set = true
+                                                                         status.text = '<div>enter at most two indexes</div>'
+                                                                       } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
+                                                                         status._error_set = true
+                                                                         status.text = '<div>invalid channel entered</div>'
+                                                                       } else {
+                                                                         if ( status._error_set ) {
+                                                                           status._error_set = false
+                                                                           status.text = '<div/>'
+                                                                         }
+                                                                         if ( values.length == 1 ) {
+                                                                           if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
+                                                                             status.text= `<div>moving to channel ${values[0]}</div>`
+                                                                             slider.value = values[0]
+                                                                           } else {
+                                                                             status._error_set = true
+                                                                             status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                           }
+                                                                         } else if ( values.length == 2 ) {
+                                                                           if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
+                                                                             status._error_set = true
+                                                                             status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                           } else {
+                                                                             if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
+                                                                               status._error_set = true
+                                                                               status.text = `<div>stokes ${values[1]} out of range</div>`
+                                                                             } else {
+                                                                               status.text= `<div>moving to channel ${values[0]}/${values[1]}</div>`
+                                                                               slider.value = values[0]
+                                                                               img.channel( values[0], values[1] )
+                                                                             }
+                                                                           }
+                                                                         }
+                                                                       }''' ) )
         self._cube.connect( )
         show(self._fig['layout'])
 
