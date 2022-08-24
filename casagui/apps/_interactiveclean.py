@@ -141,9 +141,9 @@ class InteractiveClean:
         self._error_result = err
         self.__stop( )
 
-    def __init__( self, vis, imagename, imsize=[100], cell="1arcsec", specmode='cube', nchan=-1, start='',
-                  width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom',
-                  niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[] ):
+    def __init__( self, vis, imagename, field='', spw='', imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', nchan=-1, start='',
+                  width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom', niter=0,
+                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5) ):
 
         ###
         ### used by data pipe (websocket) initialization function
@@ -162,10 +162,10 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( vis=vis, imagename=imagename, imsize=imsize, cell=cell, specmode=specmode, nchan=nchan,
-                               start=start, width=width, interpolation=interpolation, gridder=gridder, pblimit=pblimit,
-                               deconvolver=deconvolver, niter=niter, threshold=threshold, cycleniter=cycleniter,
-                               cyclefactor=cyclefactor, scales=scales,
+        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, imsize=imsize, cell=cell, phasecenter=phasecenter,
+                               stokes=stokes, specmode=specmode, nchan=nchan, start=start, width=width, interpolation=interpolation,
+                               gridder=gridder, pblimit=pblimit, deconvolver=deconvolver, niter=niter, threshold=threshold,
+                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust,
                                history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
                                                                                   if arg == 'mask' else history_value )
         ###
