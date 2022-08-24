@@ -86,6 +86,8 @@ Caveats
   `Chrome <https://www.google.com/chrome/>`_ and
   `Firefox <https://www.mozilla.org/en-US/firefox/new/>`_.
 
+- :code:`node.js` version 14.0.0 or higher is required
+
 Simple Usage Example
 --------------------
 
