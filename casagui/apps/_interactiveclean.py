@@ -256,6 +256,10 @@ class InteractiveClean:
                                                //                              stat_src.data = msg.stats
                                                //                          }
                                                //                        } )
+                                               if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
+                                                 const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
+                                                 niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                               }
                                                img_src.refresh( )
                                                if ( clean_msg !== undefined && 'convergence' in clean_msg ) {
                                                    // save convergence information and update convergence using saved state
@@ -462,13 +466,13 @@ class InteractiveClean:
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
-                                 convergence=None )
+                                 convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
-                                 convergence=self._convergence_data )
+                                 convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
 
                 return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
-                             convergence=self._convergence_data )
+                             convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
