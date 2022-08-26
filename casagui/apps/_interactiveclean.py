@@ -521,7 +521,7 @@ class InteractiveClean:
                                                                  ids=self._ids['clean'] ),
                                                       code=self._js['initialize'] )
 
-        self._fig['convergence'] = figure( tooltips=[ ("x","$x"), ("y","$y"), ("value", "@image")],
+        self._fig['convergence'] = figure( tooltips=[ ("x","$x"), ("y","$y"), ("value", "(@peakRes, @modelFlux)")],
                                            output_backend="webgl", plot_height=180, plot_width=800,
                                            tools=[ ],
                                            title='Convergence', x_axis_label='Iteration', y_axis_label='Peak Residual' )
