@@ -716,30 +716,7 @@ class CubeMask:
             self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.1, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
-            self._image_source = ImageDataSource( image_source=self._pipe['image'],
-                                                  init_script=CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids ),
-                                                                        code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
-                                                                             self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
-                                                                             self._js['setup-key-mgmt'] +
-                                                                             """// This function is called to collect the masks and/or stop
-                                                                                source.done = ( ) => {
-                                                                                    function done_close_window( msg ) {
-                                                                                        if ( msg.result === 'stopped' ) {
-                                                                                            window.close()
-                                                                                        }
-                                                                                    }
-                                                                                    ctrl.send( ids['done'],
-                                                                                               { action: 'done', value: collect_masks( ) },
-                                                                                               done_close_window )
-                                                                                }
-                                                                                // exported functions -- enable/disable masking, retrieve masks etc.
-                                                                                source._masking_enabled = true
-                                                                                source.disable_masking = ( ) => source._masking_enabled = false
-                                                                                source.enable_masking = ( ) => source._masking_enabled = true
-                                                                                source.masks = ( ) => collect_masks( )
-                                                                                source.breadcrumbs = ( ) => source._mask_breadcrumbs
-                                                                                source.drop_breadcrumb = ( code ) => register_mask_change( code )
-                                                                    """) )
+            self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
             self._image = set_attributes( figure( output_backend="webgl",
                                                   tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
@@ -948,6 +925,33 @@ class CubeMask:
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
                                                                code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                       self._slider else '') + self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
+
+        ## this is in the connect function to allow for access to self._statistics_source
+        self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                                                              stats_source=self._statistics_source ),
+                                                              code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
+                                                                   self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
+                                                                   self._js['setup-key-mgmt'] +
+                                                                   """// This function is called to collect the masks and/or stop
+                                                                      source.done = ( ) => {
+                                                                          function done_close_window( msg ) {
+                                                                              if ( msg.result === 'stopped' ) {
+                                                                                  window.close()
+                                                                              }
+                                                                          }
+                                                                          ctrl.send( ids['done'],
+                                                                                     { action: 'done', value: collect_masks( ) },
+                                                                                     done_close_window )
+                                                                      }
+                                                                      // exported functions -- enable/disable masking, retrieve masks etc.
+                                                                      source._masking_enabled = true
+                                                                      source.disable_masking = ( ) => source._masking_enabled = false
+                                                                      source.enable_masking = ( ) => source._masking_enabled = true
+                                                                      source.masks = ( ) => collect_masks( )
+                                                                      source.breadcrumbs = ( ) => source._mask_breadcrumbs
+                                                                      source.drop_breadcrumb = ( code ) => register_mask_change( code )
+                                                                      source.update_statistics = ( data ) => stats_source.data = data
+                                                                   """ )
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This

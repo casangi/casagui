@@ -262,7 +262,8 @@ class InteractiveClean:
                                                  const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
                                                  niter.value = '' + (remaining < 0 ? 0 : remaining)
                                                }
-                                               img_src.refresh( )
+                                               img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
+
                                                if ( clean_msg !== undefined && 'convergence' in clean_msg ) {
                                                    // save convergence information and update convergence using saved state
                                                    if ( clean_msg.convergence === null ) {
@@ -600,7 +601,7 @@ class InteractiveClean:
                                                  image_fig=self._fig['image'],
                                                  spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
-                                                 #stat_src=self._stats_source
+                                                 cube_obj = self._cube.js_obj( )
                                                 ),
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
                                            self._js['clean-enable'] + self._js['clean-status-update'] +
