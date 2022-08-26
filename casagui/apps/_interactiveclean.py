@@ -32,7 +32,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
-from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS
+from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from ..utils import resource_manager
@@ -87,7 +87,7 @@ class InteractiveClean:
     of these boxes are updated as the clean operation progresses.
 
     The cleaning interval is determined by the text inputs along the top of the GUI which
-    allow the user to set the ``niter``, ``cycleiter``, ``cyclefactor``, and ``threshold``.
+    allow the user to set the ``nmajor``, ``niter``, ``cycleiter``, ``cyclefactor``, and ``threshold``.
     The three buttons ( _run one interval_, _run until stoping criteral is reached_, and
     _stop_) allow the user to control the clean run.
 
@@ -123,6 +123,7 @@ class InteractiveClean:
         gridder (str): Gridding options (standard, wproject, widefield, mosaic, awproject)
         pblimit (float): PB gain level at which to cut off normalizations
         deconvolver (str): Minor cycle algorithm (hogbom,clark,multiscale,mtmfs,mem,clarkstokes)
+        nmajor (int): Maximum number of major cycle iterations
         niter (int): Maximum total number of iterations
         threshold (str | float): Stopping threshold (number in units of Jy, or string).
         cycleniter (int): Maximum number of minor-cycle iterations (per plane) before triggering a major cycle
@@ -143,7 +144,7 @@ class InteractiveClean:
 
     def __init__( self, vis, imagename, field='', spw='', imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom', niter=0,
-                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5) ):
+                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5), nmajor=1 ):
 
         ###
         ### used by data pipe (websocket) initialization function
@@ -166,7 +167,7 @@ class InteractiveClean:
         self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, imsize=imsize, cell=cell, phasecenter=phasecenter,
                                stokes=stokes, specmode=specmode, nchan=nchan, start=start, width=width, interpolation=interpolation,
                                gridder=gridder, pblimit=pblimit, deconvolver=deconvolver, niter=niter, threshold=threshold,
-                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust,
+                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust, nmajor=nmajor,
                                history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
                                                                                   if arg == 'mask' else history_value )
         ###
@@ -189,6 +190,7 @@ class InteractiveClean:
         ### Initial Conditions
         ###
         self._params = { }
+        self._params['nmajor'] = nmajor
         self._params['niter'] = niter
         self._params['cycleniter'] = cycleniter
         self._params['threshold'] = threshold
@@ -283,6 +285,7 @@ class InteractiveClean:
                                            // self._fig['image'].toolbar.tools.tool_name (e.g. "Box Select", "Lasso Select")
                                            function disable( with_stop ) {
                                                img_src.disable_masking( )
+                                               nmajor.disabled = true
                                                niter.disabled = true
                                                cycleniter.disabled = true
                                                threshold.disabled = true
@@ -301,11 +304,11 @@ class InteractiveClean:
 
                        'clean-enable':  '''function enable( only_stop ) {
                                                img_src.enable_masking( )
+                                               nmajor.disabled = false
                                                niter.disabled = false
                                                cycleniter.disabled = false
                                                threshold.disabled = false
                                                cyclefactor.disabled = false
-                                               niter.disabled = false
                                                btns['stop'].disabled = false
                                                slider.disabled = false
                                                image_fig.disabled = false
@@ -372,7 +375,7 @@ class InteractiveClean:
                                                        if ( ! state.stopped ) {
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                            { action: 'finish',
-                                                                             value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                             value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                                       threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                                       mask: img_src.masks( ),
                                                                                       breadcrumbs: img_src.breadcrumbs( ) } },
@@ -455,7 +458,7 @@ class InteractiveClean:
                         msg['value']['mask'] = ''
                 else:
                     msg['value']['mask'] = ''
-                self._clean.update( { **msg['value'], 'nmajor': 1 if msg['action'] == 'next' else -1 } )
+                self._clean.update( { **msg['value'] } )
                 stopcode, self._convergence_data = await self._clean.__anext__( )
                 if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
                     self._clean.finalize()
@@ -568,6 +571,7 @@ class InteractiveClean:
                                         icon=SVGIcon(icon_name='help', size=1.4) )
 
 
+        self._control['nmajor'] = TextInput( title='nmajor', value="%s" % self._params['nmajor'], width=90 )
         self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
         self._control['threshold'] = TextInput( title="threshold", value="%s" % self._params['threshold'], width=90 )
@@ -587,6 +591,7 @@ class InteractiveClean:
                                                  img_src=self._fig['image-source'],
                                                  #spec_src=self._image_spectra,
                                                  niter=self._control['niter'], cycleniter=self._control['cycleniter'],
+                                                 nmajor=self._control['nmajor'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
                                                  convergence_src=self._convergence_source, convergence_id=self._convergence_id,
                                                  convergence_fig=self._fig['convergence'],
@@ -607,7 +612,7 @@ class InteractiveClean:
                                                   btns['stop'].button_type = "warning"
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                   { action: 'finish',
-                                                                    value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                    value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                              threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                              mask: img_src.masks( ),
                                                                              breadcrumbs: img_src.breadcrumbs( ) } },
@@ -622,7 +627,7 @@ class InteractiveClean:
                                                   // (or even if 'XXX.origin.' is public)...
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                   { action: 'next',
-                                                                    value: { niter: niter.value, cycleniter: cycleniter.value,
+                                                                    value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                              threshold: threshold.value, cyclefactor: cyclefactor.value,
                                                                              mask: img_src.masks( ),
                                                                              breadcrumbs: img_src.breadcrumbs( ) } },
@@ -660,25 +665,27 @@ class InteractiveClean:
                                                             self._js['update-converge'] + self._js['slider-update'] ) )
         
         # Generates the HTML for the controls layout:
-        # niter cycleniter cycle_factor threshold  -----------
-        #                  slider                  -  image  -
-        # goto               continue finish stop  -----------
-        # status: stopcode                  stats         help
+        # nmajor niter cycleniter cycle_factor threshold  -----------
+        #                  slider                         -  image  -    help
+        # goto    continue finish stop                    -----------    help
+        # status: stopcode                                               help
+        # stats                                                          help
         # spectra
         # convergence
         # log
         self._fig['layout'] = column(
                                   row(
                                       column(
-                                          row( self._control['niter'],
-                                               self._control['cycleniter'],
-                                               self._control['cycle_factor'],
-                                               self._control['threshold'] ),
-                                          self._fig['slider'],
-                                          row( self._control['goto'],
+                                          row( self._control['nmajor'],
+                                               self._control['niter'],
+                                               Spacer(width=10, sizing_mode='scale_height'),
                                                self._control['clean']['continue'],
-                                               self._control['clean']['finish'],
+                                               self._control['clean']['finish'] ),
+                                          row( self._control['cycleniter'],
+                                               self._control['cycle_factor'],
+                                               self._control['threshold'],
                                                self._control['clean']['stop'] ),
+                                          row( self._fig['slider'], self._control['goto'] ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
                                           self._cube.statistics( sizing_mode = "stretch_height" ),
                                       ),
