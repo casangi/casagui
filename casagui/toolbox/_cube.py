@@ -524,7 +524,7 @@ class CubeMask:
                                                //****************************************************
 
                                                // next channel
-                                               window.hotkeys( 'alt+up', {scope: 'channel'},
+                                               window.hotkeys( 'alt+up,ctrl+up,command+up', {scope: 'channel'},
                                                                (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
                                                                             // wrap round to the first channel
@@ -534,7 +534,7 @@ class CubeMask:
                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
                                                                         } } )
                                                // previous channel
-                                               window.hotkeys( 'alt+down', { scope: 'channel'},
+                                               window.hotkeys( 'alt+down,ctrl+down,command+down', { scope: 'channel'},
                                                                (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
@@ -545,7 +545,7 @@ class CubeMask:
                                                                         } } )
 
                                                // next polarization/stokes
-                                               window.hotkeys( 'alt+right', {scope: 'channel'},
+                                               window.hotkeys( 'alt+right,ctrl+right,command+right', {scope: 'channel'},
                                                                (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[0] + 1 >= source.num_chans[0] ) {
                                                                             // wrap round to the first channel
@@ -555,7 +555,7 @@ class CubeMask:
                                                                             source.channel( source.cur_chan[1], source.cur_chan[0] + 1 )
                                                                         } } )
                                                // previous polarization/stokes
-                                               window.hotkeys( 'alt+left', { scope: 'channel'},
+                                               window.hotkeys( 'alt+left,ctrl+left,command+left', { scope: 'channel'},
                                                                (e) => { e.preventDefault( )
                                                                         if ( source.cur_chan[0] - 1 >= 0 ) {
                                                                             // advance to the prev channel
