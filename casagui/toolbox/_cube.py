@@ -145,7 +145,7 @@ class CubeMask:
                                                source._polys = [ ]              //  [ { id: int,
                                                                                 //      type: string,
                                                                                 //      geometry: { xs: [ float, ... ], ys: [ float, ... ] } } ]
-                                               source._cursor_color = 'red'
+                                               source._cursor_color = 'white'
                                                source._default_color = 'black'
                                                source._annotation_ids = annotations.reduce( (acc,c) => { acc.push(c.id); return acc }, [ ] )
                                                source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
