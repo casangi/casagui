@@ -121,11 +121,11 @@ class CubeMask:
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
                      'slider_w_stats':  '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, 0, msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                               source.channel( slider.value, source.cur_chan[0], msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
                                            }
                                            ''',
                      'slider_wo_stats': '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, 0 )
+                                               source.channel( slider.value, source.cur_chan[0] )
                                            }''',
                      ### setup maping of keys to numeric values
                      'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
