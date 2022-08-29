@@ -1014,10 +1014,10 @@ class CubeMask:
                                <tr><td><b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
                                <tr><td><b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
                                <tr><td><b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
-                               <tr><td><b>option</b>-<b>up</b></td><td>to next channel</td></tr>
-                               <tr><td><b>option</b>-<b>down</b></td><td>to previous channel</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis</td></tr>
+                               <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
                                <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
