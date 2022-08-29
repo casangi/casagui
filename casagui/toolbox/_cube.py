@@ -844,14 +844,6 @@ class CubeMask:
                                                     title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
             self._spectra.add_layout(self._sp_span)
 
-            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source ),
-                                          code = '''if ( span.location >= 0 ) {
-                                                        source.channel( span.location, source.cur_chan[0] )
-                                                        //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
-                                                    }''' )
-
-            self._spectra.js_on_event('tap', self._cb['sptap'])
-
             self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
             self._spectra.line( x='x', y='y', source=self._image_spectra )
             self._spectra.grid.grid_line_width = 0.5
@@ -925,6 +917,24 @@ class CubeMask:
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
                                                                code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                       self._slider else '') + self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
+
+        if self._spectra:
+            ###
+            ### this is set up in connect( ) because slider must be updated if it is used othersize
+            ### channel should be directly set (previously the slider was implicitly set when a new
+            ### channel was selected, but I think this update was broken when the oscillation problem
+            ### we fixed, see above)
+            ###
+            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source, slider=self._slider ),
+                                          code = '''if ( span.location >= 0 ) {
+                                                        if ( slider ) slider.value = span.location
+                                                        else source.channel( span.location, source.cur_chan[0] )
+                                                             //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
+                                                    }''' )
+
+            self._spectra.js_on_event('tap', self._cb['sptap'])
+
+
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
