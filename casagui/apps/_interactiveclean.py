@@ -32,7 +32,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
-from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer
+from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer, ColorPicker, Spinner, Select
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from ..utils import resource_manager
@@ -144,7 +144,7 @@ class InteractiveClean:
 
     def __init__( self, vis, imagename, field='', spw='', imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', nchan=-1, start='',
                   width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom', niter=0,
-                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5), nmajor=1 ):
+                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5), gain=float(0.1), nmajor=1 ):
 
         ###
         ### used by data pipe (websocket) initialization function
@@ -167,7 +167,7 @@ class InteractiveClean:
         self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, imsize=imsize, cell=cell, phasecenter=phasecenter,
                                stokes=stokes, specmode=specmode, nchan=nchan, start=start, width=width, interpolation=interpolation,
                                gridder=gridder, pblimit=pblimit, deconvolver=deconvolver, niter=niter, threshold=threshold,
-                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust, nmajor=nmajor,
+                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust, gain=gain, nmajor=nmajor,
                                history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
                                                                                   if arg == 'mask' else history_value )
         ###
@@ -204,6 +204,7 @@ class InteractiveClean:
         ### GUI Elements
         self._imagename = imagename
         self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -356,6 +357,10 @@ class InteractiveClean:
                                            }''',
 
                        'clean-gui-update': '''function update_gui( msg ) {
+                                               if ( msg.result === 'no-action' ) {
+                                                   update_status( 'nothing done' )
+                                                   enable( false )
+                                               } else
                                                if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        log.text = log.text + msg.cmd
@@ -363,7 +368,11 @@ class InteractiveClean:
                                                    refresh( msg )
                                                    // stopcode == 1: iteration limit hit
                                                    // stopcode == 9: major cycle limit hit
-                                                   state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
+                                                   // *******************************************************************************************
+                                                   // ******** perhaps the user should not be locked into exiting after the limit is hit ********
+                                                   // *******************************************************************************************
+                                                   //state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
+                                                   state.stopped = false
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        btns['stop'].button_type = "danger"
                                                        update_status( 'stopcode' in msg ? msg.stopcode : -1 )
@@ -411,8 +420,8 @@ class InteractiveClean:
                                            }''',
                    }
 
-
-        self._cube = CubeMask( self._residual_path, abort=self._abort_handler )
+        import os
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
         ###
         ### error or exception result
         ###
@@ -461,12 +470,18 @@ class InteractiveClean:
                     msg['value']['mask'] = ''
                 self._clean.update( { **msg['value'] } )
                 stopcode, self._convergence_data = await self._clean.__anext__( )
-                if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
-                    self._clean.finalize()
+                # *******************************************************************************************
+                # ******** perhaps the user should not be locked into exiting after the limit is hit ********
+                # *******************************************************************************************
+                #if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
+                #    self._clean.finalize()
 
                     # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
+                if len(self._convergence_data) == 0:
+                    return dict( result='no-action', stopcode= stopcode, cmd=f'<p style="width:790px">no operation</p>',
+                                 convergence=None, iterdone=0 )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
@@ -674,6 +689,33 @@ class InteractiveClean:
         # spectra
         # convergence
         # log
+        mask_color_pick = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
+        mask_color_pick.js_on_change( 'color', CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
+                                                         code='''let cm = bitmask.glyph.color_mapper
+                                                                 //*************************************************
+                                                                 //*** here we assume that the transparent color ***
+                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
+                                                                 //*************************************************
+                                                                 if ( cm.palette[1].startsWith('#') ) {
+                                                                     cm.palette[1] =  cb_obj.color
+                                                                 } else {
+                                                                     cm.palette[0] =  cb_obj.color
+                                                                 }
+                                                                 cm.change.emit( )''' ) )
+        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
+        mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
+                                                         code='''let gl = bitmask.glyph
+                                                                 gl.global_alpha.value = cb_obj.value
+                                                                 gl.change.emit( )''' ) )
+        mask_clean_notclean_pick = Button( label='1', width=30 )
+        mask_clean_notclean_pick.js_on_click( CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
+                                                        code='''let cm = bitmask.glyph.color_mapper
+                                                                let one = cm.palette[0]
+                                                                cm.palette[0] = cm.palette[1]
+                                                                cm.palette[1] = one
+                                                                cb_obj.origin.label = cb_obj.origin.label == '1' ? '0' : '1'
+                                                                cm.change.emit( )''' ) )
+
         self._fig['layout'] = column(
                                   row(
                                       column(
@@ -692,6 +734,10 @@ class InteractiveClean:
                                       ),
                                       column( self._fig['image'],
                                               row( Spacer(height=self._control['help'].height, sizing_mode="scale_width"),
+                                                   self._cube.palette( ),
+                                                   mask_clean_notclean_pick,
+                                                   mask_color_pick,
+                                                   mask_alpha_pick,
                                                    self._control['help'],
                                                    Spacer(height=self._control['help'].height, width=30)
                                               )

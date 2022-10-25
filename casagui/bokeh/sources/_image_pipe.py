@@ -76,18 +76,41 @@ class ImagePipe(DataSource):
 
     __implementation__ = TypeScript( "" )
 
-    def __open( self, image ):
-        if self.__im is not None:
-            self.__im.close( )
-        self.__im = imagetool( )
-        self.__rg = regionmanager( )
+    def __open_image( self, image ):
+        if self.__img is not None:
+            self.__img.close( )
+        self.__img = imagetool( )
+        self.__rgn = regionmanager( )
         try:
-            self.__im.open(image)
-            self.__path = image
+            self.__img.open(image)
+            self.__image_path = image
         except Exception as ex:
-            self.__im = None
+            self.__img = None
+            self.__image_path = None
             raise RuntimeError(f'could not open image: {image}') from ex
-        self.__chan_shape = list(self.__im.shape( )[0:2])
+        imshape = self.__img.shape( )
+        if self.__msk is not None and all(self.__msk.shape( ) != imshape):
+            raise RuntimeError(f'mismatch between image shape ({imshape}) and mask shape ({self.__msk.shape( )})')
+        if self.__chan_shape is None: self.__chan_shape = list(imshape[0:2])
+
+    def __open_mask( self, mask ):
+        if mask is None:
+            self.__mask_path = None
+            return
+        if self.__msk is not None:
+            self.__msk.close( )
+        self.__msk = imagetool( )
+        try:
+            self.__msk.open(mask)
+            self.__mask_path = mask
+        except Exception as ex:
+            self.__msk = None
+            self.__mask_path = None
+            raise RuntimeError(f'could not open mask: {mask}') from ex
+        mskshape = self.__msk.shape( )
+        if self.__img is not None and all(self.__img.shape( ) != mskshape):
+            raise RuntimeError(f'mismatch between image shape ({self.__img.shape( )}) and mask shape ({mskshape})')
+        if self.__chan_shape is None: self.__chan_shape = list(mskshape[0:2])
 
     def channel( self, index ):
         """Retrieve one channel from the image cube. The `index` should be a
@@ -100,10 +123,26 @@ class ImagePipe(DataSource):
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
         """
-        if self.__im is None:
+        if self.__img is None:
             raise RuntimeError('no image is available')
-        return np.squeeze( self.__im.getchunk( blc=[0,0] + index,
-                                               trc=self.__chan_shape + index) ).transpose( )
+        return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
+                                                trc=self.__chan_shape + index) ).transpose( )
+
+    def mask( self, index ):
+        """Retrieve one channel mask from the mask cube. The `index` should be a
+        two element list of integers. The first integer is the ''stokes'' axis
+        in the image cube. The second integer is the ''channel'' axis in the
+        image cube.
+
+        Parameters
+        ----------
+        index: [ int, int ]
+            list containing first the ''stokes'' index and second the ''channel'' index
+        """
+        if self.__msk is None:
+            return None
+        return np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
+                                                trc=self.__chan_shape + index) ).astype(np.bool_).transpose( )
     def spectra( self, index ):
         """Retrieve one spectra from the image cube. The `index` should be a
         three element list of integers. The first integer is the ''right
@@ -121,9 +160,9 @@ class ImagePipe(DataSource):
             index[0] = self.shape[0] - 1
         if index[1] >= self.shape[1]:
             index[1] = self.shape[1] - 1
-        if self.__im is None:
+        if self.__img is None:
             raise RuntimeError('no image is available')
-        result = np.squeeze( self.__im.getchunk( blc=index + [0],
+        result = np.squeeze( self.__img.getchunk( blc=index + [0],
                                                  trc=index + [self.shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
@@ -135,12 +174,15 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, *args, abort=None, stats=False, **kwargs ):
+    def __init__( self, image, *args, mask=None, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
+        self.__img = None
+        self.__msk = None
         resource_manager.reg_at_exit(self, '__del__')
         self._stats = stats
-        self.__open( image )
-        self.shape = list(self.__im.shape( ))
+        self.__open_image( image )
+        self.__open_mask( mask )
+        self.shape = list(self.__img.shape( ))
         self.__session = None
         self.__abort = abort
 
@@ -148,16 +190,16 @@ class ImagePipe(DataSource):
             raise RuntimeError('abort function must be callable')
 
     def __del__(self):
-        if self.__rg:
-            self.__rg.done( )
-        if self.__im != None:
-            self.__im.done()
-            self.__im.close()
-            self.__im = None
+        if self.__rgn:
+            self.__rgn.done( )
+        if self.__img != None:
+            self.__img.close()
+            self.__img.done()
+            self.__img = None
 
     def coorddesc( self ):
         ia = imagetool( )
-        ia.open(self.__path)
+        ia.open(self.__image_path)
         csys = ia.coordsys( )
         ia.close( )
         return { 'csys': csys, 'shape': tuple(self.shape) }
@@ -180,16 +222,16 @@ class ImagePipe(DataSource):
             part = partition( lambda s: (s.startswith('trc') or s.startswith('blc')), sorted(unsorted_dictionary.keys( )) )
             return { k: unsorted_dictionary[k] for k in part[1] + part[0] }
 
-        reg = self.__rg.box( [0,0] + index, self.__chan_shape + index )
+        reg = self.__rgn.box( [0,0] + index, self.__chan_shape + index )
         ###
         ### This seems like it should work:
         ###
-        #      rawstats = self.__im.statistics( region=reg )
+        #      rawstats = self.__img.statistics( region=reg )
         ###
         ### but it does not so we have to create a one-use image tool (see CAS-13625)
         ###
         ia = imagetool( )
-        ia.open(self.__path)
+        ia.open(self.__image_path)
         rawstats = ia.statistics( region=reg )
         ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
@@ -226,16 +268,17 @@ class ImagePipe(DataSource):
 
             if cmd['action'] == 'channel':
                 chan = self.channel(cmd['index'])
+                mask = self.mask(cmd['index'])
                 if self._stats:
                     #statistics for the displayed plane of the image cubea
                     statistics = self.statistics( cmd['index'] )
                     msg = { 'id': cmd['id'],
-                            # 'stats': pack_arrays(self.__im.statistics( axes=cmd['index'] )),
-                            'message': { 'chan': { 'd': [ pack_arrays(chan) ] },
+                            # 'stats': pack_arrays(self.__img.statistics( axes=cmd['index'] )),
+                            'message': { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] },
                                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) } } }
                 else:
                     msg = { 'id': cmd['id'],
-                            'message': { 'chan': { 'd': [ pack_arrays(chan) ] } } }
+                            'message': { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] } } }
 
                 await websocket.send(json.dumps(msg))
                 count += 1

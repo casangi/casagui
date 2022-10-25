@@ -32,23 +32,25 @@ calling application. Once all of the widgets have been created. The
 ``connect`` member function creates all of the Bokeh/JavaScript callbacks
 that allow the widgets to interact'''
 
+from os import path
 import asyncio
 from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 from ..utils import resource_manager
+from ..bokeh.state import available_palettes, find_palette, default_palette
 
 class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image, abort=None ):
+    def __init__( self, image, mask=None, abort=None ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -60,6 +62,11 @@ class CubeMask:
         ----------
         image: str
             path to CASA image for which interactive masks will be drawn
+        mask: str or None
+            If provided, this shifts the masking to bitmask operation. In
+            bitmask operation, the drawn regions are used to add or subtract
+            from a bitmask cube image instead of being the union of all drawn
+            regions. This is the standard mode of operation for interactive clean.
         abort: function
             If provided, the ``abort`` function will be called to exit the
             event loop in the case of an error.
@@ -67,16 +74,21 @@ class CubeMask:
         initialize_bokeh( )
 
         self._image_path = image	                # path to image cube to be displayed
-        self._image = None		                # figure displaying cube planes
+        self._mask_path = mask                          # path to bitmask cube (if any)
+        self._image = None		                # figure displaying cube & mask planes
+        self._chan_image = None                         # channel image
+        self._bitmask = None                            # bitmask image
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
+        self._palette = None                            # palette selection
         self._help = None
         self._image_spectra = None                      # spectra data source
         self._image_source = None	                # ImageDataSource
         self._statistics_source = None
         self._pipe = { 'image': None, 'control': None } # data pipes
-        self._ids = { 'done': str(uuid4( )) }           # ids used for control messages
+        self._ids = { 'palette': str(uuid4( )),
+                      'done': str(uuid4( ))      }      # ids used for control messages
 
         self._fig = { }
         self._hover = { 'spectra': None, 'image': None }# HoverTools which are used to synchronize image/spectra
@@ -87,7 +99,6 @@ class CubeMask:
         self._image_server = None
         self._control_server = None
 
-        self._mask = { }		                # mask drawing
         self._cb = { }
         self._annotations = [ ]		                # statically allocate fixed poly annotations for (re)use
                                                         # on successive image cube planes
@@ -127,10 +138,6 @@ class CubeMask:
                      'slider_wo_stats': '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0] )
                                            }''',
-                     ### setup maping of keys to numeric values
-                     'keymap-init':     '''const keymap = { up: 38, down: 40, left: 37, right: 39, control: 17,
-                                                            option: 18, next: 78, prev: 80, escape: 27, space: 32,
-                                                            command: 91, copy: 67, paste: 86, delete: 8, shift: 16 };''',
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
@@ -676,7 +683,8 @@ class CubeMask:
         '''set up websockets
         '''
         if self._pipe['image'] is None:
-            self._pipe['image'] = ImagePipe(image=self._image_path, stats=True, abort=self.__abort, address=find_ws_address( ))
+            self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
+                                             stats=True, abort=self.__abort, address=find_ws_address( ) )
         if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 
@@ -726,10 +734,15 @@ class CubeMask:
             self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 
             shape = self._pipe['image'].shape
-            self._image.image( image="d", x=0, y=0,
-                                   dw=shape[0], dh=shape[1],
-                                   palette="Spectral11",
-                                   level="image", source=self._image_source )
+            self._chan_image = self._image.image( image="img", x=0, y=0,
+                               dw=shape[0], dh=shape[1],
+                               palette=default_palette( ), level="image",
+                               source=self._image_source )
+            if self._mask_path is not None and path.isdir(self._mask_path):
+                self._bitmask = self._image.image( image='msk', x=0, y=0,
+                                                   dw=shape[0], dh=shape[1],
+                                                   palette=['rgba(0, 0, 0, 0)','#FFFF00'], alpha=0.6,
+                                                   source=self._image_source )
 
             self._image.grid.grid_line_width = 0.5
             self._image.plot_height = 400
@@ -897,6 +910,44 @@ class CubeMask:
 
         return self._statistics
 
+    def palette( self, **kw ):
+        '''retrieve a Select widget which allow for changing the pseudocolor palette
+        '''
+        if self._palette is None:
+            if self._image is None:
+                ###
+                ### an exception is raised instead of just creating the image display because if we create
+                ### it here [by calling self.image( )], the user will silently lose the ability to set the
+                ### maximum number of annotations per channel (along with other future parameters)
+                ###
+                raise RumtimeError('palette( ) requires an image cube display, but one has not yet been created')
+
+            async def fetch_palette( msg, self=self ):
+                if 'value' in msg:
+                    return dict( result=find_palette(msg['value']), update={ } )
+                else:
+                    return dict( result=None, update={ } )
+
+            self._pipe['control'].register( self._ids['palette'], fetch_palette )
+
+            self._palette = set_attributes( Select( options=available_palettes( ),
+                                                    width=120, value=default_palette( ) ), **kw )
+
+            self._palette.js_on_change( 'value', CustomJS( args=dict( image=self._chan_image,
+                                                                      ids=self._ids,
+                                                                      ctrl=self._pipe['control'] ),
+                                                           code='''function receive_palette( msg ) {
+                                                                       if ( 'result' in msg && msg.result != null ) {
+                                                                           let cm = image.glyph.color_mapper
+                                                                           cm.palette = msg.result
+                                                                           cm.change.emit( )
+                                                                       }
+                                                                   }
+                                                                   ctrl.send( ids['palette'],
+                                                                              { action: 'palette', value: cb_obj.value },
+                                                                              receive_palette )'''))
+        return self._palette
+
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
@@ -939,7 +990,7 @@ class CubeMask:
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
                                                               stats_source=self._statistics_source ),
-                                                              code='let source = cb_obj;' + self._js['mask-state-init'] + self._js['keymap-init'] +
+                                                              code='let source = cb_obj;' + self._js['mask-state-init'] +
                                                                    self._js['func-curmasks']( ) + self._js['key-state-funcs'] +
                                                                    self._js['setup-key-mgmt'] +
                                                                    """// This function is called to collect the masks and/or stop
@@ -962,6 +1013,11 @@ class CubeMask:
                                                                       source.drop_breadcrumb = ( code ) => register_mask_change( code )
                                                                       source.update_statistics = ( data ) => stats_source.data = data
                                                                    """ )
+
+    def js_bitmask( self ):
+        if self._bitmask is None:
+            raise RuntimeError('an image widget must be created (with CubeMask.image) before js_bitmask( ) can be called')
+        return self._bitmask
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This

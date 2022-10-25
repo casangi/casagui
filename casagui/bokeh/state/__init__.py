@@ -30,3 +30,4 @@ and with the Bokeh extensions found in ``casagui.bokeh``.'''
 
 from ._initialize import initialize_bokeh
 from ._session import setup_session as initialize_session
+from ._palette import available_palettes, find_palette, default_palette
