@@ -964,18 +964,6 @@ class CubeMask:
         ### retrieve controls for adjusting the cube bitmask
         ###
         self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
-        self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask ),
-                                                         code='''let cm = bitmask.glyph.color_mapper
-                                                                 //*************************************************
-                                                                 //*** here we assume that the transparent color ***
-                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
-                                                                 //*************************************************
-                                                                 if ( cm.palette[1].startsWith('#') ) {
-                                                                     cm.palette[1] =  cb_obj.color
-                                                                 } else {
-                                                                     cm.palette[0] =  cb_obj.color
-                                                                 }
-                                                                 cm.change.emit( )''' ) )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
@@ -1065,6 +1053,24 @@ class CubeMask:
                                                                    """ )
 
         ###
+        ### This setup is delayed until connect( ) to allow for the use of
+        ### self._bitmask_color_selector
+        ###
+        self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
+                                                                                 annotations=self._annotations ),
+                                                         code= ( "" if self._mask_path is None else
+                                                                 '''annotations[0].fill_color = cb_obj.color;''' ) +
+                                                                 '''let cm = bitmask.glyph.color_mapper
+                                                                 //*************************************************
+                                                                 //*** here we assume that the transparent color ***
+                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
+                                                                 //*************************************************
+                                                                 if ( cm.palette[1].startsWith('#') ) {
+                                                                     cm.palette[1] =  cb_obj.color
+                                                                 } else {
+                                                                     cm.palette[0] =  cb_obj.color
+                                                                 }
+                                                                 cm.change.emit( )''' ) )
         self._image.js_on_event( SelectionGeometry,
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
@@ -1084,11 +1090,6 @@ class CubeMask:
                                                           annotations[0].fill_color = selector.color
                                                       }''' ) )
 
-
-    def js_bitmask( self ):
-        if self._bitmask is None:
-            raise RuntimeError('an image widget must be created (with CubeMask.image) before js_bitmask( ) can be called')
-        return self._bitmask
 
     def js_obj( self ):
         '''return the javascript object that can be used for control. This
