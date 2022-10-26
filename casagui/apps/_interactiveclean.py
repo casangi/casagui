@@ -32,7 +32,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
-from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer, ColorPicker, Spinner, Select
+from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from ..utils import resource_manager
@@ -689,32 +689,8 @@ class InteractiveClean:
         # spectra
         # convergence
         # log
-        mask_color_pick = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
-        mask_color_pick.js_on_change( 'color', CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
-                                                         code='''let cm = bitmask.glyph.color_mapper
-                                                                 //*************************************************
-                                                                 //*** here we assume that the transparent color ***
-                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
-                                                                 //*************************************************
-                                                                 if ( cm.palette[1].startsWith('#') ) {
-                                                                     cm.palette[1] =  cb_obj.color
-                                                                 } else {
-                                                                     cm.palette[0] =  cb_obj.color
-                                                                 }
-                                                                 cm.change.emit( )''' ) )
-        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
-        mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
-                                                         code='''let gl = bitmask.glyph
-                                                                 gl.global_alpha.value = cb_obj.value
-                                                                 gl.change.emit( )''' ) )
-        mask_clean_notclean_pick = Button( label='1', width=30 )
-        mask_clean_notclean_pick.js_on_click( CustomJS( args=dict( bitmask=self._cube.js_bitmask( )),
-                                                        code='''let cm = bitmask.glyph.color_mapper
-                                                                let one = cm.palette[0]
-                                                                cm.palette[0] = cm.palette[1]
-                                                                cm.palette[1] = one
-                                                                cb_obj.origin.label = cb_obj.origin.label == '1' ? '0' : '1'
-                                                                cm.change.emit( )''' ) )
+
+        mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( )
 
         self._fig['layout'] = column(
                                   row(

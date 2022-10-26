@@ -38,7 +38,7 @@ from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.utils import find_ws_address, set_attributes
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
@@ -78,6 +78,7 @@ class CubeMask:
         self._image = None		                # figure displaying cube & mask planes
         self._chan_image = None                         # channel image
         self._bitmask = None                            # bitmask image
+        self._bitmask_color_selector = None             # bitmask color selector
         self._slider = None		                # slider to move from plane to plane
         self._spectra = None		                # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
@@ -751,7 +752,12 @@ class CubeMask:
 
             self._init_pipes( )
 
-            self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.1, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
+            if self._mask_path is None:
+                ### multiple annotations are drawn per channel to create mask from scratch
+                self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.3, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
+            else:
+                ### a bitmask cube is available and a single annotation is used to add or subtract from the bitmask cube
+                self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=1.0, line_color=None, fill_color='black', visible=True ) ]
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
@@ -786,14 +792,6 @@ class CubeMask:
                                                            code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
                                                                    if self._mask_path is None else "" ) +
                                                                  '''window.hotkeys.setScope( )''' ) )
-
-            self._image.js_on_event( SelectionGeometry,
-                                         CustomJS( args=dict( source=self._image_source,
-                                                              annotations=self._annotations ),
-                                                   code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
-                                                           self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection']
-                                                           if self._mask_path is None else "" )  +
-                                                        '''console.log('THE REST OF REGION SELECTION HERE')''' ) )
 
             for annotation in self._annotations:
                 self._image.add_layout(annotation)
@@ -956,6 +954,47 @@ class CubeMask:
                                                                               receive_palette )'''))
         return self._palette
 
+
+    def bitmask_controls( self ):
+
+        if self._bitmask is None:
+            raise RumtimeError('cube bitmask not in use')
+
+        ###
+        ### retrieve controls for adjusting the cube bitmask
+        ###
+        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
+        self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask ),
+                                                         code='''let cm = bitmask.glyph.color_mapper
+                                                                 //*************************************************
+                                                                 //*** here we assume that the transparent color ***
+                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
+                                                                 //*************************************************
+                                                                 if ( cm.palette[1].startsWith('#') ) {
+                                                                     cm.palette[1] =  cb_obj.color
+                                                                 } else {
+                                                                     cm.palette[0] =  cb_obj.color
+                                                                 }
+                                                                 cm.change.emit( )''' ) )
+
+        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
+        mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
+                                                         code='''let gl = bitmask.glyph
+                                                                 gl.global_alpha.value = cb_obj.value
+                                                                 gl.change.emit( )''' ) )
+
+        mask_transparency_selector = Button( label='1', width=30 )
+        mask_transparency_selector.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
+                                                        code='''let cm = bitmask.glyph.color_mapper
+                                                                let one = cm.palette[0]
+                                                                cm.palette[0] = cm.palette[1]
+                                                                cm.palette[1] = one
+                                                                cb_obj.origin.label = cb_obj.origin.label == '1' ? '0' : '1'
+                                                                cm.change.emit( )''' ) )
+
+        return ( self._bitmask_color_selector, mask_alpha_pick, mask_transparency_selector )
+
+
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
@@ -1024,6 +1063,27 @@ class CubeMask:
                                                                       source.drop_breadcrumb = ( code ) => register_mask_change( code )
                                                                       source.update_statistics = ( data ) => stats_source.data = data
                                                                    """ )
+
+        ###
+        self._image.js_on_event( SelectionGeometry,
+                                 CustomJS( args=dict( source=self._image_source,
+                                                      annotations=self._annotations,
+                                                      selector=self._bitmask_color_selector ),
+                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
+                                                   self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection']
+                                                   if self._mask_path is None else "" )  +
+                                                   '''if ( source._masking_enabled ) {
+                                                          const geometry = cb_obj['geometry']
+                                                          if ( geometry.type === 'rect' ) {
+                                                              annotations[0].xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
+                                                              annotations[0].ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
+                                                          } else if ( geometry.type === 'poly' && cb_obj.final ) {
+                                                              annotations[0].xs = [ ].slice.call(geometry.x)
+                                                              annotations[0].ys = [ ].slice.call(geometry.y)
+                                                          }
+                                                          annotations[0].fill_color = selector.color
+                                                      }''' ) )
+
 
     def js_bitmask( self ):
         if self._bitmask is None:
