@@ -38,6 +38,7 @@ from socket import socket
 from os import path as __path
 from ._ResourceManager import _ResourceManager
 from ._logging import get_logger
+from ._regions import polygon_indexes
 
 from astropy import units as u
 from regions import PixCoord
