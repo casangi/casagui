@@ -128,7 +128,7 @@ class ImagePipe(DataSource):
         return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
                                                 trc=self.__chan_shape + index) ).transpose( )
 
-    def mask( self, index ):
+    def mask( self, index, modify=False ):
         """Retrieve one channel mask from the mask cube. The `index` should be a
         two element list of integers. The first integer is the ''stokes'' axis
         in the image cube. The second integer is the ''channel'' axis in the
@@ -138,11 +138,39 @@ class ImagePipe(DataSource):
         ----------
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
+        modify: boolean
+            If true, it implies that the channel mask is being retrieved for modification
+            and updating the channel on disk. If false, it implies that the channel mask
+            is being retrieved for display.
         """
         if self.__msk is None:
-            return None
-        return np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
+            raise RuntimeError(f'cannot retrieve mask at {repr(index)} because no mask cube exists')
+        return ( np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
                                                 trc=self.__chan_shape + index) ).astype(np.bool_).transpose( )
+                 if modify == False else
+                 np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
+                                                trc=self.__chan_shape + index) ) )
+
+    def put_mask( self, index, mask ):
+        """Replace one channel mask with the mask specified as the second parameter.
+        The `index` should be a two element list of integers. The first integer is the
+        ''stokes'' axis in the image cube. The second integer is the ''channel'' axis
+        in the image cube. The assumption is that the :code:`mask` parameter was retrieved
+        from the mask cube using the :code:`mask(...)` function with the :code:`modify`
+        parameter set to :code:`True`.
+
+        Parameters
+        ----------
+        index: [ int, int ]
+            list containing first the ''stokes'' index and second the ''channel'' index
+        mask: numpy.ndarray
+            two dimensional array to replace the existing mask for the channel specified
+            by :code:`index`
+        """
+        if self.__msk is None:
+            raise RuntimeError(f'cannot replace mask at {repr(index)} because no mask cube exists')
+        self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
+
     def spectra( self, index ):
         """Retrieve one spectra from the image cube. The `index` should be a
         three element list of integers. The first integer is the ''right
