@@ -40,11 +40,13 @@ import websockets
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.utils import find_ws_address, set_attributes
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
-from ..utils import resource_manager
+from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
+from ..bokeh.utils import pack_arrays
 from ..bokeh.state import available_palettes, find_palette, default_palette
+
+import numpy as np
 
 class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
@@ -79,8 +81,9 @@ class CubeMask:
         self._chan_image = None                         # channel image
         self._bitmask = None                            # bitmask image
         self._bitmask_color_selector = None             # bitmask color selector
-        self._slider = None		                # slider to move from plane to plane
-        self._spectra = None		                # figure displaying spectra along the frequency axis
+        self._bitmask_transparency_button = None        # select whether the 1s or 0s is transparent
+        self._slider = None                             # slider to move from plane to plane
+        self._spectra = None                            # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
         self._palette = None                            # palette selection
         self._help = None
@@ -89,6 +92,7 @@ class CubeMask:
         self._statistics_source = None
         self._pipe = { 'image': None, 'control': None } # data pipes
         self._ids = { 'palette': str(uuid4( )),
+                      'mask-mod': str(uuid4( )),
                       'done': str(uuid4( ))      }      # ids used for control messages
 
         self._fig = { }
@@ -118,6 +122,60 @@ class CubeMask:
         ###    copy buffer:       global                                                                                        ###
         ###########################################################################################################################
         self._js_mode_code = {
+                   'bitmask-hotkey-setup':    '''
+                                              function mask_mod_result( msg ) {
+                                                  if ( msg.result == 'success' )
+                                                      source.refresh( )
+                                              }
+                                              window.hotkeys( 'escape', { scope: 'channel' },
+                                                              (e) => { e.preventDefault( )
+                                                                       annotations[0].xs = [ ]
+                                                                       annotations[0].ys = [ ] } )
+                                              window.hotkeys( 'a', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'chan',
+                                                                                    action: transparency.label == '1' ? 'set' : 'clear',
+                                                                                    value: { chan: source.cur_chan,
+                                                                                             xs: annotations[0].xs,
+                                                                                             ys: annotations[0].ys } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 's', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'chan',
+                                                                                    action: transparency.label == '1' ? 'clear' : 'set',
+                                                                                    value: { chan: source.cur_chan,
+                                                                                             xs: annotations[0].xs,
+                                                                                             ys: annotations[0].ys } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'ctrl+a', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'cube',
+                                                                                    action: transparency.label == '1' ? 'set' : 'clear',
+                                                                                    value: { chan: source.cur_chan,
+                                                                                             xs: annotations[0].xs,
+                                                                                             ys: annotations[0].ys } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'ctrl+s', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'cube',
+                                                                                    action: transparency.label == '1' ? 'clear' : 'set',
+                                                                                    value: { chan: source.cur_chan,
+                                                                                             xs: annotations[0].xs,
+                                                                                             ys: annotations[0].ys } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'n', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'chan',
+                                                                                    action: 'not',
+                                                                                    value: { chan: source.cur_chan } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'ctrl+n', { scope: 'channel' },
+                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'cube',
+                                                                                    action: 'not',
+                                                                                    value: { chan: source.cur_chan } },
+                                                                                  mask_mod_result ) } )
+                                              ''',
                    'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
                                                window.hotkeys( 'alt+]', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
@@ -319,9 +377,9 @@ class CubeMask:
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
                      'slider_w_stats':  '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0], msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
-                                           }
-                                           ''',
+                                               source.channel( slider.value, source.cur_chan[0],
+                                                               msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                           }''',
                      'slider_wo_stats': '''if ( window.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0] )
                                            }''',
@@ -698,7 +756,8 @@ class CubeMask:
                                                                         } } )
                                                %s
 
-                                           }''' % (  self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else "" )
+                                           }''' % (  self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else
+                                                     self._js_mode_code['bitmask-hotkey-setup'] )
                         }
 
     def __stop( self ):
@@ -757,7 +816,43 @@ class CubeMask:
                 self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.3, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
             else:
                 ### a bitmask cube is available and a single annotation is used to add or subtract from the bitmask cube
+                async def mod_mask( msg, self=self ):
+                    shape = self._pipe['image'].shape
+                    if msg['action'] == 'set' or msg['action'] == 'clear':
+                        indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
+                        if msg['scope'] == 'chan':
+                            ### modifying single channel
+                            mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                            mask[indices] = 0 if msg['action'] == 'clear' else 1
+                            self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                            return dict( result='success', update={ } )
+                        elif msg['scope'] == 'cube':
+                            ### modifying all channels
+                            stokes = msg['value']['chan'][0]
+                            for c in range(shape[3]):
+                                mask = self._pipe['image'].mask( [stokes,c], True )
+                                mask[indices] = 0 if msg['action'] == 'clear' else 1
+                                self._pipe['image'].put_mask( [stokes,c], mask )
+                            return dict( result='success', update={ } )
+                    elif msg['action'] == 'not':
+                        notf = np.vectorize(lambda x: 0.0 if x != 0 else 1.0)
+                        if msg['scope'] == 'chan':
+                            ### invert single channel
+                            mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                            self._pipe['image'].put_mask( msg['value']['chan'], notf(mask) )
+                            return dict( result='success', update={ } )
+                        elif msg['scope'] == 'cube':
+                            ### invert all channels
+                            stokes = msg['value']['chan'][0]
+                            for c in range(shape[3]):
+                                mask = self._pipe['image'].mask( [stokes,c], True )
+                                self._pipe['image'].put_mask( [stokes,c], notf(mask) )
+                            return dict( result='success', update={ } )
+                    return dict( result='failure', update={ } )
+
                 self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=1.0, line_color=None, fill_color='black', visible=True ) ]
+                self._pipe['control'].register( self._ids['mask-mod'], mod_mask )
+
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
@@ -971,8 +1066,8 @@ class CubeMask:
                                                                  gl.global_alpha.value = cb_obj.value
                                                                  gl.change.emit( )''' ) )
 
-        mask_transparency_selector = Button( label='1', width=30 )
-        mask_transparency_selector.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
+        self._bitmask_transparency_button = Button( label='1', width=30 )
+        self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
                                                         code='''let cm = bitmask.glyph.color_mapper
                                                                 let one = cm.palette[0]
                                                                 cm.palette[0] = cm.palette[1]
@@ -980,7 +1075,7 @@ class CubeMask:
                                                                 cb_obj.origin.label = cb_obj.origin.label == '1' ? '0' : '1'
                                                                 cm.change.emit( )''' ) )
 
-        return ( self._bitmask_color_selector, mask_alpha_pick, mask_transparency_selector )
+        return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
 
 
     def connect( self ):
@@ -1002,7 +1097,9 @@ class CubeMask:
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
                                                                code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
-                                                                      self._slider else '') + self._js['func-curmasks']('cb_obj') + self._js['add-polygon'] ) )
+                                                                      self._slider else '') +
+                                                                      (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
+                                                                      if self._mask_path is None else '' ) )
 
         if self._spectra:
             ###
@@ -1024,11 +1121,12 @@ class CubeMask:
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              stats_source=self._statistics_source ),
+                                                              stats_source=self._statistics_source,
+                                                              transparency=self._bitmask_transparency_button ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
-                                                                     if self._mask_path is None else "" ) +
+                                                                     if self._mask_path is None else self._js['setup-key-mgmt'] ) +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
                                                                       source.done = ( ) => {
