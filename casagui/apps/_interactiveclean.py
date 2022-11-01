@@ -27,6 +27,7 @@
 ########################################################################
 '''implementation of the ``InteractiveClean`` application for interactive control
 of tclean'''
+import os
 import copy
 import asyncio
 import shutil
@@ -48,6 +49,12 @@ from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask
 from casagui.bokeh.components import SVGIcon
 from casagui.bokeh.sources import DataPipe
+from ..utils import DocEnum
+
+class MaskMode(DocEnum):
+    '''Different masking modes available in addition to a user supplied mask'''
+    PB = 1, 'primary beam mask'
+    AUTOMT = 2, 'multi-threshold auto masking'
 
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
@@ -101,6 +108,8 @@ class InteractiveClean:
             be specified, e.g. "ngc5921.ms", or a list of paths may be specified, e.g.
             ``['ngc5921a.ms','ngc5921b.ms']``.
         imagename (str): Name of the output images (without a suffix).
+        mask (str or MaskMode): user specified CASA imaging mask cube (path) or MaskMode enum indicating
+            mask to generate
         imsize (int, :obj:`list` of int): Number of pixels in a image plane, for example ``[350,250]``.
             ``500`` implies ``[500,500]``. The number of pixels must be even and factorizable by 2,3,5,7 only
             due to FFT limitations.
@@ -142,7 +151,7 @@ class InteractiveClean:
         self._error_result = err
         self.__stop( )
 
-    def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', datacolumn='corrected', nterms=int(2), imsize=[100],
+    def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', datacolumn='corrected', nterms=int(2), imsize=[100],
                   cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='', interpolation='linear',
                   gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False,
                   pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0,
@@ -164,6 +173,22 @@ class InteractiveClean:
                         'flux':     'forestgreen' }
 
         ###
+        ### Auto Masking et al.
+        ###     if the user has specified a mask cube, it OVERRIDES the default, generated mask name
+        self._mask_path = ''
+        self._usemask = 'user'
+        if isinstance( mask, MaskMode ):
+            if mask == MaskMode.AUTOMT:
+                self._usemask = 'auto-multithresh'
+            elif mask == MaskMode.PB:
+                self._usemask = 'pb'
+            else:
+                raise RuntimeError( 'internal consistence error for MaskMode' )
+        elif isinstance( mask, str ) and os.path.isdir( mask ):
+            ### override default mask name
+            self._mask_path = mask
+
+        ###
         ### clean generator
         ###
         if _gclean is None:
@@ -175,9 +200,8 @@ class InteractiveClean:
                                wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm, wbawp=wbawp, usepointing=usepointing,
                                conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, deconvolver=deconvolver,
                                niter=niter, threshold=threshold, cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales,
-                               weighting=weighting, robust=robust, gain=gain, nmajor=nmajor,
-                               history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
-                                                                                  if arg == 'mask' else history_value )
+                               weighting=weighting, robust=robust, gain=gain, nmajor=nmajor, usemask=self._usemask, mask=self._mask_path
+                      )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
@@ -191,7 +215,8 @@ class InteractiveClean:
         self._convergence_id = str(uuid4( ))
         #print(f'convergence:',self._convergence_id)
 
-        self._status['log'] = Div( text='''<hr style="width:790px"><p style="width:790px">%s</p>''' % self._clean.cmds( )[-1] )
+        self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
+        ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
         self._status['stopcode'] = Div( text="<div>initial image</div>" )
 
         ###
@@ -212,7 +237,8 @@ class InteractiveClean:
         ### GUI Elements
         self._imagename = imagename
         self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
-        self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
+        if not os.path.isdir(self._mask_path):
+            self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -428,7 +454,6 @@ class InteractiveClean:
                                            }''',
                    }
 
-        import os
         self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
         ###
         ### error or exception result
@@ -492,13 +517,13 @@ class InteractiveClean:
                                  convergence=None, iterdone=0 )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
+                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
                 else:
-                    return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
+                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
 
-                return dict( result='update', stopcode=stopcode, cmd=f'<p style="width:790px">{self._clean.cmds( )[-1]}</p>',
+                return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                              convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
             elif msg['action'] == 'stop':
                 self.__stop( )

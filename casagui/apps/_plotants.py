@@ -44,12 +44,11 @@ except ImportError:
 
 try:
     import casatools as ct
+    from casatools import table, msmetadata, quanta, ms, measures
 except:
     ct = None
     from casagui.utils import warn_import
     warn_import('casatools')
-
-from casatools import table, msmetadata, quanta, ms, measures
 
 _FIGURE_PLOT_WIDTH = 450
 _FIGURE_PLOT_HEIGHT = 450

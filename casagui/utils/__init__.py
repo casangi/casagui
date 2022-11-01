@@ -39,6 +39,7 @@ from os import path as __path
 from ._ResourceManager import _ResourceManager
 from ._logging import get_logger
 from ._regions import polygon_indexes
+from ._docenum import DocEnum
 
 from astropy import units as u
 from regions import PixCoord
@@ -160,6 +161,7 @@ def error_msg(*args, **kwargs):
 
 
 @static_vars(msgs=dict(
+    casatools='{package} is not available so interactive clean and plotants will not work',
     casatasks='{package} is not available so interactive clean will not work'
 ), reported={})
 def warn_import(package):

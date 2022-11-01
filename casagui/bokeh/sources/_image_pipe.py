@@ -38,8 +38,15 @@ from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
 
 import numpy as np
-from casatools import regionmanager
-from casatools import image as imagetool
+try:
+    import casatools as ct
+    from casatools import regionmanager
+    from casatools import image as imagetool
+except:
+    ct = None
+    from casagui.utils import warn_import
+    warn_import('casatools')
+
 from ..utils import pack_arrays
 from ...utils import partition, resource_manager
 
@@ -204,6 +211,10 @@ class ImagePipe(DataSource):
 
     def __init__( self, image, *args, mask=None, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
+
+        if ct is None:
+            raise RuntimeError('cannot open an image because casatools is not available')
+
         self.__img = None
         self.__msk = None
         resource_manager.reg_at_exit(self, '__del__')
