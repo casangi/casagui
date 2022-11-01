@@ -142,9 +142,14 @@ class InteractiveClean:
         self._error_result = err
         self.__stop( )
 
-    def __init__( self, vis, imagename, field='', spw='', imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', nchan=-1, start='',
-                  width='', interpolation='linear', gridder='standard', pblimit=0.2, deconvolver='hogbom', niter=0,
-                  threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0, scales=[], weighting='natural', robust=float(0.5), gain=float(0.1), nmajor=1 ):
+    def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', datacolumn='corrected', nterms=int(2), imsize=[100],
+                  cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='', interpolation='linear',
+                  gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False,
+                  pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0,
+                  scales=[], weighting='natural', robust=float(0.5), gain=float(0.1), nmajor=1 ):
+
+        if deconvolver == 'mtmfs':
+            raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
 
         ###
         ### used by data pipe (websocket) initialization function
@@ -164,10 +169,13 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, imsize=imsize, cell=cell, phasecenter=phasecenter,
-                               stokes=stokes, specmode=specmode, nchan=nchan, start=start, width=width, interpolation=interpolation,
-                               gridder=gridder, pblimit=pblimit, deconvolver=deconvolver, niter=niter, threshold=threshold,
-                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, weighting=weighting, robust=robust, gain=gain, nmajor=nmajor,
+        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, datacolumn=datacolumn,
+                               nterms=nterms, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes, specmode=specmode,
+                               reffreq=reffreq, nchan=nchan, start=start, width=width, interpolation=interpolation, gridder=gridder,
+                               wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm, wbawp=wbawp, usepointing=usepointing,
+                               conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, deconvolver=deconvolver,
+                               niter=niter, threshold=threshold, cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales,
+                               weighting=weighting, robust=robust, gain=gain, nmajor=nmajor,
                                history_filter=lambda index, arg, history_value: ( f'mask=masks[{len(self._mask_history)-1}]' if len(self._mask_history) > 0 else '' ) \
                                                                                   if arg == 'mask' else history_value )
         ###
