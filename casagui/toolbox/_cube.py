@@ -1223,6 +1223,32 @@ class CubeMask:
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
         set to ``False``, but it can be toggled based on GUI actions.
         '''
+        mask_control = { 'no-mask': '''
+                             <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
+                             <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
+                             <tr><td><b>option</b>-<b>[</b></td><td>move cursor to previous mask</td></tr>
+                             <tr><td><b>option</b>-<b>/</b></td><td>add mask to selection set</td></tr>
+                             <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
+                             <tr><td><b>down</b></td><td>move selection set down one pixel</td></tr>
+                             <tr><td><b>up</b></td><td>move selection set up one pixel</td></tr>
+                             <tr><td><b>left</b></td><td>move selection one pixel to the left</td></tr>
+                             <tr><td><b>right</b></td><td>move selection one pixel to the right</td></tr>
+                             <tr><td><b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
+                             <tr><td><b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
+                             <tr><td><b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
+                             <tr><td><b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
+                             <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
+                             <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
+                             <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
+                             <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>''',
+                         'mask': '''
+                             <tr><td><b>a</b></td><td>add region to the displayed mask portion for current channel</td></tr>
+                             <tr><td><b>s</b></td><td>subtract region from the displayed mask portion for the current channel</td></tr>
+                             <tr><td><b>ctrl</b>-<b>a</b></td><td>add region from the displayed mask portion for all channels</td></tr>
+                             <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the displayed mask portion for all channels</td></tr>
+                             <tr><td><b>escape</b></td><td>remove displayed region</td></tr>'''
+                         }
+
         if self._help is None:
             # using set_attributes allows the user to override defaults like 'width=650'
             self._help =set_attributes(
@@ -1237,30 +1263,15 @@ class CubeMask:
                              <table id="makemaskhelp">
                                <tr><th>buttons/key(s)</th><th>description</th></tr>
                                EXTRAROWS
-                               <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
-                               <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
-                               <tr><td><b>option</b>-<b>[</b></td><td>move cursor to previous mask</td></tr>
-                               <tr><td><b>option</b>-<b>/</b></td><td>add mask to selection set</td></tr>
-                               <tr><td><b>option</b>-<b>escape</b></td><td>clear selection set</td></tr>
-                               <tr><td><b>down</b></td><td>move selection set down one pixel</td></tr>
-                               <tr><td><b>up</b></td><td>move selection set up one pixel</td></tr>
-                               <tr><td><b>left</b></td><td>move selection one pixel to the left</td></tr>
-                               <tr><td><b>right</b></td><td>move selection one pixel to the right</td></tr>
-                               <tr><td><b>shift</b>-<b>up</b></td><td>move selection up several pixels</td></tr>
-                               <tr><td><b>shift</b>-<b>down</b></td><td>move selection down several pixels</td></tr>
-                               <tr><td><b>shift</b>-<b>left</b></td><td>move selection several pixels to the left</td></tr>
-                               <tr><td><b>shift</b>-<b>right</b></td><td>move selection several pixels to the right</td></tr>
                                <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>c</b></td><td>copy selection set to the copy buffer</td></tr>
-                               <tr><td><b>option</b>-<b>v</b></td><td>paste selection set into the current channel</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
-                               <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>
+                               MASKCONTROL
                            </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
                                       .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
-                                      .replace('EXTRAROWS','\n'.join(rows)),
+                                      .replace('EXTRAROWS','\n'.join(rows))
+                                      .replace('MASKCONTROL', mask_control['no-mask'] if self._mask_path is None else mask_control['mask']),
                      visible=False, width=650 ), **kw )
         return self._help
 
