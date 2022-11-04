@@ -151,11 +151,14 @@ class InteractiveClean:
         self._error_result = err
         self.__stop( )
 
-    def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', datacolumn='corrected', nterms=int(2), imsize=[100],
-                  cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='', interpolation='linear',
-                  gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False,
-                  pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', cycleniter=-1, cyclefactor=1.0,
-                  scales=[], weighting='natural', robust=float(0.5), gain=float(0.1), nmajor=1 ):
+    def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', intent='', datacolumn='corrected',
+                  nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='',
+                  outframe='LSRK', interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True,
+                  psterm=False, wbawp=True, usepointing=False, conjbeams=False, pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom',
+                  niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='', pbcor=False,
+                  weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
+                  lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
+                  fastnoise=True, savemodel='none', parallel=False, nmajor=1 ):
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
@@ -194,13 +197,17 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, datacolumn=datacolumn,
-                               nterms=nterms, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes, specmode=specmode,
-                               reffreq=reffreq, nchan=nchan, start=start, width=width, interpolation=interpolation, gridder=gridder,
-                               wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm, wbawp=wbawp, usepointing=usepointing,
-                               conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, deconvolver=deconvolver,
-                               niter=niter, threshold=threshold, cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales,
-                               weighting=weighting, robust=robust, gain=gain, nmajor=nmajor, usemask=self._usemask, mask=self._mask_path
+        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, antenna=antenna, scan=scan,
+                               intent=intent, datacolumn=datacolumn, nterms=nterms, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes,
+                               specmode=specmode, reffreq=reffreq, nchan=nchan, start=start, width=width, outframe=outframe, interpolation=interpolation,
+                               perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm,
+                               wbawp=wbawp, usepointing=usepointing, conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit,
+                               deconvolver=deconvolver, niter=niter, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor,
+                               scales=scales, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
+                               sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
+                               negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
+                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
+                               usemask=self._usemask, mask=self._mask_path
                       )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
