@@ -312,7 +312,8 @@ class InteractiveClean:
                                                        delete convergence_src._convergence_data
                                                        const pos = img_src.cur_chan
                                                        // fetch convergence information for the current channel (pos[1])
-                                                       conv_pipe.send( convergence_id, { action: 'update', value: pos[1] }, update_convergence )
+                                                       // ...convergence update expects [ stokes, chan ]
+                                                       conv_pipe.send( convergence_id, { action: 'update', value: pos }, update_convergence )
                                                    } else {
                                                        convergence_src._convergence_data = clean_msg.convergence
                                                        update_convergence( )
