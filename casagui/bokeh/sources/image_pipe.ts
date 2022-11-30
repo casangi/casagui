@@ -97,8 +97,8 @@ export class ImagePipe extends DataSource {
     // fetch channel
     //    index: [ stokes index, spectral plane ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
-    channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
-        let message = { action: 'channel', index, id, session: object_id(this) }
+    channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string, slice?: [[number,number],[number,number]] | null ): void {
+        let message = { action: 'channel', index, id, session: object_id(this), slice: typeof(slice) !== 'undefined' ? slice : null }
         if ( id in this.pending ) {
             this.queue[id] = { cb, message, index }
         } else {

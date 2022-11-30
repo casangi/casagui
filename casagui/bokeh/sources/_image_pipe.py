@@ -306,6 +306,7 @@ class ImagePipe(DataSource):
                 return
 
             if cmd['action'] == 'channel':
+                print(f'FETCH-CHANNEL>>> {cmd}')
                 chan = self.channel(cmd['index'])
                 mask = self.mask(cmd['index'])
                 if self._stats:

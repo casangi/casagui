@@ -38,13 +38,16 @@ from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, BoxZoomTool, PanTool, \
+                         TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
 from ..bokeh.utils import pack_arrays
 from ..bokeh.state import available_palettes, find_palette, default_palette
+from ..bokeh.tools import ImageBoxZoomTool, ImagePanTool
+from ..bokeh.models import DownsampleState
 
 import numpy as np
 
@@ -52,7 +55,7 @@ class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image, mask=None, abort=None ):
+    def __init__( self, image, mask=None, maxpixels=2500*2500, abort=None ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -69,6 +72,9 @@ class CubeMask:
             bitmask operation, the drawn regions are used to add or subtract
             from a bitmask cube image instead of being the union of all drawn
             regions. This is the standard mode of operation for interactive clean.
+        maxpixels: int
+            The pixel count (number of rows multiplied by number of columns) which
+            triggers down sampling.
         abort: function
             If provided, the ``abort`` function will be called to exit the
             event loop in the case of an error.
@@ -109,6 +115,7 @@ class CubeMask:
                                                         # on successive image cube planes
 
         self.__abort = abort
+        self.__maxpixels = maxpixels                    # dimension size where down sampling begins
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
@@ -760,6 +767,35 @@ class CubeMask:
                                                      self._js_mode_code['bitmask-hotkey-setup'] )
                         }
 
+
+    def _find_tile( self, image_shape ):
+        ### minimum size for sampling
+        maxpixels = max( self.__maxpixels, 250*250 )
+        ###
+        ### find the tile shape to use that is less than the __maxpixels threshold
+        ### and generally preserves the dimensionality of the original channel shape
+        ###
+        from math import ceil
+        shape = image_shape[:2]
+        if shape[0] * shape[1] < maxpixels:
+            return shape
+        mindim = min(shape)
+        sub_max = mindim
+        sub = ceil(max(shape)/2)
+        sub_min = 1
+        for _ in range(mindim): 
+            if sub == sub_max:
+                break
+            pixels = (shape[0]-sub) * (shape[1]-sub)
+            if pixels < maxpixels:
+                sub_max = sub
+            elif pixels > maxpixels:
+                sub_min = sub
+            else:
+                break
+            sub = ceil(abs(sub_max + sub_min)/2)
+        return [shape[0]-sub,shape[1]-sub]
+
     def __stop( self ):
         '''stop interactive masking
         '''
@@ -857,8 +893,22 @@ class CubeMask:
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
+            shape = self._pipe['image'].shape
+            if shape[0] * shape[1] > self.__maxpixels:
+                self._downsample_state = DownsampleState( self._image_source,
+                                                          self._find_tile(shape) )
+                self._boxzoom = ImageBoxZoomTool( self._downsample_state )
+                self._pan = ImagePanTool( self._downsample_state )
+                self._downsample_state.js_on_change( 'viewport',
+                                                     CustomJS( args=dict( ),
+                                                               code='''console.log("HEREIAMHEREIAMPLEASEFINDME")''' ))
+            else:
+                self._boxzoom = BoxZoomTool( )
+                self._pan = PanTool( )
+
             self._image = set_attributes( figure( output_backend="webgl",
-                                                  tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
+#                                                 tools=[ "lasso_select","box_select","pan","box_zoom",
+                                                  tools=[ "lasso_select","box_select",self._pan,self._boxzoom,
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
 

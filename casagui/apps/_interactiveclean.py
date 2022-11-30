@@ -37,6 +37,11 @@ from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, 
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from ..utils import resource_manager
+###
+### THESE TWO IMPORTS ARE FOR A DEVELOPMENT SHIM AND SHOULD BE REMOVED
+### 
+import _pickle as pickle
+import pathlib
 
 try:
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
@@ -197,24 +202,37 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, antenna=antenna, scan=scan,
-                               intent=intent, datacolumn=datacolumn, nterms=nterms, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes,
-                               specmode=specmode, reffreq=reffreq, nchan=nchan, start=start, width=width, outframe=outframe, interpolation=interpolation,
-                               perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm,
-                               wbawp=wbawp, usepointing=usepointing, conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit,
-                               deconvolver=deconvolver, niter=niter, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor,
-                               scales=scales, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
-                               sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
-                               negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
-                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
-                               usemask=self._usemask, mask=self._mask_path
-                      )
+        if str(pathlib.Path(__file__).parent.resolve()).endswith('/vlass-demo'):
+            self._clean = None
+        else:
+            self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, antenna=antenna, scan=scan,
+                                   intent=intent, datacolumn=datacolumn, nterms=nterms, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes,
+                                   specmode=specmode, reffreq=reffreq, nchan=nchan, start=start, width=width, outframe=outframe, interpolation=interpolation,
+                                   perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm,
+                                   wbawp=wbawp, usepointing=usepointing, conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit,
+                                   deconvolver=deconvolver, niter=niter, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor,
+                                   scales=scales, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
+                                   sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
+                                   negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
+                                   minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
+                                   usemask=self._usemask, mask=self._mask_path
+                          )
         ###
         ### self._convergence_data: accumulated, pre-channel convergence information
         ###                         used by ColumnDataSource
         ###
         self._status = { }
-        stopcode, self._convergence_data = next(self._clean)
+
+
+        ###
+        ### THIS IS A DEVELOPMENT SHIM WHICH SHOULD BE REMOVED
+        ###
+        if str(pathlib.Path(__file__).parent.resolve()).endswith('/vlass-demo'):
+            with open( 'gclean-ret-1.pkl', 'rb' ) as fd:
+                stopcode, self._convergence_data = pickle.load(fd)
+        else:
+            stopcode, self._convergence_data = next(self._clean)
+
         if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
             self._clean.finalize()
         if len(self._convergence_data.keys()) == 0:
@@ -222,8 +240,11 @@ class InteractiveClean:
         self._convergence_id = str(uuid4( ))
         #print(f'convergence:',self._convergence_id)
 
-        self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
-        ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
+        if str(pathlib.Path(__file__).parent.resolve()).endswith('/vlass-demo'):
+            self._status['log'] = Div( text='''<hr style="width:790px"><p>THERE WOULD BE LOG STUFF HERE</p>''' )
+        else:
+            self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
+            ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
         self._status['stopcode'] = Div( text="<div>initial image</div>" )
 
         ###
@@ -243,9 +264,11 @@ class InteractiveClean:
         ###
         ### GUI Elements
         self._imagename = imagename
-        self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        self._residual_path = ("%s.residual" % imagename)
+        #self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         if not os.path.isdir(self._mask_path):
-            self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
+            self._mask_path = ("%s.mask" % imagename)
+            #self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -462,7 +485,7 @@ class InteractiveClean:
                                            }''',
                    }
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler, maxpixels=0 )
         ###
         ### error or exception result
         ###
