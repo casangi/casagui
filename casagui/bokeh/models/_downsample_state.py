@@ -34,7 +34,7 @@ class DownsampleState(Model):
     down sampling.
     """
     shape = Tuple( Int, Int, help="on disk image channel shape" )
-    raw = Tuple( Int, Int, help="disk pixel size of image that yielded sampled size" )
+    raw = Tuple( Tuple( Int, Int), Tuple( Int, Int ), help="blc/trc of selected region within the image channel (xmin, ymin) and (xmax, ymax)" )
     ###
     ### Once sampled[0] <= viewport[0][1]-viewport[0][0] and
     ###      sampled[1] <= viewport[1][1]-viewport[1][0]
@@ -54,7 +54,8 @@ class DownsampleState(Model):
     ###                                                                                         |                    |
     ###                                                  raw area sampled to produce sampled----^                    |
     ###                                                  may be smaller than shape due                               |
-    ###                                                  to zooming                                                  |
+    ###                                                  to zooming, it is typically larger                          |
+    ###                                                  than sampled                                                |
     ###
     sampled = Tuple( Int, Int, help="dimension of the pixels available inside javascript" )
     viewport = Tuple( Tuple( Int, Int), Tuple( Int, Int ), help="blc/trc of selected view (xmin, ymin) and (xmax, ymax)" )
@@ -65,6 +66,6 @@ class DownsampleState(Model):
         image_source.downsample_state = self
         shape = image_source.image_source.shape[:2]
         self.shape = shape
-        self.raw = shape
+        self.raw = [ [0,0], shape ]
         self.sampled = display_dim
         self.viewport = [ [0,0], shape ]
