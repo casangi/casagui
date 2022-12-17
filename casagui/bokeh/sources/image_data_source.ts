@@ -3,7 +3,6 @@ import * as p from "@bokehjs/core/properties"
 import {uuid4} from "@bokehjs/core/util/string"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 import { ImagePipe } from "./image_pipe"
-import { DownsampleState } from "../models/downsample_state"
 
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
@@ -16,7 +15,6 @@ export namespace ImageDataSource {
       image_source: p.Property<ImagePipe>
       num_chans: p.Property<[Number,Number]>          // [ stokes, spectral ]
       cur_chan:  p.Property<[number,number]>          // [ stokes, spectral ]
-      downsample_state: p.Property<DownsampleState | null>
   }
 }
 
@@ -35,29 +33,22 @@ export class ImageDataSource extends ColumnDataSource {
         super.initialize();
         const execute = () => {
             if ( this.init_script != null ) this.init_script!.execute( this )
-            if ( this.downsample_state ) {
-                this.downsample_state.connect( this.downsample_state.properties.viewport.change, ( ) => {
-		    this.image_source.channel( this.cur_chan, (msg) => {
-			console.group("ZOOM IMAGE HERE")
-			console.log(msg)
-			console.log(`>\t${this.cur_chan}`)
-			console.log(this)
-			console.groupEnd( )
-		    }, this.imid, this.downsample_state ? this.downsample_state.viewport : null )
-                } )
-            }
         }
         execute( )
     }
-    channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
+    channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any, slice?: [[number,number],[number,number]] | null ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
                                        this.cur_chan = [ s, c ]
                                        if ( cb ) {
                                            cb(data)
                                        }
+				       console.group('SETTING DATA')
+				                       console.log( data )
+                                       console.log( this )
+				       console.groupEnd( )
                                        this.data = data.chan
-                                   }, this.imid )
+                                   }, this.imid, slice )
     }
     refresh( cb?: (msg:{[key: string]: any}) => any ): void {
         // supply default index value because the ImagePipe will have no cached
@@ -73,7 +64,6 @@ export class ImageDataSource extends ColumnDataSource {
             image_source: [ Ref(ImagePipe) ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],
-            downsample_state: [ Any ],
         }));
     }
 }

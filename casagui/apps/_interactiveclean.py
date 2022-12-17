@@ -485,7 +485,7 @@ class InteractiveClean:
                                            }''',
                    }
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler, maxpixels=0 )
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler, maxpixels=250*250 )
         ###
         ### error or exception result
         ###

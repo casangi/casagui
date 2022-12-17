@@ -28,7 +28,7 @@
 '''This contains functions to inject the ``casaguijs`` library into the
 generated HTML that is used to display the Bokeh plots that ``casagui``'s
 applications produce'''
-from os.path import dirname, join, basename
+from os.path import dirname, join, basename, isfile
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
 from bokeh import __version__ as bokeh_version
@@ -36,6 +36,12 @@ from bokeh import __version__ as bokeh_version
 CASALIB_VERSION = "0.0.2"
 CASAGUIJS_VERSION = "0.0.6"
 
+########################################################################
+### To have a debuggable version of Bokeh, set 'do_local_subst to    ###
+### True and add the conversion from 'bokeh-2.4.3.min.js' to         ###
+### the path to 'bokeh-2.4.3.js' below.                              ###
+########################################################################
+#@static_vars(initialized=False,do_local_subst=True)
 @static_vars(initialized=False,do_local_subst=not have_network( ))
 def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
@@ -101,6 +107,8 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
         'bokeh-2.4.1.min.js': join( dirname(__file__), 'js', 'bokeh-2.4.1.min.js' ),
         'bokeh-gl-2.4.1.min.js':  join( dirname(__file__), 'js', 'bokeh-gl-2.4.1.min.js' ),
         'bokeh-widgets-2.4.1.min.js':  join( dirname(__file__), 'js', 'bokeh-widgets-2.4.1.min.js' ),
+        #### set up a debuggable version...
+    #   'bokeh-2.4.3.min.js': join( dirname(__file__), 'js', 'bokeh-2.4.3.js' ),
     }
 
     bokeh_major_minor = '.'.join(bokeh_version.split('.')[0:2])
@@ -115,7 +123,11 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     if bokeh is None:
         bokehlib = f"casaguijs-v{CASAGUIJS_VERSION}.{bokeh_dev}-b{bokeh_major_minor}.min.js"
         if initialize_bokeh.do_local_subst:
-            bokehlib_url = path_to_url( join( dirname(__file__), 'js', bokehlib ) )
+            jslibpath = join( dirname(__file__), 'js', bokehlib )
+            if isfile(jslibpath):
+                bokehlib_url = path_to_url( jslibpath )
+            else:
+                bokehlib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{bokehlib}"
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...
@@ -141,7 +153,11 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     if js is None:
         jslib = f"casalib-v{CASALIB_VERSION}.min.js"
         if initialize_bokeh.do_local_subst:
-            jslib_url = path_to_url( join( dirname(__file__), 'js', jslib ) )
+            jslibpath = join( dirname(__file__), 'js', jslib )
+            if isfile(jslibpath):
+                jslib_url = path_to_url(  )
+            else:
+                jslib_url = f"https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/{CASAGUIJS_VERSION}/{jslib}"
         else:
             ### ------------------------------------------------------------------------------------------
             ### should potentially find a better download location...

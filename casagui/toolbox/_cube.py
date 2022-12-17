@@ -46,8 +46,7 @@ from casagui.bokeh.state import initialize_bokeh
 from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
 from ..bokeh.utils import pack_arrays
 from ..bokeh.state import available_palettes, find_palette, default_palette
-from ..bokeh.tools import ImageBoxZoomTool, ImagePanTool
-from ..bokeh.models import DownsampleState
+from ..bokeh.tools import DownsampleBoxZoomTool, DownsamplePanTool
 
 import numpy as np
 
@@ -767,35 +766,6 @@ class CubeMask:
                                                      self._js_mode_code['bitmask-hotkey-setup'] )
                         }
 
-
-    def _find_tile( self, image_shape ):
-        ### minimum size for sampling
-        maxpixels = max( self.__maxpixels, 250*250 )
-        ###
-        ### find the tile shape to use that is less than the __maxpixels threshold
-        ### and generally preserves the dimensionality of the original channel shape
-        ###
-        from math import ceil
-        shape = image_shape[:2]
-        if shape[0] * shape[1] < maxpixels:
-            return shape
-        mindim = min(shape)
-        sub_max = mindim
-        sub = ceil(max(shape)/2)
-        sub_min = 1
-        for _ in range(mindim): 
-            if sub == sub_max:
-                break
-            pixels = (shape[0]-sub) * (shape[1]-sub)
-            if pixels < maxpixels:
-                sub_max = sub
-            elif pixels > maxpixels:
-                sub_min = sub
-            else:
-                break
-            sub = ceil(abs(sub_max + sub_min)/2)
-        return [shape[0]-sub,shape[1]-sub]
-
     def __stop( self ):
         '''stop interactive masking
         '''
@@ -810,7 +780,8 @@ class CubeMask:
         '''
         if self._pipe['image'] is None:
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
-                                             stats=True, abort=self.__abort, address=find_ws_address( ) )
+                                             stats=True, abort=self.__abort,
+                                             maxpixels=self.__maxpixels, address=find_ws_address( ) )
         if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 
@@ -895,13 +866,14 @@ class CubeMask:
 
             shape = self._pipe['image'].shape
             if shape[0] * shape[1] > self.__maxpixels:
-                self._downsample_state = DownsampleState( self._image_source,
-                                                          self._find_tile(shape) )
-                self._boxzoom = ImageBoxZoomTool( self._downsample_state )
-                self._pan = ImagePanTool( self._downsample_state )
-                self._downsample_state.js_on_change( 'viewport',
-                                                     CustomJS( args=dict( ),
-                                                               code='''console.log("HEREIAMHEREIAMPLEASEFINDME")''' ))
+                self._boxzoom = DownsampleBoxZoomTool( )
+                self._boxzoom.js_on_event( 'downsample-zoom', CustomJS( args=dict( source=self._image_source  ),
+                                                               code='''console.group('DOWNSAMPLE UPDATE')
+                                                                       const shape = source.cur_chan
+                                                                       source.channel( shape[0], shape[1], undefined, [ cb_obj.blc, cb_obj.trc ] )
+                                                                       console.groupEnd( )
+                                                                    ''' ) )
+                self._pan = DownsamplePanTool( )
             else:
                 self._boxzoom = BoxZoomTool( )
                 self._pan = PanTool( )
@@ -911,6 +883,10 @@ class CubeMask:
                                                   tools=[ "lasso_select","box_select",self._pan,self._boxzoom,
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
+            #self._image.xaxis.ticker = [ 1, 250, 512 ]
+            #self._image.xaxis.major_label_overrides = { 1: 'a', 250: 'b', 512: 'c' }
+            #self._image.yaxis.ticker = [ 1, 250, 512 ]
+            #self._image.yaxis.major_label_overrides = { 1: 'a', 250: 'b', 512: 'c' }
 
             self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 

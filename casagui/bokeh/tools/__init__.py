@@ -1,2 +1,2 @@
-from ._image_box_zoom_tool import ImageBoxZoomTool
-from ._image_pan_tool import ImagePanTool
+from ._downsample_box_zoom_tool import DownsampleBoxZoomTool
+from ._downsample_pan_tool import DownsamplePanTool

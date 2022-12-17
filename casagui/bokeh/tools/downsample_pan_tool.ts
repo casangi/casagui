@@ -1,14 +1,13 @@
 import {PanEvent} from "@bokehjs/core/ui_events"
 import * as p from "@bokehjs/core/properties"
 import {PanTool, PanToolView} from "@bokehjs/models/tools/gestures/pan_tool"
-import { DownsampleState } from "../models/downsample_state"
 
-export class ImagePanToolView extends PanToolView {
-    override model: ImagePanTool
+export class DownsamplePanToolView extends PanToolView {
+    override model: DownsamplePanTool
 
     override _pan_end(e: PanEvent): void {
-    	console.group("ImagePan: _pan_end")
-    	console.log("Made it to _pan_end")
+        console.group("DownsamplePan: _pan_end")
+        console.log("Made it to _pan_end")
         console.log( e )
         console.log( this.plot_view.frame.bbox )
         super._pan_end(e)
@@ -17,28 +16,28 @@ export class ImagePanToolView extends PanToolView {
     }
 }
 
-export namespace ImagePanTool {
+export namespace DownsamplePanTool {
     export type Attrs = p.AttrsOf<Props>
 
     export type Props = PanTool.Props & {
-        downsample_state: p.Property<DownsampleState>
+        //downsample_state: p.Property<DownsampleState>
     }
 }
 
-export interface ImagePanTool extends ImagePanTool.Attrs {}
+export interface DownsamplePanTool extends DownsamplePanTool.Attrs {}
 
-export class ImagePanTool extends PanTool {
-    override properties: ImagePanTool.Props
-    override __view_type__: ImagePanToolView
+export class DownsamplePanTool extends PanTool {
+    override properties: DownsamplePanTool.Props
+    override __view_type__: DownsamplePanToolView
 
-    constructor(attrs?: Partial<ImagePanTool.Attrs>) {
+    constructor(attrs?: Partial<DownsamplePanTool.Attrs>) {
         super(attrs)
     }
 
     static {
-        this.prototype.default_view = ImagePanToolView
-        this.define<ImagePanTool.Props>(({ Any }) => ({
-            downsample_state: [ Any ]
+        this.prototype.default_view = DownsamplePanToolView
+        this.define<DownsamplePanTool.Props>(({ /*Any*/ }) => ({
+            // downsample_state: [ Any ]
         }))
 
         //this.register_alias("box_zoom", () => new BoxZoomTool({dimensions: "both"}))
@@ -46,5 +45,5 @@ export class ImagePanTool extends PanTool {
         //this.register_alias("ybox_zoom", () => new BoxZoomTool({dimensions: "height"}))
     }
 
-    override tool_name: "Image Pan"
+    override tool_name: "Downsample Pan"
 }

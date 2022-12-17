@@ -32,7 +32,6 @@ from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance, Tuple, Int, Nullable
 from bokeh.models.callbacks import Callback
 from ._image_pipe import ImagePipe
-from ..models import DownsampleState
 
 class ImageDataSource(ColumnDataSource):
     """Implementation of a ``ColumnDataSource`` customized for planes from
@@ -53,9 +52,6 @@ class ImageDataSource(ColumnDataSource):
     image_source = Instance(ImagePipe)
     num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
     cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
-    downsample_state = Nullable(Instance(DownsampleState), help='''
-    State object that shares downsample state between downsampling tools and ImagePipe
-    ''')
 
     __implementation__ = TypeScript("")
 

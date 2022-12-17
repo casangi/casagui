@@ -31,6 +31,7 @@ of image cube channels in response to user input.'''
 
 import json
 import asyncio
+import types
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
@@ -119,7 +120,7 @@ class ImagePipe(DataSource):
             raise RuntimeError(f'mismatch between image shape ({self.__img.shape( )}) and mask shape ({mskshape})')
         if self.__chan_shape is None: self.__chan_shape = list(mskshape[0:2])
 
-    def channel( self, index ):
+    def channel( self, index, slice=None ):
         """Retrieve one channel from the image cube. The `index` should be a
         two element list of integers. The first integer is the ''stokes'' axis
         in the image cube. The second integer is the ''channel'' axis in the
@@ -130,10 +131,31 @@ class ImagePipe(DataSource):
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
         """
+        import math as m
         if self.__img is None:
             raise RuntimeError('no image is available')
-        return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
-                                                trc=self.__chan_shape + index) ).transpose( )
+
+        floor = lambda x: list(map(m.floor,x)) if isinstance(x,list) else m.floor(x)
+        ceil = lambda x: list(map(m.floor,x)) if isinstance(x,list) else m.floor(x)
+
+        blc = floor(slice[0]) if slice else [0,0]
+        trc = ceil(slice[1]) if slice else self.__chan_shape
+
+        chan = np.squeeze( self.__img.getchunk( blc=blc + index,
+                                                trc=trc + index) )
+        cursize = chan.shape[0]*chan.shape[1]
+
+        if cursize > self.__maxpixels:
+            print("DOWNSAMPLE HERE")
+            print( f'\tblc={blc + index}\ttrc={trc + index}' )
+            chan = self.__downsample( chan, self.__find_tile( chan.shape ) )
+
+        self.__pixel_range = { 'x': [ blc[0], trc[0] ],
+                               'y': [ blc[1], trc[1] ] }
+        print( f'\trange={self.__pixel_range}' )
+        #return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
+        #                                        trc=self.__chan_shape + index) ).transpose( )
+        return chan.transpose( )
 
     def mask( self, index, modify=False ):
         """Retrieve one channel mask from the mask cube. The `index` should be a
@@ -209,7 +231,49 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
-    def __init__( self, image, *args, mask=None, abort=None, stats=False, **kwargs ):
+    def __downsample( self, chan, shape ):
+        from scipy.interpolate import interp2d
+        x = np.linspace( 0, 1, chan.shape[0] )
+        y = np.linspace( 0, 1, chan.shape[1] )
+        cvt = interp2d( y, x, chan, kind="cubic" )
+        x2 = np.linspace( 0, 1, shape[0] )
+        y2 = np.linspace( 0, 1, shape[1] )
+        return cvt( y2, x2 )
+        #return cvt( x2, y2 )
+
+        print( '************************************************************' )
+        print( f'convert from {chan.shape} to {shape}' )
+        print( '************************************************************' )
+
+    def __find_tile( self, image_shape ):
+        ### minimum size for sampling
+        maxpixels = max( self.__maxpixels, 250*250 )
+        ###
+        ### find the tile shape to use that is less than the __maxpixels threshold
+        ### and generally preserves the dimensionality of the original channel shape
+        ###
+        from math import ceil
+        shape = image_shape[:2]
+        if shape[0] * shape[1] < maxpixels:
+            return shape
+        mindim = min(shape)
+        sub_max = mindim
+        sub = ceil(max(shape)/2)
+        sub_min = 1
+        for _ in range(mindim):
+            if sub == sub_max:
+                break
+            pixels = (shape[0]-sub) * (shape[1]-sub)
+            if pixels < maxpixels:
+                sub_max = sub
+            elif pixels > maxpixels:
+                sub_min = sub
+            else:
+                break
+            sub = ceil(abs(sub_max + sub_min)/2)
+        return [shape[0]-sub,shape[1]-sub]
+
+    def __init__( self, image, *args, mask=None, abort=None, stats=False, maxpixels=None, **kwargs ):
         super( ).__init__( *args, **kwargs, )
 
         if ct is None:
@@ -224,6 +288,9 @@ class ImagePipe(DataSource):
         self.shape = list(self.__img.shape( ))
         self.__session = None
         self.__abort = abort
+        self.__maxpixels = maxpixels
+        self.__displayed_axes = { 'x': [0,self.shape[0]],
+                                  'y': [0,self.shape[1]] }
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
@@ -275,6 +342,30 @@ class ImagePipe(DataSource):
         ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
 
+    async def __send_message( self, ws, msg, err="sending*error" ):
+        def dump( obj, space=0, sep=", " ):
+            if isinstance(obj,dict):
+                return "{ " + sep.join( [ f'{key}: {dump(val)}' for key,val in obj.items() ] ) + " }"
+            elif isinstance(obj,list):
+                vals = [ f'{dump(val)}' for val in obj ]
+                if len(vals) > 2:
+                    if all( [ x == vals[0] for x in vals ] ):
+                        return f'[ {vals[0]} X {len(vals)} ]'
+                return "[ " + sep.join( vals ) + " ]"
+            else:
+                return type(obj).__name__
+
+        try:
+            await ws.send(json.dumps(msg))
+        except Exception as e:
+            print(f'********************{err}********************')
+            print(e)
+            print('---------------message-that-failed------------------')
+            ### often the failure seems to be an ndarray that
+            ### cannot be converted to JSON...
+            print( dump(msg) )
+            print('----------------------------------------------------')
+
     async def process_messages( self, websocket ):
         """Process messages related to image display updates.
 
@@ -307,7 +398,9 @@ class ImagePipe(DataSource):
 
             if cmd['action'] == 'channel':
                 print(f'FETCH-CHANNEL>>> {cmd}')
-                chan = self.channel(cmd['index'])
+                if 'slice' in cmd:
+                    print( f'''slice\t>>>>>>---> {cmd['slice']}''' )
+                chan = self.channel(cmd['index'],cmd['slice'] if 'slice' in cmd else None)
                 mask = self.mask(cmd['index'])
                 if self._stats:
                     #statistics for the displayed plane of the image cubea
@@ -320,12 +413,12 @@ class ImagePipe(DataSource):
                     msg = { 'id': cmd['id'],
                             'message': { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] } } }
 
-                await websocket.send(json.dumps(msg))
+                await self.__send_message( websocket, msg, "first*send" )
                 count += 1
             elif cmd['action'] == 'spectra':
                 msg = { 'id': cmd['id'],
                         'message': { 'spectrum': pack_arrays( self.spectra(cmd['index']) ) } }
-                await websocket.send(json.dumps(msg))
+                await self.__send_message( websocket, msg, "second*send" )
             elif cmd['action'] == 'initialize':
                 ###
                 ### initialize session identifier
