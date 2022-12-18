@@ -39,11 +39,21 @@ from bokeh.layouts import column, row, Spacer
 from ..utils import resource_manager
 
 try:
+    ## gclean version number needed for proper interactive clean behavior
+    from casatasks.private.imagerhelpers._gclean import _GCV001
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 except:
-    _gclean = None
-    from casagui.utils import warn_import
-    warn_import('casatasks')
+    try:
+        ###
+        ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
+        ###
+        #print('warning: using tclean compatibility layer...')
+        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV001
+        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
+    except:
+        _gclean = None
+        from casagui.utils import warn_import
+        warn_import('casatasks')
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask
