@@ -123,13 +123,13 @@ class gclean:
         if 'mask' in msg:
             self._mask = msg['mask']
 
-    def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', antenna='', scan='', intent='', datacolumn='corrected', imsize=[100],
-                  cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='', outframe='LSRK', interpolation='linear',
-                  perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, conjbeams=False, usepointing=False,
-                  pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, nmajor=1, cyclefactor=1.0,
-                  scales=[], restoringbeam='', pbcor=False, nterms=int(2), weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0,
-                  noisethreshold=5.0, lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
-                  fastnoise=True, savemodel='none', usemask='user', mask='', parallel=False,
+    def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected',
+                  imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1, start='', width='', outframe='LSRK',
+                  interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True,
+                  conjbeams=False, usepointing=False, pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0,
+                  cycleniter=-1, nmajor=1, cyclefactor=1.0, scales=[], restoringbeam='', pbcor=False, nterms=int(2), weighting='natural', robust=float(0.5),
+                  npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0, lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3,
+                  growiterations=75, dogrowprune=True, minpercentchange=-1.0, fastnoise=True, savemodel='none', usemask='user', mask='', parallel=False,
                   history_filter=lambda index, arg, history_value: history_value ):
         self._output_count = 0
         self._vis = vis
@@ -162,7 +162,6 @@ class gclean:
         self._nsigma = nsigma
         self._nmajor = nmajor
         self._cyclefactor = cyclefactor
-        self._mask = ''
         self._scales = scales
         self._restoringbeam = restoringbeam
         self._pbcor = pbcor
@@ -176,6 +175,7 @@ class gclean:
         self._uvrange = uvrange
         self._antenna = antenna
         self._scan = scan
+        self._observation = observation
         self._intent = intent
         self._datacolumn = datacolumn
         self._weighting = weighting
@@ -196,8 +196,6 @@ class gclean:
         self._usemask = usemask
         self._mask = mask
 
-        if len(list(filter(lambda f: os.path.isdir(f) and f.startswith(self._imagename + '.') and not f.endswith('.cf'), os.listdir( os.curdir )))) > 0:
-            raise RuntimeError("image files already exist")
         self._convergence_result = (None,None)
 
     def __filter_convergence( raw ):
@@ -296,9 +294,10 @@ class gclean:
                                            outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
                                            deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales,
                                            restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
-                                           timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, intent=self._intent,
-                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=0,
-                                           niter=1, gain=0.000001, calcres=True, restoration=False, parallel=self._parallel )
+                                           timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
+                                           observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
+                                           robust=self._robust, npixels=self._npixels, interactive=0, niter=1, gain=0.000001, calcres=True,
+                                           restoration=False, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, mask=self._mask, restoration=False, deconvolver=self._deconvolver )
             else:
                 tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell, phasecenter=self._phasecenter,
@@ -309,14 +308,15 @@ class gclean:
                                            outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
                                            deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam,
                                            pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange,
-                                           uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, intent=self._intent, datacolumn=self._datacolumn,
-                                           weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=0, niter=self._niter,
-                                           restart=True, calcpsf=False, calcres=False, restoration=False, threshold=self._threshold, nsigma=self._nsigma,
-                                           cycleniter=self._cycleniter, nmajor=self._nmajor, gain=self._gain, sidelobethreshold=self._sidelobethreshold,
-                                           noisethreshold=self._noisethreshold, lownoisethreshold=self._lownoisethreshold,
-                                           negativethreshold=self._negativethreshold, minbeamfrac=self._minbeamfrac, growiterations=self._growiterations,
-                                           dogrowprune=self._dogrowprune, minpercentchange=self._minpercentchange, fastnoise=self._fastnoise,
-                                           savemodel=self._savemodel, maxpsffraction=1, minpsffraction=0, mask=self._mask, parallel=self._parallel )
+                                           uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
+                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=0,
+                                           niter=self._niter, restart=True, calcpsf=False, calcres=False, restoration=False, threshold=self._threshold,
+                                           nsigma=self._nsigma, cycleniter=self._cycleniter, nmajor=self._nmajor, gain=self._gain,
+                                           sidelobethreshold=self._sidelobethreshold, noisethreshold=self._noisethreshold,
+                                           lownoisethreshold=self._lownoisethreshold, negativethreshold=self._negativethreshold,
+                                           minbeamfrac=self._minbeamfrac, growiterations=self._growiterations, dogrowprune=self._dogrowprune,
+                                           minpercentchange=self._minpercentchange, fastnoise=self._fastnoise, savemodel=self._savemodel, maxpsffraction=1,
+                                           minpsffraction=0, mask=self._mask, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, mask=self._mask, restoration=False, deconvolver=self._deconvolver )
 
             new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
@@ -357,8 +357,8 @@ class gclean:
                                        outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
                                        deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam,
                                        pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange,
-                                       uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, intent=self._intent, datacolumn=self._datacolumn,
-                                       weighting=self._weighting, robust=self._robust, npixels=self._npixels, gain=self._gain,
+                                       uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
+                                       datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, gain=self._gain,
                                        sidelobethreshold=self._sidelobethreshold, noisethreshold=self._noisethreshold, lownoisethreshold=self._lownoisethreshold,
                                        negativethreshold=self._negativethreshold, minbeamfrac=self._minbeamfrac, growiterations=self._growiterations,
                                        dogrowprune=self._dogrowprune, minpercentchange=self._minpercentchange, fastnoise=self._fastnoise,
