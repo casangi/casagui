@@ -763,11 +763,11 @@ class CubeMask:
     def __stop( self ):
         '''stop interactive masking
         '''
-        resource_manager.stop_asyncio_loop()
+        resource_manager( ).stop_asyncio_loop()
         if self._image_server is not None and self._image_server.ws_server.is_serving( ):
-            resource_manager.stop_asyncio_loop()
+            resource_manager( ).stop_asyncio_loop()
         if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            resource_manager.stop_asyncio_loop()
+            resource_manager( ).stop_asyncio_loop()
 
     def _init_pipes( self ):
         '''set up websockets
@@ -1282,6 +1282,6 @@ class CubeMask:
             return await asyncio.gather( loop1, loop2 )
         self._image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
         self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
-        resource_manager.reg_webserver(self._image_server.ws_server)
-        resource_manager.reg_webserver(self._control_server.ws_server)
+        resource_manager( ).reg_webserver(self._image_server.ws_server)
+        resource_manager( ).reg_webserver(self._control_server.ws_server)
         return async_loop( self._control_server, self._image_server )

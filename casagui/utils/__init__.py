@@ -53,8 +53,6 @@ except ImportError:
     __have_casatools = False
 
 logger = get_logger()
-resource_manager = _ResourceManager()
-
 
 def static_vars(**kwargs):
     '''Initialize static function variables to for use within a function.
@@ -93,6 +91,16 @@ def static_dir(func):
     '''
     return [a for a in dir(func) if a[0] != '_']
 
+
+@static_vars(mgr=None)
+def resource_manager( ):
+    if resource_manager.mgr is None:
+        resource_manager.mgr = _ResourceManager( )
+    return resource_manager.mgr
+
+def reset_resource_manager( ):
+    if resource_manager.mgr is not None:
+        resource_manager.mgr = _ResourceManager( )
 
 def path_to_url(path):
     '''Convert a single filesystem path to a URL.

@@ -217,7 +217,7 @@ class ImagePipe(DataSource):
 
         self.__img = None
         self.__msk = None
-        resource_manager.reg_at_exit(self, '__del__')
+        resource_manager( ).reg_at_exit( self, '__del__' )
         self._stats = stats
         self.__open_image( image )
         self.__open_mask( mask )

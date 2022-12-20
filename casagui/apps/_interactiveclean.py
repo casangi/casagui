@@ -36,7 +36,8 @@ from uuid import uuid4
 from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
-from ..utils import resource_manager
+from bokeh.io import reset_output as reset_bokeh_output
+from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -151,15 +152,41 @@ class InteractiveClean:
 
     '''
     def __stop( self ):
-        resource_manager.stop_asyncio_loop()
+        resource_manager( ).stop_asyncio_loop()
         if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            resource_manager.stop_asyncio_loop()
+            resource_manager( ).stop_asyncio_loop()
         if self._converge_server is not None and self._converge_server.ws_server.is_serving( ):
-            resource_manager.stop_asyncio_loop()
+            resource_manager( ).stop_asyncio_loop()
 
     def _abort_handler( self, loop, err ):
         self._error_result = err
         self.__stop( )
+
+    def __reset( self ):
+        if self.__pipes_initialized:
+            self._pipe = { 'control': None, 'converge': None }
+            reset_bokeh_output( )
+            reset_resource_manager( )
+            self._clean.reset( )
+
+        ###
+        ### used by data pipe (websocket) initialization function
+        ###
+        self.__pipes_initialized = False
+        self._mask_history = [ ]
+
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
+        ###
+        ### error or exception result
+        ###
+        self._error_result = None
+
+        ###
+        ### websocket servers
+        ###
+        self._control_server = None
+        self._converge_server = None
+
 
     def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', specmode='cube', reffreq='', nchan=-1,
@@ -174,10 +201,10 @@ class InteractiveClean:
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
 
         ###
-        ### used by data pipe (websocket) initialization function
+        ### This is used to tell whether the websockets have been initialized, but also to
+        ### indicate if __call__ is being called multiple times to allow for resetting Bokeh
         ###
         self.__pipes_initialized = False
-        self._mask_history = [ ]
 
         ###
         ### color specs
@@ -232,10 +259,6 @@ class InteractiveClean:
         self._convergence_id = str(uuid4( ))
         #print(f'convergence:',self._convergence_id)
 
-        self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
-        ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
-        self._status['stopcode'] = Div( text="<div>initial image</div>" )
-
         ###
         ### Initial Conditions
         ###
@@ -277,12 +300,16 @@ class InteractiveClean:
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'initialize':      '''if ( ! convergence_src._initialized ) {
                                                convergence_src._initialized = true
+                                               convergence_src._window_closed = false
                                                window.addEventListener( 'beforeunload',
                                                                         function (e) {
-                                                                            ctrl_pipe.send( ids['stop'],
-                                                                                            { action: 'stop', value: { } },
-                                                                                              undefined ) }
-                                                                      )
+                                                                            // if the window is already closed this message is never
+                                                                            // delivered (unless interactive clean is called again then
+                                                                            // the event shows up in the newly created control pipe
+                                                                            if ( convergence_src._window_closed == false ) {
+                                                                                ctrl_pipe.send( ids['stop'],
+                                                                                                { action: 'stop', value: { } },
+                                                                                                  undefined ) } } )
                                            }''',
 
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
@@ -472,17 +499,6 @@ class InteractiveClean:
                                            }''',
                    }
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
-        ###
-        ### error or exception result
-        ###
-        self._error_result = None
-
-        ###
-        ### websocket servers
-        ###
-        self._control_server = None
-        self._converge_server = None
 
     def _init_pipes( self ):
         if not self.__pipes_initialized:
@@ -499,6 +515,10 @@ class InteractiveClean:
         ### set up websockets which will be used for control and convergence updates
         ###
         self._init_pipes( )
+
+        self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
+        ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
+        self._status['stopcode'] = Div( text="<div>initial image</div>" )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
@@ -706,7 +726,8 @@ class InteractiveClean:
                                                   //                { action: 'stop',
                                                   //                  value: { } },
                                                   //                update_gui )
-                                                  img_src.done( )
+                                                  convergence_src._window_closed = true
+                                                  img_src.done( )  /*** <<-------<<<< this will close the tab ***/
                                               } else if ( state.mode === 'continuous' &&
                                                           cb_obj.origin.name === 'stop' &&
                                                           ! state.awaiting_stop ) {
@@ -730,7 +751,7 @@ class InteractiveClean:
                                                              ),
                                                     code='''const pos = img_src.cur_chan;''' +             ### later we will receive the polarity from some widget mechanism...
                                                             self._js['update-converge'] + self._js['slider-update'] ) )
-        
+
         # Generates the HTML for the controls layout:
         # nmajor niter cycleniter cycle_factor threshold  -----------
         #                  slider                         -  image  -    help
@@ -833,11 +854,11 @@ class InteractiveClean:
 
         self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
         self._converge_server = websockets.serve( self._pipe['converge'].process_messages, self._pipe['converge'].address[0], self._pipe['converge'].address[1] )
-        resource_manager.reg_webserver(self._control_server.ws_server)
-        resource_manager.reg_webserver(self._converge_server.ws_server)
+        resource_manager( ).reg_webserver(self._control_server.ws_server)
+        resource_manager( ).reg_webserver(self._converge_server.ws_server)
         return async_loop( self._control_server, self._converge_server, self._cube.loop( ) )
 
-    def __call__( self, loop=asyncio.get_event_loop( ) ):
+    def __call__( self, loop=asyncio.new_event_loop( ) ):
         '''Display GUI using the event loop specified by ``loop``.
 
         Parameters
@@ -853,6 +874,14 @@ class InteractiveClean:
                                cell='12.0arcsec', specmode='cube',
                                interpolation='nearest', ... )( ) )
         '''
+        ###
+        ### new event loops must be set in asyncio to become active
+        ###
+        if loop != asyncio.get_event_loop( ):
+            asyncio.set_event_loop(loop)
+
+        self.__reset( )
+
         try:
             loop.run_until_complete(self.show( ))
             loop.run_forever( )

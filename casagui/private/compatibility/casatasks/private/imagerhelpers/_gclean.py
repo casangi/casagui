@@ -345,6 +345,11 @@ class gclean:
     def __aiter__( self ):
         return self
 
+    def reset(self):
+        #if not self._finalized:
+        #    raise RuntimeError('attempt to reset a gclean run that has not been finalized')
+        self._finalized = False
+
     def finalize(self):
         """ Runs the restoration step, prevents any future cleaning, and returns a path to the restored image. """
         if not self._finalized:
