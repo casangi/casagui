@@ -134,7 +134,7 @@ class CubeMask:
                                               window.hotkeys( 'a', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'chan',
-                                                                                    action: transparency.label == 'masked' ? 'set' : 'clear',
+                                                                                    action: 'set',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -142,7 +142,7 @@ class CubeMask:
                                               window.hotkeys( 's', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'chan',
-                                                                                    action: transparency.label == 'masked' ? 'clear' : 'set',
+                                                                                    action: 'clear',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -150,7 +150,7 @@ class CubeMask:
                                               window.hotkeys( 'ctrl+a', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
-                                                                                    action: transparency.label == 'masked' ? 'set' : 'clear',
+                                                                                    action: 'set',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -158,7 +158,7 @@ class CubeMask:
                                               window.hotkeys( 'ctrl+s', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
-                                                                                    action: transparency.label == 'masked' ? 'clear' : 'set',
+                                                                                    action: 'clear',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -1242,10 +1242,10 @@ class CubeMask:
                              <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                              <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>''',
                          'mask': '''
-                             <tr><td><b>a</b></td><td>add region to the displayed mask portion for current channel</td></tr>
-                             <tr><td><b>s</b></td><td>subtract region from the displayed mask portion for the current channel</td></tr>
-                             <tr><td><b>ctrl</b>-<b>a</b></td><td>add region from the displayed mask portion for all channels</td></tr>
-                             <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the displayed mask portion for all channels</td></tr>
+                             <tr><td><b>a</b></td><td>add region to the mask for the current channel</td></tr>
+                             <tr><td><b>s</b></td><td>subtract region from the mask for the current channel</td></tr>
+                             <tr><td><b>ctrl</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
+                             <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
                              <tr><td><b>escape</b></td><td>remove displayed region</td></tr>'''
                          }
 
