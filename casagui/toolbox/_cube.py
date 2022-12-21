@@ -134,7 +134,7 @@ class CubeMask:
                                               window.hotkeys( 'a', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'chan',
-                                                                                    action: transparency.label == '1' ? 'set' : 'clear',
+                                                                                    action: transparency.label == 'masked' ? 'set' : 'clear',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -142,7 +142,7 @@ class CubeMask:
                                               window.hotkeys( 's', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'chan',
-                                                                                    action: transparency.label == '1' ? 'clear' : 'set',
+                                                                                    action: transparency.label == 'masked' ? 'clear' : 'set',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -150,7 +150,7 @@ class CubeMask:
                                               window.hotkeys( 'ctrl+a', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
-                                                                                    action: transparency.label == '1' ? 'set' : 'clear',
+                                                                                    action: transparency.label == 'masked' ? 'set' : 'clear',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -158,7 +158,7 @@ class CubeMask:
                                               window.hotkeys( 'ctrl+s', { scope: 'channel' },
                                                               (e) => { ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
-                                                                                    action: transparency.label == '1' ? 'clear' : 'set',
+                                                                                    action: transparency.label == 'masked' ? 'clear' : 'set',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
@@ -1066,13 +1066,14 @@ class CubeMask:
                                                                  gl.global_alpha.value = cb_obj.value
                                                                  gl.change.emit( )''' ) )
 
-        self._bitmask_transparency_button = Button( label='1', width=30 )
+        ### setting button background color does not work with Bokeh 2.4.3
+        self._bitmask_transparency_button = Button( label='masked', width=80 )
         self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
                                                         code='''let cm = bitmask.glyph.color_mapper
                                                                 let one = cm.palette[0]
                                                                 cm.palette[0] = cm.palette[1]
                                                                 cm.palette[1] = one
-                                                                cb_obj.origin.label = cb_obj.origin.label == '1' ? '0' : '1'
+                                                                cb_obj.origin.label = cb_obj.origin.label == 'masked' ? 'unmasked' : 'masked'
                                                                 cm.change.emit( )''' ) )
 
         return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
@@ -1121,8 +1122,7 @@ class CubeMask:
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              stats_source=self._statistics_source,
-                                                              transparency=self._bitmask_transparency_button ),
+                                                              stats_source=self._statistics_source ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
