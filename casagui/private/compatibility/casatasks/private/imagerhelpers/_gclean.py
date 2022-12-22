@@ -287,7 +287,7 @@ class gclean:
             ###
             if self._convergence_result[0] is None:
                 # initial call to tclean(...) creates the initial dirty image with niter=0
-                tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                tclean_ret = self._tclean( vis=self._vis, mask=self._mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
                                            phasecenter=self._phasecenter, stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode,
                                            reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                            psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
@@ -299,11 +299,10 @@ class gclean:
                                            observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
                                            robust=self._robust, npixels=self._npixels, interactive=0, niter=1, gain=0.000001, calcres=True,
                                            restoration=False, parallel=self._parallel )
-                self._deconvolve( imagename=self._imagename, startmodel=self._startmodel, niter=0, usemask=self._usemask, mask=self._mask,
-                                  restoration=False, deconvolver=self._deconvolver )
+                self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
             else:
                 tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell, phasecenter=self._phasecenter,
-                                           stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode, reffreq=self._reffreq,
+                                           stokes=self._stokes, specmode=self._specmode, reffreq=self._reffreq,
                                            gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight, psterm=self._psterm,
                                            wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing, interpolation=self._interpolation,
                                            perchanweightdensity=self._perchanweightdensity, nchan=self._nchan, start=self._start, width=self._width,
@@ -318,9 +317,8 @@ class gclean:
                                            lownoisethreshold=self._lownoisethreshold, negativethreshold=self._negativethreshold,
                                            minbeamfrac=self._minbeamfrac, growiterations=self._growiterations, dogrowprune=self._dogrowprune,
                                            minpercentchange=self._minpercentchange, fastnoise=self._fastnoise, savemodel=self._savemodel, maxpsffraction=1,
-                                           minpsffraction=0, mask=self._mask, parallel=self._parallel )
-                self._deconvolve( imagename=self._imagename, startmodel=self._startmodel, niter=0, usemask=self._usemask, mask=self._mask,
-                                  restoration=False, deconvolver=self._deconvolver )
+                                           minpsffraction=0, parallel=self._parallel )
+                self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
 
             new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
             self._convergence_result = ( tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
@@ -358,7 +356,7 @@ class gclean:
         if not self._finalized:
             self._finalized = True
             tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
-                                       phasecenter=self._phasecenter, stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode,
+                                       phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode,
                                        reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                        psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
                                        interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
@@ -373,7 +371,7 @@ class gclean:
                                        dogrowprune=self._dogrowprune, minpercentchange=self._minpercentchange, fastnoise=self._fastnoise,
                                        savemodel=self._savemodel, nsigma=self._nsigma, interactive=0,
                                        niter=0, restart=True, calcpsf=False, calcres=False, restoration=True,
-                                       mask=self._mask, parallel=self._parallel )
+                                       parallel=self._parallel )
         return {
             "image": f"{self._imagename}.image"
         }
