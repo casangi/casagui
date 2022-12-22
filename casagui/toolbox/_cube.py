@@ -858,7 +858,7 @@ class CubeMask:
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
             self._image = set_attributes( figure( output_backend="webgl",
-                                                  tools=[ "poly_select", "lasso_select","box_select","pan,wheel_zoom","box_zoom",
+                                                  tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
 

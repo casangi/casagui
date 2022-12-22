@@ -25,7 +25,16 @@ def polygon_indexes( xs, ys, shape ):
     '''
     assert len(shape) == 2, 'contains only works for 2D shapes, so "shape" should have length equal to two'
     assert len(xs) == len(ys), 'to specify a polygon the number of X values must equal the number of Y values'
+
+    if len(xs) == 4 and len(ys) == 4 :
+        uniqx = sorted(set(xs))
+        uniqy = sorted(set(ys))
+        if len(uniqx) == 2 and len(uniqy) == 2:
+            ### we have a proper box, the Path.contains_point implementation seems to
+            ### err slightly with very small regions...
+            return product(range(floor(uniqx[0]),ceil(uniqx[1])),range(floor(uniqy[0]),ceil(uniqy[1])))
+
     path = Path(list(zip(xs,ys)))
-    xmin, xmax = min(xs), max(xs)
-    ymin, ymax = min(ys), max(ys)
+    xmin, xmax = max([0,min(xs)-1]), max(xs)+1
+    ymin, ymax = max([0,min(ys)-1]), max(ys)+1
     return filter( path.contains_point, product(range(floor(xmin),ceil(xmax)), range(floor(ymin),ceil(ymax))) )
