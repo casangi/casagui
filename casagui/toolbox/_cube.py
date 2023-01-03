@@ -719,9 +719,11 @@ class CubeMask:
                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
                                                                             // wrap round to the first channel
                                                                             source.channel( 0, source.cur_chan[0] )
+                                                                            if ( chan_slider ) { chan_slider.value = 0 }
                                                                         } else {
                                                                             // advance to the next channel
                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
+                                                                            if ( chan_slider ) { chan_slider.value = source.cur_chan[1] + 1 }
                                                                         } } )
                                                // previous channel -- all modes
                                                window.hotkeys( 'alt+down,ctrl+down,command+down', { scope: 'channel'},
@@ -729,9 +731,11 @@ class CubeMask:
                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
                                                                             // advance to the prev channel
                                                                             source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
+                                                                            if ( chan_slider ) { chan_slider.value = source.cur_chan[1] - 1 }
                                                                         } else {
                                                                             // wrap round to the last channel
                                                                             source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
+                                                                            if ( chan_slider ) { chan_slider.value = source.num_chans[1] - 1 }
                                                                         } } )
 
                                                // next polarization/stokes -- all modes
@@ -1122,7 +1126,7 @@ class CubeMask:
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              stats_source=self._statistics_source ),
+                                                              stats_source=self._statistics_source, chan_slider=self._slider ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
