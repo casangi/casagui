@@ -148,7 +148,8 @@ class CubeMask:
                                                                                              ys: annotations[0].ys } },
                                                                                   mask_mod_result ) } )
                                               window.hotkeys( 'ctrl+a', { scope: 'channel' },
-                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                              (e) => { e.preventDefault( )
+                                                                       ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
                                                                                     action: 'set',
                                                                                     value: { chan: source.cur_chan,
@@ -156,24 +157,13 @@ class CubeMask:
                                                                                              ys: annotations[0].ys } },
                                                                                   mask_mod_result ) } )
                                               window.hotkeys( 'ctrl+s', { scope: 'channel' },
-                                                              (e) => { ctrl.send( ids['mask-mod'],
+                                                              (e) => { e.preventDefault( )
+                                                                       ctrl.send( ids['mask-mod'],
                                                                                   { scope: 'cube',
                                                                                     action: 'clear',
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
-                                                                                  mask_mod_result ) } )
-                                              window.hotkeys( 'n', { scope: 'channel' },
-                                                              (e) => { ctrl.send( ids['mask-mod'],
-                                                                                  { scope: 'chan',
-                                                                                    action: 'not',
-                                                                                    value: { chan: source.cur_chan } },
-                                                                                  mask_mod_result ) } )
-                                              window.hotkeys( 'ctrl+n', { scope: 'channel' },
-                                                              (e) => { ctrl.send( ids['mask-mod'],
-                                                                                  { scope: 'cube',
-                                                                                    action: 'not',
-                                                                                    value: { chan: source.cur_chan } },
                                                                                   mask_mod_result ) } )
                                               ''',
                    'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
@@ -842,11 +832,17 @@ class CubeMask:
                         notf = np.vectorize(lambda x: 0.0 if x != 0 else 1.0)
                         if msg['scope'] == 'chan':
                             ### invert single channel
+                            ### ctrl.send( ids['mask-mod'], { scope: 'chan', action: 'not',
+                            ###                               value: { chan: source.cur_chan } },
+                            ###            mask_mod_result )
                             mask = self._pipe['image'].mask( msg['value']['chan'], True )
                             self._pipe['image'].put_mask( msg['value']['chan'], notf(mask) )
                             return dict( result='success', update={ } )
                         elif msg['scope'] == 'cube':
                             ### invert all channels
+                            ### ctrl.send( ids['mask-mod'], { scope: 'cube', action: 'not',
+                            ###                               value: { chan: source.cur_chan } },
+                            ###            mask_mod_result )
                             stokes = msg['value']['chan'][0]
                             for c in range(shape[3]):
                                 mask = self._pipe['image'].mask( [stokes,c], True )
