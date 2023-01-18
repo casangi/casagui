@@ -1157,7 +1157,7 @@ class CubeMask:
         self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
                                                                                  annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
-                                                                 '''annotations[0].fill_color = cb_obj.color;''' ) +
+                                                                 '''annotations[0].line_color = cb_obj.color;''' ) +
                                                                  '''let cm = bitmask.glyph.color_mapper
                                                                  //*************************************************
                                                                  //*** here we assume that the transparent color ***
@@ -1179,13 +1179,22 @@ class CubeMask:
                                                    '''if ( source._masking_enabled ) {
                                                           const geometry = cb_obj['geometry']
                                                           if ( geometry.type === 'rect' ) {
+                                                              // rectangle drawing complete
                                                               annotations[0].xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
                                                               annotations[0].ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
+                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
+                                                              annotations[0].line_width = 3
+                                                              annotations[0].line_dash = 'dashed'
+                                                              annotations[0].line_color = selector.color
                                                           } else if ( geometry.type === 'poly' && cb_obj.final ) {
+                                                              // polygon drawing complete
                                                               annotations[0].xs = [ ].slice.call(geometry.x)
                                                               annotations[0].ys = [ ].slice.call(geometry.y)
+                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
+                                                              annotations[0].line_width = 3
+                                                              annotations[0].line_dash = 'dashed'
+                                                              annotations[0].line_color = selector.color
                                                           }
-                                                          annotations[0].fill_color = selector.color
                                                       }''' ) )
 
 
