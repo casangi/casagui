@@ -252,7 +252,7 @@ class InteractiveClean:
         ###                         used by ColumnDataSource
         ###
         self._status = { }
-        stopcode, self._convergence_data = next(self._clean)
+        err, stopcode, self._convergence_data = next(self._clean)
         if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
             self._clean.finalize()
         if len(self._convergence_data.keys()) == 0:
@@ -437,11 +437,19 @@ class InteractiveClean:
                                            }''',
 
                        'clean-gui-update': '''function update_gui( msg ) {
-                                               if ( msg.result === 'no-action' ) {
+                                               if ( msg.error ) {
+                                                   // *******************************************************************************************
+                                                   // ******** error occurs and is signaled by _gclean, e.g. continuing when niter is 0  ********
+                                                   // *******************************************************************************************
+                                                   state.mode = 'interactive'
+                                                   btns['stop'].button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.error )
+                                               } else if ( msg.result === 'no-action' ) {
                                                    update_status( 'nothing done' )
                                                    enable( false )
-                                               } else
-                                               if ( msg.result === 'update' ) {
+                                               } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        log.text = log.text + msg.cmd
                                                    }
@@ -462,7 +470,10 @@ class InteractiveClean:
                                                            disable( false )
                                                        }
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
-                                                       if ( ! state.stopped ) {
+                                                       if ( ! state.stopped && niter.value > 0 ) {
+                                                           // *******************************************************************************************
+                                                           // ******** 'niter.value > 0 so continue with one more iteration                      ********
+                                                           // *******************************************************************************************
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                            { action: 'finish',
                                                                              value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
@@ -470,6 +481,15 @@ class InteractiveClean:
                                                                                       mask: img_src.masks( ),
                                                                                       breadcrumbs: img_src.breadcrumbs( ) } },
                                                                            update_gui )
+                                                       } else if ( ! state.stopped  ) {
+                                                           // *******************************************************************************************
+                                                           // ******** 'niter.value <= 0 so iteration should stop                                ********
+                                                           // *******************************************************************************************
+                                                           state.mode = 'interactive'
+                                                           btns['stop'].button_type = "danger"
+                                                           enable(false)
+                                                           state.stopped = false
+                                                           update_status( 'stopping criteria reached' )
                                                        } else {
                                                            state.mode = 'interactive'
                                                            btns['stop'].button_type = "danger"
@@ -541,7 +561,7 @@ class InteractiveClean:
                 else:
                     msg['value']['mask'] = ''
                 self._clean.update( { **msg['value'] } )
-                stopcode, self._convergence_data = await self._clean.__anext__( )
+                err, stopcode, self._convergence_data = await self._clean.__anext__( )
                 # *******************************************************************************************
                 # ******** perhaps the user should not be locked into exiting after the limit is hit ********
                 # *******************************************************************************************
@@ -550,20 +570,23 @@ class InteractiveClean:
 
                     # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7:
-                    return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None  )
+                    return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None, error=err )
                 if len(self._convergence_data) == 0:
-                    return dict( result='no-action', stopcode= stopcode, cmd=f'<p style="width:790px">no operation</p>',
-                                 convergence=None, iterdone=0 )
+                    return dict( result='no-action', stopcode=stopcode, cmd=f'<p style="width:790px">no operation</p>',
+                                 convergence=None, iterdone=0, error=err )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
-                                 convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
+                                 convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
+                                 error=err )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
-                                 convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
+                                 convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
+                                 error=err )
 
                 return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
-                             convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]) )
+                             convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
+                             error=err )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )

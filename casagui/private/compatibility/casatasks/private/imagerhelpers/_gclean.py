@@ -29,7 +29,6 @@ import os
 import asyncio
 from functools import reduce
 import copy
-import _pickle as pickle
 
 _GCV001 = True
 
@@ -131,7 +130,6 @@ class gclean:
                   npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0, lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3,
                   growiterations=75, dogrowprune=True, minpercentchange=-1.0, fastnoise=True, savemodel='none', usemask='user', mask='', parallel=False,
                   history_filter=lambda index, arg, history_value: history_value ):
-        self._output_count = 0
         self._vis = vis
         self._imagename = imagename
         self._imsize = imsize
@@ -197,8 +195,11 @@ class gclean:
         self._usemask = usemask
         self._mask = mask
 
-        self._convergence_result = (None,None)
-
+        self._convergence_result = (None,None,None)
+        #                           ^^^^ ^^^^ ^^^^------------->>> tclean convergence record
+        #                              |    |
+        #                              |    +------------------>>> tclean stopcode
+        #                              +----------------------->>> error message
     def __filter_convergence( raw ):
         ###
         ### this function filters out the pieces of the `raw` tclean 'summaryminor'
@@ -276,16 +277,21 @@ class gclean:
         See also: gclean.__update_convergence(...)
         """
         if self._finalized:
+            self._convergence_result = ( f'iteration terminated',
+                                         self._convergence_result[1],
+                                         self._convergence_result[2] )
             raise StopIteration
         if self._niter < 1:
-            print("warning, nothing to run, niter == %s" % self._niter)
+            self._convergence_result = ( f'nothing to run, niter == {self._niter}',
+                                         self._convergence_result[1],
+                                         self._convergence_result[2] )
             return self._convergence_result
         else:
             ###
             ### CALL SEQUENCE:
             ###       tclean(niter=0),deconvolve(niter=0),tclean(niter=100),deconvolve(niter=0),tclean(niter=100),tclean(niter=0,restoration=True)
             ###
-            if self._convergence_result[0] is None:
+            if self._convergence_result[1] is None:
                 # initial call to tclean(...) creates the initial dirty image with niter=0
                 tclean_ret = self._tclean( vis=self._vis, mask=self._mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
                                            phasecenter=self._phasecenter, stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode,
@@ -321,11 +327,9 @@ class gclean:
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
 
             new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
-            self._convergence_result = ( tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
-                                         gclean.__update_convergence(self._convergence_result[1],new_summaryminor_rec) )
-            self._output_count += 1
-            with open( f'gclean-ret-{self._output_count}.pkl', 'wb' ) as fd:
-                fd.write( pickle.dumps(self._convergence_result) )
+            self._convergence_result = ( None,
+                                         tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
+                                         gclean.__update_convergence(self._convergence_result[2],new_summaryminor_rec) )
             return self._convergence_result
 
     def __reflect_stop( self ):
@@ -350,6 +354,9 @@ class gclean:
         #if not self._finalized:
         #    raise RuntimeError('attempt to reset a gclean run that has not been finalized')
         self._finalized = False
+        self._convergence_result = ( None,
+                                     self._convergence_result[1],
+                                     self._convergence_result[2] )
 
     def finalize(self):
         """ Runs the restoration step, prevents any future cleaning, and returns a path to the restored image. """
