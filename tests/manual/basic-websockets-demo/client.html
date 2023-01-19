@@ -1,0 +1,71 @@
+<html>
+
+  <head>
+    <script type="text/javascript">
+      var socket
+
+      function connect_to_server( ) {
+          var url = document.getElementById("url").value
+          if (socket !== undefined) {
+              socket.close()
+          }
+
+          socket = new WebSocket( url )
+
+          socket.onmessage = ( e ) => {
+              var len
+              if ( e.data.size === undefined ) {
+                  len = e.data.length
+              } else {
+                  len = e.data.size
+              }
+              console.log( `onmessage: size=${len} data=${e.data}` )
+              document.getElementById("replytext").innerHTML = e.data
+          }
+
+          socket.onopen = ( e ) => {
+              console.log("onopen")
+          }
+
+          socket.onclose = ( e ) => {
+              console.log("onclose")
+          }
+
+          socket.onerror = ( e ) => {
+              console.log('onerror')
+          }
+      }
+
+      function send_message( ) {
+          var message = document.getElementById("message").value
+          socket.send(message)
+      }
+
+      function close_connection() {
+          socket.close()
+      }
+    </script>
+  </head>
+
+  <body>
+
+    <form>
+    url: <input type="text" id="url" name="url" value="ws://localhost:8765"  style="width: 200px" >
+    <input type="button" onclick="connect_to_server()" value="connect" />
+    </form>
+
+    <form>
+      message: <input type="text" id="message" name="message" value="hello world" />
+    </form>
+    <form>
+      reply: <label id="replytext"> </label>
+    </form>
+      
+    <form>
+      <input type="button" onclick="send_message( )" value="send message" />
+      <input type="button" onclick="close_connection( )" value="close connection" />
+    </form>
+
+  </body>
+
+</html>
