@@ -1,0 +1,113 @@
+<html>
+
+  <head>
+    <script type="text/javascript">
+
+      var socket
+
+      function ReconnectState( ) {
+          this.timeout = 1000
+          this.retries = 20
+          this.connected = true
+          this.backoff = ( ) => {
+              this.connected = false
+              this.timeout += Math.floor(1.8 ** (22 - this.retries))
+              this.retries -= 1
+          }
+      }
+
+      var reconnections = undefined
+      var shutdown_in_progress = false
+      
+      function connect_to_server( ) {
+          var url = document.getElementById("url").value
+          if (socket !== undefined) {
+              socket.close( )
+          }
+
+          socket = new WebSocket( url )
+
+          socket.onmessage = ( e ) => {
+              var len
+              if ( e.data.size === undefined ) {
+                  len = e.data.length
+              } else {
+                  len = e.data.size
+              }
+              console.log( `onmessage: size=${len} data=${e.data}` )
+              document.getElementById("replytext").innerHTML = e.data
+          }
+
+          socket.onopen = ( e ) => {
+              console.log("onopen")
+              if ( reconnections && reconnections.connected == false ) {
+                  console.log( `connection reestablished at ${new Date( )}` )
+              }
+              reconnections = new ReconnectState( )
+          }
+
+          socket.onclose = ( e ) => {
+              console.log("onclose")
+              if ( reconnections.connected == true ) {
+                  reconnections.connected = false
+                  if ( ! shutdown_in_progress ) {
+                      var recon = reconnections
+                      function reconnect( tries ) {
+                          if ( reconnections.connected == false ) {
+                              console.log( `${tries+1}\treconnection attempt ${new Date( )}` )
+                              connect_to_server( )
+                              recon.backoff( )
+                              if ( recon.retries > 0 ) { setTimeout( reconnect, recon.timeout, tries+1 ) }
+                              else if ( reconnections.connected == false ) { console.log( `aborting reconnection after ${tries} attempts ${new Date( )}` ) }
+                          }
+                      }
+                      reconnect( 0 )
+                  }
+              }
+          }
+
+          socket.onerror = ( e ) => {
+              console.log( 'onerror:', e )
+          }
+      }
+
+      function send_message( ) {
+          var message = document.getElementById("message").value
+          socket.send(message)
+      }
+
+      function close_connection( shut_down=true ) {
+          if ( shut_down ) {
+              shutdown_in_progress = true
+          }
+          socket.close( 1000 )
+      }
+
+    </script>
+  </head>
+
+  <body>
+
+    <form>
+    url: <input type="text" id="url" name="url" value="ws://localhost:8765"  style="width: 200px" >
+    <input type="button" onclick="connect_to_server()" value="connect" />
+    </form>
+
+    <form>
+      message: <input type="text" id="message" name="message" value="hello world" />
+    </form>
+    <form>
+      reply: <label id="replytext"> </label>
+    </form>
+      
+    <form>
+      <input type="button" onclick="send_message( )" value="send message" />
+      <input type="button" onclick="close_connection( )" value="close connection" />
+    </form>
+
+    <form>
+      <input type="button" onclick="close_connection( false )" value="simulate failure" />
+
+  </body>
+
+</html>
