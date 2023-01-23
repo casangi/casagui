@@ -3,9 +3,12 @@
  * The code executes when loaded in a browser.
  */
 import { object_id } from './object_id'
+import { ReconnectState } from "./reconnect_state"
 
 import hotkeys from 'hotkeys-js'
 export { hotkeys }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).object_id = object_id
+(window as any).object_id = object_id;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).ReconnectState = ReconnectState;
