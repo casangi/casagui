@@ -51,6 +51,7 @@
               if ( reconnections.connected == true ) {
                   reconnections.connected = false
                   if ( ! shutdown_in_progress ) {
+                      console.log( `connection lost at ${new Date( )}` )
                       var recon = reconnections
                       function reconnect( tries ) {
                           if ( reconnections.connected == false ) {
