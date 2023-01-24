@@ -54,6 +54,10 @@ export class DataPipe extends DataSource {
             this.websocket = new WebSocket(ws_address)
             this.websocket.binaryType = "arraybuffer"
 
+            this.websocket.onerror = ( e ) => {
+                console.log( 'error encountered:', e )
+            }
+
             this.websocket.onmessage = (event: any) => {
                 //--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                 // helper function
@@ -110,8 +114,31 @@ export class DataPipe extends DataSource {
             this.websocket.onopen = ( ) => {
                 if ( ! reconnections ) {
                     this.websocket.send(JSON.stringify({ id: 'initialize', direction: 'j2p', session: object_id(this) }))
+                } else if ( reconnections.connected == false ) {
+                    console.log( `connection reestablished at ${new Date( )}` )
                 }
                 reconnections = new (ReconnectState as any)( )
+            }
+
+            this.websocket.onclose = ( ) => {
+                if ( reconnections.connected == true ) {
+                    console.log( `connection lost at ${new Date( )}` )
+                    reconnections.connected = false
+                    if ( ! document.shutdown_in_progress_ ) {
+                        console.log( `connection lost at ${new Date( )}` )
+                        var recon = reconnections
+                        function reconnect( tries ) {
+                            if ( reconnections.connected == false ) {
+                                console.log( `${tries+1}\treconnection attempt ${new Date( )}` )
+                                connect_to_server( )
+                                recon.backoff( )
+                                if ( recon.retries > 0 ) { setTimeout( reconnect, recon.timeout, tries+1 ) }
+                                else if ( reconnections.connected == false ) { console.log( `aborting reconnection after ${tries} attempts ${new Date( )}` ) }
+                            }
+                        }
+                        reconnect( 0 )
+                    }
+                }
             }
         }
         connect_to_server( )
