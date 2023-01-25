@@ -31,8 +31,9 @@ of image cube channels in response to user input.'''
 
 import json
 import asyncio
+from uuid import uuid4
 
-from bokeh.models.sources import DataSource
+from . import DataPipe
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
@@ -50,7 +51,7 @@ except:
 from ..utils import pack_arrays
 from ...utils import partition, resource_manager
 
-class ImagePipe(DataSource):
+class ImagePipe(DataPipe):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
 
     image. This is done using a `websocket`. A `ImagePipe` is created with
@@ -74,12 +75,8 @@ class ImagePipe(DataSource):
     __im = None
     __chan_shape = None
 
-    init_script = Nullable(Instance(Callback), help="""
-    JavaScript to be run during initialization of an instance of an DataPipe object.
-    """)
-
-    address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
     shape = Tuple( Int, Int, Int, Int, help="shape: [ RA, DEC, Stokes, Spectral ]" )
+    dataid = String( )
 
     __implementation__ = TypeScript( "" )
 
@@ -209,8 +206,26 @@ class ImagePipe(DataSource):
             ## an ndarray.
             return { 'x': [0], 'y': [float(result)] }
 
+    async def _image_message_handler( self, cmd ):
+        if cmd['action'] == 'channel':
+            chan = self.channel(cmd['index'])
+            mask = self.mask(cmd['index'])
+            if self._stats:
+                #statistics for the displayed plane of the image cubea
+                statistics = self.statistics( cmd['index'] )
+                return { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] },
+                         'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) },
+                         'id': cmd['id'] }
+            else:
+                return { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] }, 'id': cmd['id'] }
+
+        elif cmd['action'] == 'spectra':
+            return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
+
     def __init__( self, image, *args, mask=None, abort=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
+
+        self.dataid = str(uuid4( ))
 
         if ct is None:
             raise RuntimeError('cannot open an image because casatools is not available')
@@ -227,6 +242,8 @@ class ImagePipe(DataSource):
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
+
+        super( ).register( self.dataid, self._image_message_handler )
 
     def __del__(self):
         if self.__rgn:
@@ -274,62 +291,3 @@ class ImagePipe(DataSource):
         rawstats = ia.statistics( region=reg )
         ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
-
-    async def process_messages( self, websocket ):
-        """Process messages related to image display updates.
-
-        Parameters
-        ----------
-        websocket: websocket object
-            Websocket serve function passes in the websocket object to use.
-        path:
-            Websocket serve provides a second parameter.
-        """
-        count = 1
-        async for message in websocket:
-            cmd = json.loads(message)
-            if 'session' not in cmd:
-                await websocket.close( )
-                err = RuntimeError(f'session not in: {cmd}')
-                if self.__abort is not None:
-                    self.__abort( asyncio.get_running_loop( ), err )
-                else:
-                    raise err
-                return
-            elif self.__session != None and self.__session != cmd['session']:
-                await websocket.close( )
-                err = RuntimeError(f"session corruption: {cmd['session']} does not equal {self.__session}")
-                if self.__abort is not None:
-                    self.__abort( asyncio.get_running_loop( ), err )
-                else:
-                    raise err
-                return
-
-            if cmd['action'] == 'channel':
-                chan = self.channel(cmd['index'])
-                mask = self.mask(cmd['index'])
-                if self._stats:
-                    #statistics for the displayed plane of the image cubea
-                    statistics = self.statistics( cmd['index'] )
-                    msg = { 'id': cmd['id'],
-                            # 'stats': pack_arrays(self.__img.statistics( axes=cmd['index'] )),
-                            'message': { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] },
-                                         'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) } } }
-                else:
-                    msg = { 'id': cmd['id'],
-                            'message': { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] } } }
-
-                await websocket.send(json.dumps(msg))
-                count += 1
-            elif cmd['action'] == 'spectra':
-                msg = { 'id': cmd['id'],
-                        'message': { 'spectrum': pack_arrays( self.spectra(cmd['index']) ) } }
-                await websocket.send(json.dumps(msg))
-            elif cmd['action'] == 'initialize':
-                ###
-                ### initialize session identifier
-                ###
-                if self.__session == None:
-                    self.__session = cmd['session']
-            else:
-                print(f"received messate in python with unknown 'action' value: {cmd}")

@@ -24,7 +24,6 @@ export namespace DataPipe {
         address: p.Property<[string,number]>
         send: p.Property<( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any ) => void>
         register: p.Property<( id: string, cb: (msg:{[key: string]: any}) => any ) => void>
-
     }
 }
 
@@ -54,7 +53,7 @@ export class DataPipe extends DataSource {
             this.websocket = new WebSocket(ws_address)
             this.websocket.binaryType = "arraybuffer"
 
-            this.websocket.onerror = ( e ) => {
+            this.websocket.onerror = ( e: any ) => {
                 console.log( 'error encountered:', e )
             }
 
@@ -127,7 +126,7 @@ export class DataPipe extends DataSource {
                     if ( ! document.shutdown_in_progress_ ) {
                         console.log( `connection lost at ${new Date( )}` )
                         var recon = reconnections
-                        function reconnect( tries ) {
+                        function reconnect( tries: number ) {
                             if ( reconnections.connected == false ) {
                                 console.log( `${tries+1}\treconnection attempt ${new Date( )}` )
                                 connect_to_server( )

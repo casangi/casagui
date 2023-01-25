@@ -24,7 +24,6 @@ export class SpectraDataSource extends ColumnDataSource {
     constructor(attrs?: Partial<SpectraDataSource.Attrs>) {
         super(attrs);
         this.imid = uuid4( )
-        console.log( 'spectra data source id:', this.imid )
     }
     initialize(): void {
         super.initialize();
