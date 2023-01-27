@@ -31,6 +31,7 @@ from functools import reduce
 import copy
 
 _GCV001 = True
+_GCV002 = True
 
 # from casatasks.private.imagerhelpers._gclean import gclean
 class gclean:
@@ -326,10 +327,15 @@ class gclean:
                                            minpsffraction=0, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
 
-            new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
-            self._convergence_result = ( None,
-                                         tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
-                                         gclean.__update_convergence(self._convergence_result[2],new_summaryminor_rec) )
+            if len(tclean_ret) > 0 and 'summaryminor' in tclean_ret and sum(map(len,tclean_ret['summaryminor'].values())) > 0:
+                new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
+                self._convergence_result = ( None,
+                                             tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
+                                             gclean.__update_convergence(self._convergence_result[2],new_summaryminor_rec) )
+            else:
+                self._convergence_result = ( f'tclean returned an empty result',
+                                             self._convergence_result[1],
+                                             self._convergence_result[2] )
             return self._convergence_result
 
     def __reflect_stop( self ):

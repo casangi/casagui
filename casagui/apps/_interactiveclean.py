@@ -41,7 +41,7 @@ from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
-    from casatasks.private.imagerhelpers._gclean import _GCV001
+    from casatasks.private.imagerhelpers._gclean import _GCV002
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 except:
     try:
@@ -49,7 +49,7 @@ except:
         ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
         ###
         #print('warning: using tclean compatibility layer...')
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV001
+        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV002
         from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
     except:
         _gclean = None
@@ -569,7 +569,7 @@ class InteractiveClean:
                 #    self._clean.finalize()
 
                     # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
-                if len(self._convergence_data) == 0 and stopcode == 7:
+                if len(self._convergence_data) == 0 and stopcode == 7 or err:
                     return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None, error=err )
                 if len(self._convergence_data) == 0:
                     return dict( result='no-action', stopcode=stopcode, cmd=f'<p style="width:790px">no operation</p>',
