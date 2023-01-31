@@ -446,9 +446,15 @@ class InteractiveClean:
                                                    enable(false)
                                                    state.stopped = false
                                                    update_status( msg.error )
+                                                   if ( 'cmd' in msg ) {
+                                                       log.text = log.text + msg.cmd
+                                                   }
                                                } else if ( msg.result === 'no-action' ) {
                                                    update_status( 'nothing done' )
                                                    enable( false )
+                                                   if ( 'cmd' in msg ) {
+                                                       log.text = log.text + msg.cmd
+                                                   }
                                                } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        log.text = log.text + msg.cmd
@@ -570,9 +576,10 @@ class InteractiveClean:
 
                     # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7 or err:
-                    return dict( result='error', stopcode=stopcode, cmd=f"<p>mask error encountered (stopcode {stopcode})</p>", convergence=None, error=err )
+                    return dict( result='error', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                                 convergence=None, error=err )
                 if len(self._convergence_data) == 0:
-                    return dict( result='no-action', stopcode=stopcode, cmd=f'<p style="width:790px">no operation</p>',
+                    return dict( result='no-action', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, iterdone=0, error=err )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
