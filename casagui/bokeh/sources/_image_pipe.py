@@ -83,6 +83,7 @@ class ImagePipe(DataPipe):
     def __open_image( self, image ):
         if self.__img is not None:
             self.__img.close( )
+            self.__stokes_labels = None
         self.__img = imagetool( )
         self.__rgn = regionmanager( )
         try:
@@ -115,6 +116,12 @@ class ImagePipe(DataPipe):
         if self.__img is not None and all(self.__img.shape( ) != mskshape):
             raise RuntimeError(f'mismatch between image shape ({self.__img.shape( )}) and mask shape ({mskshape})')
         if self.__chan_shape is None: self.__chan_shape = list(mskshape[0:2])
+
+    def stokes_labels( self ):
+        """Returns stokes plane labels"""
+        if self.__stokes_labels is None:
+            self.__stokes_labels = self.__img.coordsys( ).stokes( )
+        return self.__stokes_labels
 
     def channel( self, index ):
         """Retrieve one channel from the image cube. The `index` should be a
@@ -239,6 +246,7 @@ class ImagePipe(DataPipe):
         self.shape = list(self.__img.shape( ))
         self.__session = None
         self.__abort = abort
+        self.__stokes_labels = None
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
@@ -252,6 +260,7 @@ class ImagePipe(DataPipe):
             self.__img.close()
             self.__img.done()
             self.__img = None
+            self.__stokes_labels = None
 
     def coorddesc( self ):
         ia = imagetool( )

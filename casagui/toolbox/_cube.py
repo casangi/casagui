@@ -38,7 +38,7 @@ from uuid import uuid4
 from sys import platform
 import websockets
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button, PreText
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
@@ -78,6 +78,7 @@ class CubeMask:
         self._image_path = image	                # path to image cube to be displayed
         self._mask_path = mask                          # path to bitmask cube (if any)
         self._image = None		                # figure displaying cube & mask planes
+        self._channel_label = None                      # display channel and stokes
         self._chan_image = None                         # channel image
         self._bitmask = None                            # bitmask image
         self._bitmask_color_selector = None             # bitmask color selector
@@ -1079,6 +1080,15 @@ class CubeMask:
         return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
 
 
+    def channel_label( self ):
+        '''Return a text label for the current channel being displayed.
+        It will be updated as the channel or stokes axis changes.
+        '''
+        if self._image is None:
+            raise RuntimeError('cube image not in use')
+        self._channel_label = PreText(text='Channel 0 I')
+        return self._channel_label
+
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
@@ -1096,11 +1106,18 @@ class CubeMask:
                                            code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
-        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider ),
-                                                               code=( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
+        ###
+        ### function to generate the stokes labels from the stokes plane number
+        ###
+        stokes_func = 'function stokes( v ) { return %s }' % ( ' : '.join(map( lambda p: f'v == {p[0]} ? {repr(p[1])}',
+                                                                               zip( range(len(self._image_source.stokes_labels( ))), self._image_source.stokes_labels( ) )) ) + " : ''" )
+        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_label ),
+                                                               code=((stokes_func + '''label.text = `Channel ${cb_obj.cur_chan[1]} ${stokes(cb_obj.cur_chan[0])}`;''') if
+                                                                     self._channel_label else '') +
+                                                                    (('''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                       self._slider else '') +
                                                                       (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
-                                                                      if self._mask_path is None else '' ) )
+                                                                      if self._mask_path is None else '' ) ) )
 
         if self._spectra:
             ###
