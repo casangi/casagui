@@ -887,13 +887,8 @@ class InteractiveClean:
         self._cube.connect( )
         show(self._fig['layout'])
 
-    def __call__( self, loop=asyncio.new_event_loop( ) ):
-        '''Display GUI using the event loop specified by ``loop``.
-
-        Parameters
-        ----------
-        loop: event loop object
-            defaults to standard asyncio event loop.
+    def __call__( self ):
+        '''Display GUI and process events until the user stops the application.
 
         Example:
             Create ``iclean`` object and display::
@@ -912,8 +907,30 @@ class InteractiveClean:
 
     @asynccontextmanager
     async def serve( self ):
-        '''Get the InteractiveClean event loop to use for running the interactive clean GUI
-        as part of an external event loop.
+        '''This function is intended for developers who would like to embed interactive
+        clean as a part of a larger GUI. This embedded use of interactive clean is not
+        currently supported and would require the addition of parameters to this function
+        as well as changes to the interactive clean implementation. However, this function
+        does expose the ``asyncio.Future`` that is used to signal completion of the
+        interactive cleaning operation, and it provides the coroutines which must be
+        managed by asyncio to make the interactive clean GUI responsive.
+
+        Example:
+            Create ``iclean`` object, process events and retrieve result::
+
+                ic = iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
+                             cell='12.0arcsec', specmode='cube', interpolation='nearest', ... )
+                async def process_events( ):
+                    async with ic.serve( ) as state:
+                        await state[0]
+
+                asyncio.run(process_events( ))
+                print( "Result:", ic.result( ) )
+
+
+        Returns
+        -------
+        (asyncio.Future, dictionary of coroutines)
         '''
         self.__reset( )
         self._launch_gui( )
