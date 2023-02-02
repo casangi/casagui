@@ -33,6 +33,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
+from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, Range1d, LinearAxis, CustomJS, Spacer
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
@@ -152,11 +153,7 @@ class InteractiveClean:
 
     '''
     def __stop( self ):
-        resource_manager( ).stop_asyncio_loop()
-        if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            resource_manager( ).stop_asyncio_loop()
-        if self._converge_server is not None and self._converge_server.ws_server.is_serving( ):
-            resource_manager( ).stop_asyncio_loop()
+        self.__result_future.set_result(self.__retrieve_result( ))
 
     def _abort_handler( self, loop, err ):
         self._error_result = err
@@ -168,6 +165,11 @@ class InteractiveClean:
             reset_bokeh_output( )
             reset_resource_manager( )
             self._clean.reset( )
+
+        ###
+        ### reset asyncio result future
+        ###
+        self.__result_future = None
 
         ###
         ### used by data pipe (websocket) initialization function
@@ -199,6 +201,11 @@ class InteractiveClean:
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
+
+        ###
+        ### the asyncio future that is used to transmit the result from interactive clean
+        ###
+        self.__result_future = None
 
         ###
         ### This is used to tell whether the websockets have been initialized, but also to
@@ -880,16 +887,6 @@ class InteractiveClean:
         self._cube.connect( )
         show(self._fig['layout'])
 
-    def _asyncio_loop( self ):
-        async def async_loop( f1, f2, f3 ):
-            return await asyncio.gather( f1, f2, f3 )
-
-        self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
-        self._converge_server = websockets.serve( self._pipe['converge'].process_messages, self._pipe['converge'].address[0], self._pipe['converge'].address[1] )
-        resource_manager( ).reg_webserver(self._control_server.ws_server)
-        resource_manager( ).reg_webserver(self._converge_server.ws_server)
-        return async_loop( self._control_server, self._converge_server, self._cube.loop( ) )
-
     def __call__( self, loop=asyncio.new_event_loop( ) ):
         '''Display GUI using the event loop specified by ``loop``.
 
@@ -906,30 +903,28 @@ class InteractiveClean:
                                cell='12.0arcsec', specmode='cube',
                                interpolation='nearest', ... )( ) )
         '''
-        ###
-        ### new event loops must be set in asyncio to become active
-        ###
-        if loop != asyncio.get_event_loop( ):
-            asyncio.set_event_loop(loop)
+        async def _run_( ):
+            async with self.serve( ) as s:
+                await s[0]
 
-        self.__reset( )
-
-        try:
-            loop.run_until_complete(self.show( ))
-            loop.run_forever( )
-        except KeyboardInterrupt:
-            print('\nInterrupt received, stopping GUI...')
-
+        asyncio.run(_run_( ))
         return self.result( )
 
-    def show( self ):
+    @asynccontextmanager
+    async def serve( self ):
         '''Get the InteractiveClean event loop to use for running the interactive clean GUI
         as part of an external event loop.
         '''
+        self.__reset( )
         self._launch_gui( )
-        return self._asyncio_loop( )
 
-    def result( self ):
+        async with websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl, \
+                   websockets.serve( self._pipe['converge'].process_messages, self._pipe['converge'].address[0], self._pipe['converge'].address[1] ) as conv, \
+                   self._cube.serve( self.__stop ) as cube:
+            self.__result_future = asyncio.Future( )
+            yield ( self.__result_future, { 'ctrl': ctrl, 'conv': conv, 'cube': cube } )
+
+    def __retrieve_result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
         GUI dialog between Python and JavaScript and this function would return it'''
         if isinstance(self._error_result,Exception):
@@ -937,6 +932,13 @@ class InteractiveClean:
         elif self._error_result is not None:
             return self._error_result
         return self._cube.result( )
+
+    def result( self ):
+        '''If InteractiveClean had a return value, it would be filled in as part of the
+        GUI dialog between Python and JavaScript and this function would return it'''
+        if self.__result_future is None:
+            raise RuntimeError( 'no interactive clean result is available' )
+        return self.__result_future.result( )
 
     def masks( self ):
         '''Retrieves the masks which were used with interactive clean.

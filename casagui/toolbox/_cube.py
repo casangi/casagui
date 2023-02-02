@@ -37,6 +37,7 @@ import asyncio
 from uuid import uuid4
 from sys import platform
 import websockets
+from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button, PreText
 from bokeh.plotting import ColumnDataSource, figure
@@ -75,6 +76,7 @@ class CubeMask:
         '''
         initialize_bokeh( )
 
+        self._stop_serving_function = None              # function supplied when starting serving
         self._image_path = image	                # path to image cube to be displayed
         self._mask_path = mask                          # path to bitmask cube (if any)
         self._image = None		                # figure displaying cube & mask planes
@@ -758,11 +760,8 @@ class CubeMask:
     def __stop( self ):
         '''stop interactive masking
         '''
-        resource_manager( ).stop_asyncio_loop()
-        if self._image_server is not None and self._image_server.ws_server.is_serving( ):
-            resource_manager( ).stop_asyncio_loop()
-        if self._control_server is not None and self._control_server.ws_server.is_serving( ):
-            resource_manager( ).stop_asyncio_loop()
+        if self._stop_serving_function:
+            self._stop_serving_function( )
 
     def _init_pipes( self ):
         '''set up websockets
@@ -1301,13 +1300,9 @@ class CubeMask:
                      visible=False, width=650 ), **kw )
         return self._help
 
-    def loop( self ):
-        '''Returns an ``asyncio`` eventloop which can be mixed in with an
-        existing eventloop to animate this GUI.'''
-        async def async_loop( loop1, loop2 ):
-            return await asyncio.gather( loop1, loop2 )
-        self._image_server = websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] )
-        self._control_server = websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] )
-        resource_manager( ).reg_webserver(self._image_server.ws_server)
-        resource_manager( ).reg_webserver(self._control_server.ws_server)
-        return async_loop( self._control_server, self._image_server )
+    @asynccontextmanager
+    async def serve( self, stop_function ):
+        self._stop_serving_function = stop_function
+        async with websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] ) as im, \
+             websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl:
+            yield { 'im': im, 'ctrl': ctrl }
