@@ -180,7 +180,7 @@ class DataPipe(DataSource):
                     await self.__websocket.close( )
                     err = RuntimeError(f'session not in: {msg}')
                     if self.__abort is not None:
-                        self.__abort( asyncio.get_running_loop( ), err )
+                        self.__abort( err )
                     else:
                         raise err
                     return
@@ -188,7 +188,7 @@ class DataPipe(DataSource):
                     await self.__websocket.close( )
                     err = RuntimeError(f"session corruption: {msg['session']} does not equal {self.__session}")
                     if self.__abort is not None:
-                        self.__abort( asyncio.get_running_loop( ), err )
+                        self.__abort( err )
                     else:
                         raise err
                     return

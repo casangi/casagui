@@ -229,7 +229,7 @@ class ImagePipe(DataPipe):
         elif cmd['action'] == 'spectra':
             return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
 
-    def __init__( self, image, *args, mask=None, abort=None, stats=False, **kwargs ):
+    def __init__( self, image, *args, mask=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
 
         self.dataid = str(uuid4( ))
@@ -245,11 +245,7 @@ class ImagePipe(DataPipe):
         self.__open_mask( mask )
         self.shape = list(self.__img.shape( ))
         self.__session = None
-        self.__abort = abort
         self.__stokes_labels = None
-
-        if self.__abort is not None and not callable(self.__abort):
-            raise RuntimeError('abort function must be callable')
 
         super( ).register( self.dataid, self._image_message_handler )
 

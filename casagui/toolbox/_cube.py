@@ -71,8 +71,7 @@ class CubeMask:
             from a bitmask cube image instead of being the union of all drawn
             regions. This is the standard mode of operation for interactive clean.
         abort: function
-            If provided, the ``abort`` function will be called to exit the
-            event loop in the case of an error.
+            If provided, the ``abort`` function will be called in the case of an error.
         '''
         initialize_bokeh( )
 

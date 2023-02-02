@@ -155,7 +155,7 @@ class InteractiveClean:
     def __stop( self ):
         self.__result_future.set_result(self.__retrieve_result( ))
 
-    def _abort_handler( self, loop, err ):
+    def _abort_handler( self, err ):
         self._error_result = err
         self.__stop( )
 
