@@ -39,7 +39,8 @@ from sys import platform
 import websockets
 from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button, PreText
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown
+from bokeh.layouts import column, row, Spacer
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
@@ -85,6 +86,7 @@ class CubeMask:
         self._bitmask_color_selector = None             # bitmask color selector
         self._bitmask_transparency_button = None        # select whether the 1s or 0s is transparent
         self._slider = None                             # slider to move from plane to plane
+        self._slider_group = None                       # slider with dropdown
         self._spectra = None                            # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
         self._palette = None                            # palette selection
@@ -906,12 +908,21 @@ class CubeMask:
             shape = self._pipe['image'].shape
             slider_end = shape[-1]-1
             self._slider = set_attributes( Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
-                                                   title="Channel" ), **kw )
+                                                   title=None ), **kw )
             if slider_end == 0:
                 # for a cube with one channel, a slider is of no use
                 self._slider.disabled = True
+            #self._slider_dropdown = Dropdown( menu=[('Channel',cb)] )
+            self._slider_dropdown = Dropdown( label='Channel 0',
+                                              menu=[( 'Channel', 'Channel' ),
+                                                    ( 'Stokes',  'Stokes' )] )
+            self._slider_dropdown.js_on_click( CustomJS( args=dict(slider=self._slider),
+                                                         code='''cb_obj.origin.label = `${cb_obj.item} ${slider.value}`''' ) )
 
-        return self._slider
+            self._slider_group = column( self._slider_dropdown,
+                                         self._slider )
+
+        return ( self._slider_group, self._slider )
 
     def spectra( self, **kw ):
         '''Return the line graph of spectra from the image cube which is updated

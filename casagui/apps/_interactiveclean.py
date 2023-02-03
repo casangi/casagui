@@ -721,7 +721,7 @@ class InteractiveClean:
                                                  convergence_src=self._convergence_source, convergence_id=self._convergence_id,
                                                  convergence_fig=self._fig['convergence'],
                                                  log=self._status['log'],
-                                                 slider=self._fig['slider'],
+                                                 slider=self._fig['slider'][1],
                                                  image_fig=self._fig['image'],
                                                  spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
@@ -781,14 +781,14 @@ class InteractiveClean:
         self._control['clean']['finish'].js_on_click( self._cb['clean'] )
         self._control['clean']['stop'].js_on_click( self._cb['clean'] )
 
-        self._fig['slider'].js_on_change( 'value',
-                                          CustomJS( args=dict( convergence_src=self._convergence_source,
-                                                               convergence_fig=self._fig['convergence'],
-                                                               conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                               img_src=self._fig['image-source']
-                                                             ),
-                                                    code='''const pos = img_src.cur_chan;''' +             ### later we will receive the polarity from some widget mechanism...
-                                                            self._js['update-converge'] + self._js['slider-update'] ) )
+        self._fig['slider'][1].js_on_change( 'value',
+                                             CustomJS( args=dict( convergence_src=self._convergence_source,
+                                                                  convergence_fig=self._fig['convergence'],
+                                                                  conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
+                                                                  img_src=self._fig['image-source']
+                                                                ),
+                                                       code='''const pos = img_src.cur_chan;''' +             ### later we will receive the polarity from some widget mechanism...
+                                                               self._js['update-converge'] + self._js['slider-update'] ) )
 
         # Generates the HTML for the controls layout:
         # nmajor niter cycleniter cycle_factor threshold  -----------
@@ -814,7 +814,7 @@ class InteractiveClean:
                                                self._control['cycle_factor'],
                                                self._control['threshold'],
                                                self._control['clean']['stop'] ),
-                                          row( self._fig['slider'], self._control['goto'] ),
+                                          row( self._fig['slider'][0], self._control['goto'] ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
                                           self._cube.statistics( sizing_mode = "stretch_height" ),
                                       ),
@@ -846,7 +846,7 @@ class InteractiveClean:
                                                              else help.visible = true''' ) )
 
         self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
-                                                                          slider=self._fig['slider'],
+                                                                          slider=self._fig['slider'][1],
                                                                           status=self._status['stopcode'] ),
                                                                code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
                                                                        if ( values.length > 2 ) {
