@@ -33,8 +33,8 @@ from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
 from bokeh import __version__ as bokeh_version
 
-CASALIB_VERSION = "0.0.4"
-CASAGUIJS_VERSION = "0.0.7"
+CASALIB_VERSION = "0.0.5"
+CASAGUIJS_VERSION = "0.0.8"
 
 @static_vars(initialized=False,do_local_subst=not have_network( ))
 def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):

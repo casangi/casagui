@@ -1,6 +1,6 @@
 {
   "name": "casaguijs",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "casagui browser-side bokeh implementation",
   "license": "BSD-3-Clause",
   "keywords": [],

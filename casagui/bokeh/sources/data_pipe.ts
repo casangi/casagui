@@ -22,8 +22,6 @@ export namespace DataPipe {
     export type Props = DataSource.Props & {
         init_script: p.Property<CallbackLike0<DataSource> | null>;
         address: p.Property<[string,number]>
-        send: p.Property<( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any ) => void>
-        register: p.Property<( id: string, cb: (msg:{[key: string]: any}) => any ) => void>
     }
 }
 
@@ -33,7 +31,12 @@ export class DataPipe extends DataSource {
     properties: DataPipe.Props
 
     websocket: any
+    // used to queue up messages sent to a particular id which already has outstanding
+    // messages for wwhich a reply has not been received.
     send_queue: {[key: string]: any} = { }
+    // used to queue up messages which are sent BEFORE the connection is completely
+    // established. After the connection is established, these message are resent in order.
+    connection_queue: [ object, [ string, {[key: string]: any}, (msg:{[key: string]: any}) => any ] ][ ] = [ ]
     pending: {[key: string]: any} = { }
     incoming_callbacks: {[key: string]: any} = { }
 
@@ -117,6 +120,12 @@ export class DataPipe extends DataSource {
                     console.log( `connection reestablished at ${new Date( )}` )
                 }
                 reconnections = new (ReconnectState as any)( )
+
+                // if there were send events before the websocket was connected, resend them
+                while ( this.connection_queue.length > 0 ) {
+                    let state = this.connection_queue.shift( )!
+                    this.send.apply( state[0], state[1] )
+                }
             }
 
             this.websocket.onclose = ( ) => {
@@ -163,7 +172,10 @@ export class DataPipe extends DataSource {
                 this.send_queue[id] = [ { cb, msg } ]
             }
         } else {
-            if ( id in this.send_queue && this.send_queue[id].length > 0 ) {
+            if ( this.websocket.readyState === WebSocket.CONNECTING ) {
+                // connection not yet established yet...
+                this.connection_queue.push( [ this, [ id, message, cb ] ] )
+            } else if ( id in this.send_queue && this.send_queue[id].length > 0 ) {
                 this.send_queue[id].push( { cb, msg } )
                 {   // seemingly cannot reference wider 'cb' and the block-scoped
                     // 'cb' within the same block...
