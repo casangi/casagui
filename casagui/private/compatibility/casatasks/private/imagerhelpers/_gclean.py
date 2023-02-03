@@ -282,7 +282,9 @@ class gclean:
                                          self._convergence_result[1],
                                          self._convergence_result[2] )
             raise StopIteration
-        if self._niter < 1:
+        #                                                                             ensure that at least the initial tclean run
+        #                      vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv------------>>> is done to produce an initial dirty image
+        if self._niter < 1 and self._convergence_result[2] is not None:
             self._convergence_result = ( f'nothing to run, niter == {self._niter}',
                                          self._convergence_result[1],
                                          self._convergence_result[2] )
