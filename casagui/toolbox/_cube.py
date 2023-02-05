@@ -39,13 +39,15 @@ from sys import platform
 import websockets
 from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, DataTable, Select, ColorPicker, Spinner, Select, Button, PreText
+from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
+                         DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
 from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
 from ..bokeh.utils import pack_arrays
 from ..bokeh.state import available_palettes, find_palette, default_palette
+from bokeh.layouts import row
 
 import numpy as np
 
@@ -1084,8 +1086,10 @@ class CubeMask:
         '''
         if self._image is None:
             raise RuntimeError('cube image not in use')
-        self._channel_label = PreText(text='Channel 0 I')
-        return self._channel_label
+        self._channel_label = PreText( text='Channel 0', min_width=100 )
+        self._channel_label_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
+        self._channel_label_group = row( self._channel_label, self._channel_label_stokes_dropdown )
+        return self._channel_label_group
 
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
@@ -1104,19 +1108,32 @@ class CubeMask:
                                            code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
-        ###
-        ### function to generate the stokes labels from the stokes plane number
-        ###
-        stokes_func = 'function stokes( v ) { return %s }' % ( ' : '.join(map( lambda p: f'v == {p[0]} ? {repr(p[1])}',
-                                                                               zip( range(len(self._image_source.stokes_labels( ))), self._image_source.stokes_labels( ) )) ) + " : ''" )
-        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_label ),
-                                                               code=((stokes_func + '''label.text = `Channel ${cb_obj.cur_chan[1]} ${stokes(cb_obj.cur_chan[0])}`;''') if
-                                                                     self._channel_label else '') +
-                                                                    (('''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
-                                                                      self._slider else '') +
-                                                                      (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
-                                                                      if self._mask_path is None else '' ) ) )
+        stokes_labels = self._image_source.stokes_labels( )
+        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_label,
+                                                                          stokes_label=self._channel_label_stokes_dropdown ),
+                                                               ### the label manipulation portion of 'code' is '' when self._channel_label is None
+                                                               ### so stokes_label.label and label.text will not be updated when they are not used
+                                                               code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
+                                                                           stokes_label.label = ( %s )''' %
+                                                                        ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
+                                                                                          zip( range(len(stokes_labels)), stokes_labels )) ) + " : ''" ) if
+                                                                        self._channel_label else '' ) +
+                                                                      ( ( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
+                                                                          self._slider else '') +
+                                                                        (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
+                                                                        if self._mask_path is None else '' ) ) ) )
 
+        if self._channel_label:
+            ###
+            ### allow switching to stokes planes
+            ###
+            self._channel_label_stokes_dropdown.menu = stokes_labels
+            self._channel_label_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
+                                                                       code='''if ( cb_obj.item != cb_obj.origin.label ) {
+                                                                                   cb_obj.origin.label = cb_obj.item
+                                                                                   source.channel( source.cur_chan[1], %s )
+                                                                               }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
+                                                                                                         zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
         if self._spectra:
             ###
             ### this is set up in connect( ) because slider must be updated if it is used othersize
@@ -1289,8 +1306,8 @@ class CubeMask:
                                EXTRAROWS
                                <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>up</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>shift</b>-<b>down</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>right</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+                               <tr><td><b>option</b>-<b>left</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
                                MASKCONTROL
                            </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
                                       .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
