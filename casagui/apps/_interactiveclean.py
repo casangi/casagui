@@ -953,6 +953,11 @@ class InteractiveClean:
         asyncio.run(_run_( ))
         return self.result( )
 
+    def setup( self ):
+        self.__reset( )
+        self._init_pipes()
+        self._cube._init_pipes()
+
     @asynccontextmanager
     async def serve( self ):
         '''This function is intended for developers who would like to embed interactive
@@ -980,7 +985,6 @@ class InteractiveClean:
         -------
         (asyncio.Future, dictionary of coroutines)
         '''
-        self.__reset( )
         self._launch_gui( )
 
         async with websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl, \
