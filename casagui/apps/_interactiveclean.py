@@ -38,7 +38,7 @@ from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, S
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from bokeh.io import reset_output as reset_bokeh_output
-from ..utils import resource_manager, reset_resource_manager
+from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -203,6 +203,11 @@ class InteractiveClean:
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
+
+        ###
+        ### whether or not the session is being run from a jupyter notebook or script
+        ###
+        self._is_notebook = is_notebook()
 
         ###
         ### the asyncio future that is used to transmit the result from interactive clean
