@@ -44,7 +44,8 @@ from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool,
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
-from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes
+from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
+
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
 
@@ -76,6 +77,7 @@ class CubeMask:
         '''
         initialize_bokeh( )
 
+        self._is_notebook = is_notebook()
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
@@ -1239,8 +1241,13 @@ class CubeMask:
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
                                                                       source.done = ( ) => {
                                                                           function done_close_window( msg ) {
-                                                                              if ( msg.result === 'stopped' ) {
-                                                                                  window.close()
+                                                                              if ( msg.result === 'stopped' ) {""" +
+                                                                            # Don't close tab if running in a jupyter notebook
+                                                                            ("""console.log("Running in jupyter notebook. Not closing window.")""" if self._is_notebook else
+                                                                                 """console.log("Running from script/terminal. Closing window.)
+                                                                                    window.close()"""
+                                                                            ) +
+                                                                    """
                                                                               }
                                                                           }
                                                                           ctrl.send( ids['done'],
