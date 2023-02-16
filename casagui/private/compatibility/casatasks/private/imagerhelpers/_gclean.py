@@ -306,7 +306,7 @@ class gclean:
                                            restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
                                            timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
                                            observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
-                                           robust=self._robust, npixels=self._npixels, interactive=0, niter=1, gain=0.000001, calcres=True,
+                                           robust=self._robust, npixels=self._npixels, interactive=False, niter=1, gain=0.000001, calcres=True,
                                            restoration=False, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
             else:
@@ -319,7 +319,7 @@ class gclean:
                                            deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam,
                                            pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange,
                                            uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
-                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=0,
+                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=False,
                                            niter=self._niter, restart=True, calcpsf=False, calcres=False, restoration=False, threshold=self._threshold,
                                            nsigma=self._nsigma, cycleniter=self._cycleniter, nmajor=self._nmajor, gain=self._gain,
                                            sidelobethreshold=self._sidelobethreshold, noisethreshold=self._noisethreshold,
