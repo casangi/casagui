@@ -36,7 +36,7 @@ from ...utils import path_to_url, static_vars, have_network
 from bokeh import __version__ as bokeh_version
 
 CASALIB_VERSION = "0.0.5"
-CASAGUIJS_VERSION = "0.0.8"
+CASAGUIJS_VERSION = "0.0.9"
 
 @static_vars( initialized=False,
               do_local_subst=not have_network( ),
