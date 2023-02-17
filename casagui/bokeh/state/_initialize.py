@@ -28,6 +28,8 @@
 '''This contains functions to inject the ``casaguijs`` library into the
 generated HTML that is used to display the Bokeh plots that ``casagui``'s
 applications produce'''
+import os
+import re
 from os.path import dirname, join, basename
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
@@ -36,7 +38,11 @@ from bokeh import __version__ as bokeh_version
 CASALIB_VERSION = "0.0.5"
 CASAGUIJS_VERSION = "0.0.8"
 
-@static_vars(initialized=False,do_local_subst=not have_network( ))
+@static_vars( initialized=False,
+              do_local_subst=not have_network( ),
+              do_nonmin_bokeh_subst=False,
+              bokeh_replacement_path="/tmp/bokeh.js"        # only done if do_nonmin_bokeh_subst is set
+             )                                              # and replacement exists
 def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
@@ -190,6 +196,16 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
         else:
             result = self._old_js_files                                  # pylint: disable=protected-access
         result = jslib_libs + result + bokehlib_libs
+        ## get non-minified bokeh javascript
+        if initialize_bokeh.do_nonmin_bokeh_subst:
+            for i in range(len(result)):
+                result[i] = re.sub( r'bokeh(.*)\.min\.js', r'bokeh\1.js', result[i] )
+            if initialize_bokeh.bokeh_replacement_path is not None and \
+               os.path.exists(initialize_bokeh.bokeh_replacement_path):
+                for i in range(len(result)):
+                    if re.match( r'.*/bokeh-\d+\.\d+\.\d+\.js.*', result[i] ):
+                        result[i] = f'file://{initialize_bokeh.bokeh_replacement_path}'
+
         return result
 
     resources.JSResources.hashes = property(hashes)
