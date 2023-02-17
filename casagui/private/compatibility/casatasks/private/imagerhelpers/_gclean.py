@@ -32,6 +32,7 @@ import copy
 
 _GCV001 = True
 _GCV002 = True
+_GCV003 = True
 
 # from casatasks.private.imagerhelpers._gclean import gclean
 class gclean:
@@ -348,7 +349,11 @@ class gclean:
             raise StopAsyncIteration
 
     async def __anext__( self ):
-        return asyncio.run( self.__reflect_stop )
+        ### asyncio.run cannot be used here because this is called
+        ### within an asyncio loop...
+        loop = asyncio.get_event_loop( )
+        result = await loop.run_in_executor( None, self.__reflect_stop )
+        return result
 
     def __iter__( self ):
         return self

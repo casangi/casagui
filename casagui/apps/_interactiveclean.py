@@ -42,7 +42,7 @@ from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
-    from casatasks.private.imagerhelpers._gclean import _GCV002
+    from casatasks.private.imagerhelpers._gclean import _GCV003
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 except:
     try:
@@ -50,7 +50,7 @@ except:
         ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
         ###
         #print('warning: using tclean compatibility layer...')
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV002
+        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV003
         from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
     except:
         _gclean = None
