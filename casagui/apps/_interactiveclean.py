@@ -32,6 +32,9 @@ import copy
 import asyncio
 import shutil
 import websockets
+import http.server
+import socketserver
+from threading import Thread
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
@@ -1025,6 +1028,28 @@ class InteractiveClean:
         -------
         (asyncio.Future, dictionary of coroutines)
         '''
+        def start_http_server():
+            PORT = 8000
+            DIRECTORY=self._webpage_path
+
+            class Handler(http.server.SimpleHTTPRequestHandler):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+            with socketserver.TCPServer(("", PORT), Handler) as httpd:
+                print("\nServing Interactive Clean webpage from local directory: ", DIRECTORY)
+                print("Use Control-C to stop Interactive clean.\n")
+                print("Copy and paste one of the below URLs into your browser (Chrome or Firefox) to view:")
+                print("http://localhost:"+str(PORT))
+                print("http://127.0.0.1:"+str(PORT))
+
+                httpd.serve_forever()
+
+        if not self._is_notebook:
+            thread = Thread(target=start_http_server)
+            thread.daemon = True # Let Ctrl+C kill server thread
+            thread.start()
+
         self._launch_gui( )
 
         async with websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl, \
