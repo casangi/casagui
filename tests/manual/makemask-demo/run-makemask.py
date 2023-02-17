@@ -5,8 +5,7 @@ import asyncio
 import urllib
 import tarfile
 #from casagui.bokeh.state import initialize_bokeh
-#initialize_bokeh( ".../casagui/casaguijs/dist/casaguijs.min.js" )        ### local build
-
+#initialize_bokeh( bokeh='../../../casaguijs/dist/casaguijs.js' )                  ### local gui/js build + standard bokeh independent library
 from casagui.apps import MakeMask
 
 ##
