@@ -191,6 +191,21 @@ class InteractiveClean:
         self._control_server = None
         self._converge_server = None
 
+    def _gen_port_fwd_cmd(self):
+        hostname = os.uname()[1]
+        host = self._pipe['control'].address[0]
+
+        ports = [self._pipe['control'].address[1],
+                self._pipe['converge'].address[1],
+                self._cube._pipe['image'].address[1],
+                self._cube._pipe['control'].address[1]]
+
+        cmd = 'ssh'
+        for port in ports:
+            cmd += (' -L ' + str(port) + ':localhost:' + str(port))
+
+        cmd += ' ' + str(hostname)
+        return cmd
 
     def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='',
@@ -961,6 +976,16 @@ class InteractiveClean:
                                cell='12.0arcsec', specmode='cube',
                                interpolation='nearest', ... )( ) )
         '''
+
+        self.setup()
+
+        print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
+            You may need to change the last argument to align with your ssh config.\n")
+        print(self._gen_port_fwd_cmd() + ' && python3.8 -m http.server --directory ' + self._imagename + '_webpage')
+
+        # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
+        input("\nPress enter when port forwarding is setup...")
+
         async def _run_( ):
             async with self.serve( ) as s:
                 await s[0]
