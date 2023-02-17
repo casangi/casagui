@@ -40,7 +40,7 @@ from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
-from bokeh.io import reset_output as reset_bokeh_output
+from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
@@ -984,7 +984,7 @@ class InteractiveClean:
 
         print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
             You may need to change the last argument to align with your ssh config.\n")
-        print(self._gen_port_fwd_cmd() + ' && python3.8 -m http.server --directory ' + self._imagename + '_webpage')
+        print(self._gen_port_fwd_cmd())
 
         # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
         input("\nPress enter when port forwarding is setup...")
