@@ -260,6 +260,8 @@ class InteractiveClean:
         ###
         self._status = { }
         err, stopcode, self._convergence_data = next(self._clean)
+        if stopcode is None and err:
+            raise RuntimeError(err)
         if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
             self._clean.finalize()
         if len(self._convergence_data.keys()) == 0:

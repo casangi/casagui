@@ -348,9 +348,7 @@ class gclean:
             raise StopAsyncIteration
 
     async def __anext__( self ):
-        loop = asyncio.get_event_loop( )
-        result = await loop.run_in_executor( None, self.__reflect_stop )
-        return result
+        return asyncio.run( self.__reflect_stop )
 
     def __iter__( self ):
         return self
