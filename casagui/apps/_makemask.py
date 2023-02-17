@@ -28,14 +28,45 @@
 '''implementation of the ``MakeMask`` application for interactive creation
 of channel masks'''
 import asyncio
+from contextlib import asynccontextmanager
 from bokeh.layouts import row, column
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS
 from casagui.toolbox import CubeMask
 from casagui.bokeh.components import SVGIcon
+from bokeh.io import reset_output as reset_bokeh_output
+from ..utils import resource_manager, reset_resource_manager
 
 class MakeMask:
     '''Class that can be used to launch a makemask GUI with ``MakeMask('test.image')( )``.'''
+
+    def __stop( self ):
+        self.__result_future.set_result(self.__retrieve_result( ))
+
+    def _abort_handler( self, err ):
+        self._error_result = err
+        self.__stop( )
+
+    def __reset( self ):
+        if self.__initialized:
+            reset_bokeh_output( )
+            reset_resource_manager( )
+
+        ###
+        ### reset asyncio result future
+        ###
+        self.__result_future = None
+
+        ###
+        ### used by data pipe (websocket) initialization function
+        ###
+        self.__initialized = False
+
+        self._cube = CubeMask(self._image_path)
+        ###
+        ### error or exception result
+        ###
+        self._error_result = None
 
     def __init__( self, image ):
         '''create a ``makemask`` object which will display image planes from a CASA
@@ -46,15 +77,29 @@ class MakeMask:
         image: str
             path to CASA image for which interactive masks will be drawn
         '''
-        self._cube = CubeMask(image)
+        self._image_path = image
+        self._cube = CubeMask(self._image_path)
         self._done = None
         self._help = None
         self._help_text = None
         self._layout = None
 
+        ###
+        ### This is used to tell whether the websockets have been initialized, but also to
+        ### indicate if __call__ is being called multiple times to allow for resetting Bokeh
+        ###
+        self.__initialized = False
+
+        ###
+        ### the asyncio future that is used to transmit the result from interactive clean
+        ###
+        self.__result_future = None
+
     def _launch_gui( self ):
         '''create and show GUI
         '''
+        self.__initialized = True
+
         width = 35
         height = 35
         self._done = Button( label="", button_type="danger", max_width=width, max_height=height, name='done',
@@ -84,51 +129,44 @@ class MakeMask:
         '''
         return self._cube.loop( )
 
-    def __call__( self, loop=asyncio.get_event_loop( ) ):
+    def __call__( self ):
         '''Display GUI using the event loop specified by ``loop``.
-
-        Parameters
-        ----------
-        loop: event loop object
-            defaults to standard asyncio event loop.
-
-        Example:
-            Create ``iclean`` object and display::
-
-                print( "Result: %s" %
-                       iclean( vis='refim_point_withline.ms', imagename='test', imsize=512,
-                               cell='12.0arcsec', specmode='cube',
-                               interpolation='nearest', ... )( ) )
         '''
-        try:
-            loop.run_until_complete(self.show( ))
-            loop.run_forever( )
-        except KeyboardInterrupt:
-            print('\nInterrupt received, stopping GUI...')
-
+        async def _run_( ):
+            async with self.serve( ) as s:
+                await s[0]
+        asyncio.run(_run_( ))
         return self.result( )
 
-    def show( self ):
-        '''Get the makemask event loop to use for running the ``makemask`` GUI
-        as part of an external event loop.
+    @asynccontextmanager
+    async def serve( self ):
+        '''This function is intended for developers who would like to embed interactive
+        clean as a part of a larger GUI. This embedded use of interactive clean is not
+        currently supported and would require the addition of parameters to this function
+        as well as changes to the interactive clean implementation. However, this function
+        does expose the ``asyncio.Future`` that is used to signal completion of the
+        interactive cleaning operation, and it provides the coroutines which must be
+        managed by asyncio to make the interactive clean GUI responsive.
         '''
+        self.__reset( )
         self._launch_gui( )
-        return self._asyncio_loop( )
+
+        async with self._cube.serve( self.__stop ) as cube:
+            self.__result_future = asyncio.Future( )
+            yield ( self.__result_future, { 'cube': cube } )
+
+    def __retrieve_result( self ):
+        '''If InteractiveClean had a return value, it would be filled in as part of the
+        GUI dialog between Python and JavaScript and this function would return it'''
+        if isinstance(self._error_result,Exception):
+            raise self._error_result
+        elif self._error_result is not None:
+            return self._error_result
+        return self._cube.result( )
 
     def result( self ):
-        '''Retrieve the masks that have been drawn by the user. The return
-        value is a dictionary with two elements ``masks`` and ``polys``.
-
-        The value of the ``masks`` element is a dictionary that is indexed by
-        tuples of ``(stokes,chan)`` and the value of each element is a list
-        whose elements describe the polygons drawn on the channel represented
-        by ``(stokes,chan)``. Each polygon description in this list has a
-        polygon index (``p``) and a x/y translation (``d``).
-
-        The value of the ``polys`` element is a dictionary that is indexed by
-        polygon indexes. The value of each polygon index is a dictionary containing
-        ``type`` (whose value is either ``'rect'`` or ``'poly``) and ``geometry``
-        (whose value is a dictionary containing ``'xs'`` and ``'ys'`` (which are
-        the x and y coordinates that define the polygon).
-        '''
-        return self._cube.result( )
+        '''If InteractiveClean had a return value, it would be filled in as part of the
+        GUI dialog between Python and JavaScript and this function would return it'''
+        if self.__result_future is None:
+            raise RuntimeError( 'no interactive clean result is available' )
+        return self.__result_future.result( )

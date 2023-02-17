@@ -139,6 +139,16 @@ class ImagePipe(DataPipe):
         return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
                                                 trc=self.__chan_shape + index) ).transpose( )
 
+    def have_mask( self ):
+        """Check to see if a mask exists.
+
+        Returns
+        -------
+        bool:
+            ''True'' if a mask cube is available otherwise ''False''
+        """
+        return self.__msk is not None
+
     def mask( self, index, modify=False ):
         """Retrieve one channel mask from the mask cube. The `index` should be a
         two element list of integers. The first integer is the ''stokes'' axis
@@ -216,15 +226,15 @@ class ImagePipe(DataPipe):
     async def _image_message_handler( self, cmd ):
         if cmd['action'] == 'channel':
             chan = self.channel(cmd['index'])
-            mask = self.mask(cmd['index'])
+            mask = { } if self.__msk is None else { 'msk': [ pack_arrays( self.mask(cmd['index']) ) ] }
             if self._stats:
                 #statistics for the displayed plane of the image cubea
                 statistics = self.statistics( cmd['index'] )
-                return { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] },
+                return { 'chan': { 'img': [ pack_arrays(chan) ], **mask },
                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) },
                          'id': cmd['id'] }
             else:
-                return { 'chan': { 'img': [ pack_arrays(chan) ], 'msk': [ pack_arrays(mask) ] }, 'id': cmd['id'] }
+                return { 'chan': { 'img': [ pack_arrays(chan) ], **mask }, 'id': cmd['id'] }
 
         elif cmd['action'] == 'spectra':
             return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }

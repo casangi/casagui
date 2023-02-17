@@ -57,8 +57,9 @@ class ImageDataSource(ColumnDataSource):
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
-        self.data = { 'img': [ self.image_source.channel( [0,0] ) ],
-                      'msk': [ self.image_source.mask( [0,0] ) ] }
+        self.data = { 'img': [ self.image_source.channel( [0,0] ) ] }
+        if self.image_source.have_mask( ):
+            self.data['msk'] = [ self.image_source.mask( [0,0] ) ]
         self.num_chans = list(self.image_source.shape[-2:])
         self.cur_chan  = [ 0, 0 ]
 

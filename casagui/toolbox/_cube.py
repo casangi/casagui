@@ -82,6 +82,7 @@ class CubeMask:
         self._mask_path = mask                          # path to bitmask cube (if any)
         self._image = None		                # figure displaying cube & mask planes
         self._channel_label = None                      # display channel and stokes
+        self._channel_label_stokes_dropdown = None      # drop down for changing stokes when _channel_label is used
         self._chan_image = None                         # channel image
         self._bitmask = None                            # bitmask image
         self._bitmask_color_selector = None             # bitmask color selector
@@ -1186,8 +1187,9 @@ class CubeMask:
         ### This setup is delayed until connect( ) to allow for the use of
         ### self._bitmask_color_selector
         ###
-        self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
-                                                                                 annotations=self._annotations ),
+        if self._bitmask_color_selector:
+            self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
+                                                                                     annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
                                                                  '''annotations[0].line_color = cb_obj.color;''' ) +
                                                                  '''let cm = bitmask.glyph.color_mapper
@@ -1206,8 +1208,9 @@ class CubeMask:
                                                       annotations=self._annotations,
                                                       selector=self._bitmask_color_selector ),
                                            code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
-                                                   self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection']
-                                                   if self._mask_path is None else "" )  +
+                                                   self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
+                                                   if self._mask_path is None else (
+                                                   ### selector indicates if a on-disk mask is being used
                                                    '''if ( source._masking_enabled ) {
                                                           const geometry = cb_obj['geometry']
                                                           if ( geometry.type === 'rect' ) {
@@ -1227,7 +1230,7 @@ class CubeMask:
                                                               annotations[0].line_dash = 'dashed'
                                                               annotations[0].line_color = selector.color
                                                           }
-                                                      }''' ) )
+                                                      }''' ) ) )
 
 
     def js_obj( self ):
