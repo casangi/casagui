@@ -1115,7 +1115,7 @@ class CubeMask:
                                                                ### the label manipulation portion of 'code' is '' when self._channel_label is None
                                                                ### so stokes_label.label and label.text will not be updated when they are not used
                                                                code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
-                                                                           stokes_label.label = ( %s )''' %
+                                                                           stokes_label.label = ( %s );''' %
                                                                         ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
                                                                                           zip( range(len(stokes_labels)), stokes_labels )) ) + " : ''" ) if
                                                                         self._channel_label else '' ) +
