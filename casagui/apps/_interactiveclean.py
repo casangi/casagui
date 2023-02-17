@@ -293,6 +293,11 @@ class InteractiveClean:
         ###
         ### GUI Elements
         self._imagename = imagename
+        # Create folder for the generated html webpage - needs its own folder to not name conflict (must be 'index.html')
+        webpage_dirname = imagename + '_webpage'
+        if not os.path.isdir(webpage_dirname):
+            os.makedirs(webpage_dirname)
+        self._webpage_path = os.path.abspath(webpage_dirname)
         self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         if not os.path.isdir(self._mask_path):
             self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
