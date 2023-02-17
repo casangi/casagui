@@ -1244,7 +1244,7 @@ class CubeMask:
                                                                               if ( msg.result === 'stopped' ) {""" +
                                                                             # Don't close tab if running in a jupyter notebook
                                                                             ("""console.log("Running in jupyter notebook. Not closing window.")""" if self._is_notebook else
-                                                                                 """console.log("Running from script/terminal. Closing window.)
+                                                                                 """console.log("Running from script/terminal. Closing window.")
                                                                                     window.close()"""
                                                                             ) +
                                                                     """
