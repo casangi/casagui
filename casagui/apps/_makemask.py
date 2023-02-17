@@ -63,6 +63,7 @@ class MakeMask:
         self.__initialized = False
 
         self._cube = CubeMask(self._image_path)
+        self._image = None
         ###
         ### error or exception result
         ###
@@ -110,7 +111,9 @@ class MakeMask:
         ### CubeMask provides a help table
         self._help_text = self._cube.help( rows=[ '<tr><td><i>red check button</i></td><td>clicking the red check button will close the dialog and return masks to python</td></tr>' ] )
 
-        self._layout = column( self._cube.image( ),
+        self._image = self._cube.image( )
+        self._layout = column( self._cube.channel_label( ),
+                               self._image,
                                row( self._cube.slider( ), self._help, self._done ),
                                self._help_text )
 
