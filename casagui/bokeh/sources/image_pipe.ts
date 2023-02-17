@@ -33,6 +33,7 @@ export class ImagePipe extends DataPipe {
     //    index: [ stokes index, spectral plane ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
     channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
+        this.position[id] = { index }
         let message = { action: 'channel', index, id }
         super.send( this.dataid, message, cb )
     }
@@ -44,7 +45,7 @@ export class ImagePipe extends DataPipe {
         super.send( this.dataid, message, cb )
     }
 
-    refresh( cb: (msg:{[key: string]: any}) => any, id: string, default_index=[ ] as number[] ): void {
+    refresh( cb: (msg:{[key: string]: any}) => any, id: string, default_index=[ 0, 0 ] as number[] ): void {
         let { index } = id in this.position ? this.position[id] : { index: default_index }
         if ( index.length === 2 ) {
             // refreshing channel
