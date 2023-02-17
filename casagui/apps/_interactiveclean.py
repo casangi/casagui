@@ -943,6 +943,11 @@ class InteractiveClean:
                                                              else help.visible = true''' ) )
 
         self._cube.connect( )
+        # Change display type depending on runtime environment
+        if self._is_notebook:
+            output_notebook()
+        else:
+            output_file(self._imagename+'_webpage/index.html')
         show(self._fig['layout'])
 
     def __call__( self ):
