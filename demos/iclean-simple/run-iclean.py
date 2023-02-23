@@ -12,7 +12,14 @@ import asyncio
 import urllib
 import tarfile
 
+import os
+import sys
+# Alter below path if needed to select custom casagui location
+# print(os.pwd())
+sys.path.insert(0, os.path.abspath('../../../casagui/'))
+
 from casagui.apps import InteractiveClean
+
 
 ##
 ## demo measurement set to use
