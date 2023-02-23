@@ -993,8 +993,11 @@ class InteractiveClean:
             async with self.serve( ) as s:
                 await s[0]
 
-        asyncio.run(_run_( ))
-        return self.result( )
+        if self._is_notebook:
+            ic_task = asyncio.create_task(_run_())
+        else:
+            asyncio.run(_run_( ))
+            return self.result( )
 
     def setup( self ):
         self.__reset( )
