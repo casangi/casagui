@@ -369,30 +369,26 @@ class gclean:
                                      self._convergence_result[1],
                                      self._convergence_result[2] )
 
-    def finalize(self):
-        """ Runs the restoration step, prevents any future cleaning, and returns a path to the restored image. """
-        if not self._finalized:
-            self._finalized = True
-            tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
-                                       phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode,
-                                       reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
-                                       psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
-                                       interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
-                                       start=self._start, width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev,
-                                       pblimit=self._pblimit, deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales,
-                                       restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
-                                       timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
-                                       observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
-                                       robust=self._robust, npixels=self._npixels, gain=self._gain, sidelobethreshold=self._sidelobethreshold,
-                                       noisethreshold=self._noisethreshold, lownoisethreshold=self._lownoisethreshold,
-                                       negativethreshold=self._negativethreshold, minbeamfrac=self._minbeamfrac, growiterations=self._growiterations,
-                                       dogrowprune=self._dogrowprune, minpercentchange=self._minpercentchange, fastnoise=self._fastnoise,
-                                       savemodel=self._savemodel, nsigma=self._nsigma, interactive=0,
-                                       niter=0, restart=True, calcpsf=False, calcres=False, restoration=True,
-                                       parallel=self._parallel )
-        return {
-            "image": f"{self._imagename}.image"
-        }
+    def restore(self):
+        """ Restores the final image, and returns a path to the restored image. """
+        tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                                   phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode,
+                                   reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
+                                   psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
+                                   interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
+                                   start=self._start, width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev,
+                                   pblimit=self._pblimit, deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales,
+                                   restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
+                                   timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
+                                   observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
+                                   robust=self._robust, npixels=self._npixels, gain=self._gain, sidelobethreshold=self._sidelobethreshold,
+                                   noisethreshold=self._noisethreshold, lownoisethreshold=self._lownoisethreshold,
+                                   negativethreshold=self._negativethreshold, minbeamfrac=self._minbeamfrac, growiterations=self._growiterations,
+                                   dogrowprune=self._dogrowprune, minpercentchange=self._minpercentchange, fastnoise=self._fastnoise,
+                                   savemodel=self._savemodel, nsigma=self._nsigma, interactive=False,
+                                   niter=0, restart=True, calcpsf=False, calcres=False, restoration=True,
+                                   parallel=self._parallel )
+        return { "image": f"{self._imagename}.image" }
 
     def has_next(self):
         return not self._finalized

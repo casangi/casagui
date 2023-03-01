@@ -957,6 +957,7 @@ class InteractiveClean:
         GUI dialog between Python and JavaScript and this function would return it'''
         if self.__result_future is None:
             raise RuntimeError( 'no interactive clean result is available' )
+        self._clean.restore( )
         return self.__result_future.result( )
 
     def masks( self ):
