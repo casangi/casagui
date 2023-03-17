@@ -123,7 +123,13 @@ class ImagePipe(DataPipe):
             self.__stokes_labels = self.__img.coordsys( ).stokes( )
         return self.__stokes_labels
 
-    def channel( self, index ):
+    ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
+    ### the element type of image pixels retrieved from the CASA image are float64, but it
+    ### seems like 256 is the greatest number of colors in the colormaps currrently used
+    ### for pseudo color within interactive clean...
+    ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
+    #def channel( self, index, element_type=np.float64 ):
+    def channel( self, index, element_type=np.uint8 ):
         """Retrieve one channel from the image cube. The `index` should be a
         two element list of integers. The first integer is the ''stokes'' axis
         in the image cube. The second integer is the ''channel'' axis in the
@@ -134,10 +140,24 @@ class ImagePipe(DataPipe):
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
         """
+        def quantize( nptype, image_plane ):
+            bits = nptype(0).nbytes * 8
+            min = image_plane.min( )
+            max = image_plane.max( )
+            max -= min
+            img = ((image_plane - min)/max) * (2**bits-1)
+            return img.astype(nptype)
+
         if self.__img is None:
             raise RuntimeError('no image is available')
-        return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
-                                                trc=self.__chan_shape + index) ).transpose( )
+        if np.issubdtype( element_type, np.integer ):
+            return quantize( element_type,
+                             np.squeeze( self.__img.getchunk( blc=[0,0] + index,
+                                                              trc=self.__chan_shape + index) ) ).transpose( )
+        else:
+            return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
+                                                    trc=self.__chan_shape + index) ).astype(element_type).transpose( )
+
 
     def have_mask( self ):
         """Check to see if a mask exists.
