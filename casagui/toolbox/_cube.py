@@ -1,6 +1,6 @@
 #######################################################################
 #
-# Copyright (C) 2022
+# Copyright (C) 2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -40,7 +40,7 @@ import websockets
 from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
-                         DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown
+                         DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, LinearColorMapper
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
@@ -169,6 +169,20 @@ class CubeMask:
                                                                                     value: { chan: source.cur_chan,
                                                                                              xs: annotations[0].xs,
                                                                                              ys: annotations[0].ys } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'shift+`', { scope: 'channel' },
+                                                              (e) => { e.preventDefault( )
+                                                                       ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'chan',
+                                                                                    action: 'not',
+                                                                                    value: { chan: source.cur_chan } },
+                                                                                  mask_mod_result ) } )
+                                              window.hotkeys( 'shift+1', { scope: 'channel' },
+                                                              (e) => { e.preventDefault( )
+                                                                       ctrl.send( ids['mask-mod'],
+                                                                                  { scope: 'cube',
+                                                                                    action: 'not',
+                                                                                    value: { chan: source.cur_chan } },
                                                                                   mask_mod_result ) } )
                                               ''',
                    'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
@@ -872,10 +886,15 @@ class CubeMask:
                                palette=default_palette( ), level="image",
                                source=self._image_source )
             if self._mask_path is not None and path.isdir(self._mask_path):
-                self._bitmask = self._image.image( image='msk', x=0, y=0,
-                                                   dw=shape[0], dh=shape[1],
-                                                   palette=['rgba(0, 0, 0, 0)','#FFFF00'], alpha=0.6,
-                                                   source=self._image_source )
+                ##
+                ## LinearColorMapper must be used because otherwise a bitmask that is
+                ## all true or all false is colored with '#FFFF00' by default because
+                ## the "image" range drops to a single value, i.e. the maximum value
+                ##
+                self._bitmask = self._image.image( image='msk', x=0, y=0, dw=shape[0], dh=shape[1],
+                                                   color_mapper=LinearColorMapper( low=0, high=1,
+                                                                                   palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
+                                                   alpha=0.6, source=self._image_source )
 
             self._image.grid.grid_line_width = 0.5
             self._image.plot_height = 400
@@ -1288,8 +1307,10 @@ class CubeMask:
                          'mask': '''
                              <tr><td><b>a</b></td><td>add region to the mask for the current channel</td></tr>
                              <tr><td><b>s</b></td><td>subtract region from the mask for the current channel</td></tr>
+                             <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
                              <tr><td><b>ctrl</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
                              <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
+                             <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
                              <tr><td><b>escape</b></td><td>remove displayed region</td></tr>'''
                          }
 
