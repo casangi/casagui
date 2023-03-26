@@ -793,6 +793,12 @@ class CubeMask:
         '''
         return self._image_papth
 
+    def shape( self ):
+        '''return shape of image cube
+        '''
+        self._init_pipes( )
+        return self._pipe['image'].shape
+
     def jsmask_to_raw( self, jsmask ):
         '''The CubeMask raw format uses tuples for dictionary keys but tuples are not a type that can be
         created in javascript...

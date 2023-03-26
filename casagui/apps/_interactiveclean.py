@@ -383,9 +383,9 @@ class InteractiveClean:
                                                cyclefactor.disabled = true
                                                btns['continue'].disabled = true
                                                btns['finish'].disabled = true
-                                               slider.disabled = true
+                                               if ( slider ) slider.disabled = true
                                                image_fig.disabled = true
-                                               spectra_fig.disabled = true
+                                               if ( spectra_fig ) spectra_fig.disabled = true
                                                if ( with_stop ) {
                                                    btns['stop'].disabled = true
                                                } else {
@@ -401,9 +401,9 @@ class InteractiveClean:
                                                threshold.disabled = false
                                                cyclefactor.disabled = false
                                                btns['stop'].disabled = false
-                                               slider.disabled = false
+                                               if ( slider ) slider.disabled = false
                                                image_fig.disabled = false
-                                               spectra_fig.disabled = false
+                                               if ( spectra_fig ) spectra_fig.disabled = false
                                                if ( ! only_stop ) {
                                                    btns['continue'].disabled = false
                                                    btns['finish'].disabled = false
@@ -545,6 +545,8 @@ class InteractiveClean:
     def _launch_gui( self ):
         '''create and show GUI
         '''
+        image_channels = self._cube.shape( )[3]
+
         self._fig = { }
 
         ###
@@ -554,7 +556,7 @@ class InteractiveClean:
 
         self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
         ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
-        self._status['stopcode'] = Div( text="<div>initial image</div>" )
+        self._status['stopcode'] = Div( text="<div>initial residual image</div>" ) if image_channels > 1 else Div( text="<div>initial <b>single-channel</b> residual image</div>" )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
@@ -704,12 +706,67 @@ class InteractiveClean:
         self._control['threshold'] = TextInput( title="threshold", value="%s" % self._params['threshold'], width=90 )
         self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
 
-        self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
 
-        self._fig['slider'] = self._cube.slider( )
         self._fig['image'] = self._cube.image( )
         self._fig['image-source'] = self._cube.js_obj( )
-        self._fig['spectra'] = self._cube.spectra( )
+
+        if image_channels > 1:
+            self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
+            self._fig['slider'] = self._cube.slider( )
+            self._fig['spectra'] = self._cube.spectra( )
+
+            self._fig['slider'].js_on_change( 'value',
+                                              CustomJS( args=dict( convergence_src=self._convergence_source,
+                                                                   convergence_fig=self._fig['convergence'],
+                                                                   conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
+                                                                   img_src=self._fig['image-source']
+                                                                  ),
+                                                        code='''const pos = img_src.cur_chan;''' +
+                                                                self._js['update-converge'] + self._js['slider-update'] ) )
+
+            self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
+                                                                              slider=self._fig['slider'],
+                                                                              status=self._status['stopcode'] ),
+                                                                   code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
+                                                                           if ( values.length > 2 ) {
+                                                                             status._error_set = true
+                                                                             status.text = '<div>enter at most two indexes</div>'
+                                                                           } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
+                                                                             status._error_set = true
+                                                                             status.text = '<div>invalid channel entered</div>'
+                                                                           } else {
+                                                                             if ( status._error_set ) {
+                                                                               status._error_set = false
+                                                                               status.text = '<div/>'
+                                                                             }
+                                                                             if ( values.length == 1 ) {
+                                                                               if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
+                                                                                 status.text= `<div>moving to channel ${values[0]}</div>`
+                                                                                 slider.value = values[0]
+                                                                               } else {
+                                                                                 status._error_set = true
+                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                               }
+                                                                             } else if ( values.length == 2 ) {
+                                                                               if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
+                                                                                 status._error_set = true
+                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                               } else {
+                                                                                 if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<div>stokes ${values[1]} out of range</div>`
+                                                                                 } else {
+                                                                                   status.text= `<div>moving to channel ${values[0]}/${values[1]}</div>`
+                                                                                   slider.value = values[0]
+                                                                                   img.channel( values[0], values[1] )
+                                                                                 }
+                                                                               }
+                                                                             }
+                                                                           }''' ) )
+        else:
+            self._control['goto'] = None
+            self._fig['slider'] = None
+            self._fig['spectra'] = None
 
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
@@ -783,15 +840,6 @@ class InteractiveClean:
         self._control['clean']['finish'].js_on_click( self._cb['clean'] )
         self._control['clean']['stop'].js_on_click( self._cb['clean'] )
 
-        self._fig['slider'].js_on_change( 'value',
-                                          CustomJS( args=dict( convergence_src=self._convergence_source,
-                                                               convergence_fig=self._fig['convergence'],
-                                                               conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                               img_src=self._fig['image-source']
-                                                             ),
-                                                    code='''const pos = img_src.cur_chan;''' +             ### later we will receive the polarity from some widget mechanism...
-                                                            self._js['update-converge'] + self._js['slider-update'] ) )
-
         # Generates the HTML for the controls layout:
         # nmajor niter cycleniter cycle_factor threshold  -----------
         #                  slider                         -  image  -    help
@@ -816,7 +864,7 @@ class InteractiveClean:
                                                self._control['cycle_factor'],
                                                self._control['threshold'],
                                                self._control['clean']['stop'] ),
-                                          row( self._fig['slider'], self._control['goto'] ),
+                                          row( self._fig['slider'], self._control['goto'] ) if self._fig['slider'] else Div( ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
                                           self._cube.statistics( sizing_mode = "stretch_height" ),
                                       ),
@@ -838,7 +886,7 @@ class InteractiveClean:
                                                              ]
                                                      )
                                   ),
-                                  self._fig['spectra'],
+                                  self._fig['spectra'] if self._fig['spectra'] else Div( ),
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
                                   self._status['log'] )
@@ -847,45 +895,6 @@ class InteractiveClean:
                                                      code='''if ( help.visible == true ) help.visible = false
                                                              else help.visible = true''' ) )
 
-        self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
-                                                                          slider=self._fig['slider'],
-                                                                          status=self._status['stopcode'] ),
-                                                               code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
-                                                                       if ( values.length > 2 ) {
-                                                                         status._error_set = true
-                                                                         status.text = '<div>enter at most two indexes</div>'
-                                                                       } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
-                                                                         status._error_set = true
-                                                                         status.text = '<div>invalid channel entered</div>'
-                                                                       } else {
-                                                                         if ( status._error_set ) {
-                                                                           status._error_set = false
-                                                                           status.text = '<div/>'
-                                                                         }
-                                                                         if ( values.length == 1 ) {
-                                                                           if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
-                                                                             status.text= `<div>moving to channel ${values[0]}</div>`
-                                                                             slider.value = values[0]
-                                                                           } else {
-                                                                             status._error_set = true
-                                                                             status.text = `<div>channel ${values[0]} out of range</div>`
-                                                                           }
-                                                                         } else if ( values.length == 2 ) {
-                                                                           if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
-                                                                             status._error_set = true
-                                                                             status.text = `<div>channel ${values[0]} out of range</div>`
-                                                                           } else {
-                                                                             if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
-                                                                               status._error_set = true
-                                                                               status.text = `<div>stokes ${values[1]} out of range</div>`
-                                                                             } else {
-                                                                               status.text= `<div>moving to channel ${values[0]}/${values[1]}</div>`
-                                                                               slider.value = values[0]
-                                                                               img.channel( values[0], values[1] )
-                                                                             }
-                                                                           }
-                                                                         }
-                                                                       }''' ) )
         self._cube.connect( )
         show(self._fig['layout'])
 
