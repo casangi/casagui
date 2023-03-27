@@ -251,7 +251,7 @@ class InteractiveClean:
                                restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
                                sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
                                negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
-                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
+                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=1,
                                usemask=self._usemask, mask=self._mask_path
                       )
         ###
@@ -259,7 +259,7 @@ class InteractiveClean:
         ###                         used by ColumnDataSource
         ###
         self._status = { }
-        err, stopcode, self._convergence_data = next(self._clean)
+        err, stopcode, majordone, self._convergence_data = next(self._clean)
         if stopcode is None and err:
             raise RuntimeError(err)
         if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
@@ -350,6 +350,10 @@ class InteractiveClean:
                                                if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
                                                  const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
                                                  niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                               }
+                                               if ( clean_msg !== undefined && 'majordone' in clean_msg ) {
+                                                 const remaining = parseInt(nmajor.value) - parseInt(clean_msg['majordone'])
+                                                 nmajor.value = '' + (remaining < 0 ? 0 : remaining)
                                                }
                                                img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
 
@@ -459,7 +463,7 @@ class InteractiveClean:
                                                        log.text = log.text + msg.cmd
                                                    }
                                                } else if ( msg.result === 'no-action' ) {
-                                                   update_status( 'nothing done' )
+                                                   update_status( 'status' in msg ? msg.status : 'nothing done' )
                                                    enable( false )
                                                    if ( 'cmd' in msg ) {
                                                        log.text = log.text + msg.cmd
@@ -485,7 +489,7 @@ class InteractiveClean:
                                                            disable( false )
                                                        }
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
-                                                       if ( ! state.stopped && niter.value > 0 ) {
+                                                       if ( ! state.stopped && niter.value > 0 && nmajor.value > 0 ) {
                                                            // *******************************************************************************************
                                                            // ******** 'niter.value > 0 so continue with one more iteration                      ********
                                                            // *******************************************************************************************
@@ -563,6 +567,14 @@ class InteractiveClean:
         ###
         async def clean_handler( msg, self=self ):
             if msg['action'] == 'next' or msg['action'] == 'finish':
+
+                if 'nmajor' in msg['value']:
+                    if msg['value']['nmajor'].isdigit( ):
+                        if int(msg['value']['nmajor']) <= 0:
+                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, status="major cycle limit is zero" )
+                    else:
+                        return dict( result='error', stopcode=1, iterdone=0, majordone=0, error="major cycle limit is not an integer" )
+
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
@@ -578,33 +590,27 @@ class InteractiveClean:
                 else:
                     msg['value']['mask'] = ''
                 self._clean.update( { **msg['value'] } )
-                err, stopcode, self._convergence_data = await self._clean.__anext__( )
-                # *******************************************************************************************
-                # ******** perhaps the user should not be locked into exiting after the limit is hit ********
-                # *******************************************************************************************
-                #if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
-                #    self._clean.finalize()
+                err, stopcode, majordone, self._convergence_data = await self._clean.__anext__( )
 
-                    # self._cube.update_image(self._clean.finalize()['image']) # TODO show the restored image
                 if len(self._convergence_data) == 0 and stopcode == 7 or err:
                     return dict( result='error', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
-                                 convergence=None, error=err )
+                                 convergence=None, majordone=majordone, error=err )
                 if len(self._convergence_data) == 0:
                     return dict( result='no-action', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
-                                 convergence=None, iterdone=0, error=err )
+                                 convergence=None, iterdone=0, majordone=majordone, error=err )
                 if len(self._convergence_data) * len(self._convergence_data[0]) > self._threshold_chan or \
                    len(self._convergence_data[0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
-                                 error=err )
+                                 majordone=majordone, error=err )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
-                                 error=err )
+                                 majordone=majordone, error=err )
 
                 return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                              convergence=self._convergence_data, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data.values() for x in y.values( ) ]),
-                             error=err )
+                             majordone=majordone, error=err )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )

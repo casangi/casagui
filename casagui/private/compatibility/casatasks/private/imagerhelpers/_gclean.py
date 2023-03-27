@@ -109,11 +109,6 @@ class gclean:
                 self._cycleniter = int(msg['cycleniter'])
             except ValueError:
                 pass
-        if 'nmajor' in msg:
-            try:
-                self._nmajor = int(msg['nmajor'])
-            except ValueError:
-                pass
         if 'threshold' in msg:
             self._threshold = msg['threshold']
         if 'cyclefactor' in msg:
@@ -197,9 +192,11 @@ class gclean:
         self._usemask = usemask
         self._mask = mask
 
-        self._convergence_result = (None,None,None)
-        #                           ^^^^ ^^^^ ^^^^------------->>> tclean convergence record
-        #                              |    |
+        self._major_done = 0
+        self._convergence_result = (None,None,None,None)
+        #                           ^^^^ ^^^^ ^^^^ ^^^^-------->>> tclean convergence record
+        #                              |    | |
+        #                              |    | +---------------->>> major cycles done for current run
         #                              |    +------------------>>> tclean stopcode
         #                              +----------------------->>> error message
     def __filter_convergence( raw ):
@@ -281,14 +278,16 @@ class gclean:
         if self._finalized:
             self._convergence_result = ( f'iteration terminated',
                                          self._convergence_result[1],
-                                         self._convergence_result[2] )
+                                         self._major_done,
+                                         self._convergence_result[3] )
             raise StopIteration
         #                                                                             ensure that at least the initial tclean run
         #                      vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv------------>>> is done to produce an initial dirty image
         if self._niter < 1 and self._convergence_result[2] is not None:
             self._convergence_result = ( f'nothing to run, niter == {self._niter}',
                                          self._convergence_result[1],
-                                         self._convergence_result[2] )
+                                         self._major_done,
+                                         self._convergence_result[3] )
             return self._convergence_result
         else:
             ###
@@ -310,6 +309,7 @@ class gclean:
                                            robust=self._robust, npixels=self._npixels, interactive=False, niter=1, gain=0.000001, calcres=True,
                                            restoration=False, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
+                self._major_done = 0
             else:
                 tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell, phasecenter=self._phasecenter,
                                            stokes=self._stokes, specmode=self._specmode, reffreq=self._reffreq,
@@ -329,16 +329,19 @@ class gclean:
                                            minpercentchange=self._minpercentchange, fastnoise=self._fastnoise, savemodel=self._savemodel, maxpsffraction=1,
                                            minpsffraction=0, parallel=self._parallel )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
+                self._major_done = tclean_ret['nmajordone'] if 'nmajordone' in tclean_ret else 0
 
             if len(tclean_ret) > 0 and 'summaryminor' in tclean_ret and sum(map(len,tclean_ret['summaryminor'].values())) > 0:
                 new_summaryminor_rec = gclean.__filter_convergence(tclean_ret['summaryminor'])
                 self._convergence_result = ( None,
                                              tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
-                                             gclean.__update_convergence(self._convergence_result[2],new_summaryminor_rec) )
+                                             self._major_done,
+                                             gclean.__update_convergence(self._convergence_result[3],new_summaryminor_rec) )
             else:
                 self._convergence_result = ( f'tclean returned an empty result',
                                              self._convergence_result[1],
-                                             self._convergence_result[2] )
+                                             self._major_done,
+                                             self._convergence_result[3] )
             return self._convergence_result
 
     def __reflect_stop( self ):
@@ -367,7 +370,8 @@ class gclean:
         self._finalized = False
         self._convergence_result = ( None,
                                      self._convergence_result[1],
-                                     self._convergence_result[2] )
+                                     self._major_done,
+                                     self._convergence_result[3] )
 
     def restore(self):
         """ Restores the final image, and returns a path to the restored image. """

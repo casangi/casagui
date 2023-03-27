@@ -1204,7 +1204,7 @@ class CubeMask:
                                                                       source.enable_masking = ( ) => source._masking_enabled = true
                                                                       source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
                                                                       source.breadcrumbs = ( ) => source._mask_breadcrumbs
-                                                                      source.drop_breadcrumb = ( code ) => register_mask_change( code )
+                                                                      source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
                                                                       source.update_statistics = ( data ) => stats_source.data = data
                                                                    """ )
 
