@@ -193,8 +193,8 @@ class gclean:
         self._mask = mask
 
         self._major_done = 0
-        self._convergence_result = (None,None,None,None)
-        #                           ^^^^ ^^^^ ^^^^ ^^^^-------->>> tclean convergence record
+        self._convergence_result = (None,None,None,{ 'chan': None, 'major': None })
+        #                           ^^^^ ^^^^ ^^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----->>> convergence info
         #                              |    | |
         #                              |    | +---------------->>> major cycles done for current run
         #                              |    +------------------>>> tclean stopcode
@@ -216,6 +216,16 @@ class gclean:
                 for summary_k in keep_keys:
                     ret[channel_k][stokes_k][summary_k] = copy.deepcopy(stokes_v[summary_k])
         return ret
+
+    def __add_per_major_items( self, tclean_ret, major_ret, chan_ret ):
+        '''Add meta-data about the whole major cycle, including 'cyclethreshold'
+        '''
+        if 'cyclethreshold' in tclean_ret:
+            return dict( major=dict( cyclethreshold=[tclean_ret['cyclethreshold']] if major_ret is None else (major_ret['cyclethreshold'] + [tclean_ret['cyclethreshold']]) ),
+                         chan=chan_ret )
+        else:
+            return dict( major=dict( cyclethreshold=major_ret['cyclethreshold'].append(tclean_ret['cyclethreshold']) ),
+                         chan=chan_ret )
 
     def __update_convergence( cumm_sm, new_sm ):
         """Accumulates the per-channel/stokes subimage 'summaryminor' records from new_sm to cumm_sm.
@@ -336,7 +346,10 @@ class gclean:
                 self._convergence_result = ( None,
                                              tclean_ret['stopcode'] if 'stopcode' in tclean_ret else 0,
                                              self._major_done,
-                                             gclean.__update_convergence(self._convergence_result[3],new_summaryminor_rec) )
+                                             self.__add_per_major_items( tclean_ret,
+                                                                         self._convergence_result[3]['major'],
+                                                                         gclean.__update_convergence( self._convergence_result[3]['chan'],
+                                                                                                      new_summaryminor_rec ) ) )
             else:
                 self._convergence_result = ( f'tclean returned an empty result',
                                              self._convergence_result[1],
