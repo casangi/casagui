@@ -389,6 +389,7 @@ class InteractiveClean:
                                                btns['continue'].disabled = true
                                                btns['finish'].disabled = true
                                                if ( slider ) slider.disabled = true
+                                               if ( go_to ) go_to.disabled = true
                                                image_fig.disabled = true
                                                if ( spectra_fig ) spectra_fig.disabled = true
                                                if ( with_stop ) {
@@ -407,6 +408,7 @@ class InteractiveClean:
                                                cyclefactor.disabled = false
                                                btns['stop'].disabled = false
                                                if ( slider ) slider.disabled = false
+                                               if ( go_to ) go_to.disabled = true
                                                image_fig.disabled = false
                                                if ( spectra_fig ) spectra_fig.disabled = false
                                                if ( ! only_stop ) {
@@ -798,7 +800,8 @@ class InteractiveClean:
                                                  spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
-                                                 cycle_thresh=self._fig['cyclethreshold span']
+                                                 cycle_thresh=self._fig['cyclethreshold span'],
+                                                 go_to = self._control['goto']
                                                 ),
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
                                            self._js['clean-enable'] + self._js['clean-status-update'] +
