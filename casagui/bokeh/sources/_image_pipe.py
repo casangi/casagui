@@ -158,6 +158,42 @@ class ImagePipe(DataPipe):
             return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
                                                     trc=self.__chan_shape + index) ).astype(element_type).transpose( )
 
+    def have_mask0( self ):
+        """Check to see if the synthesis imaging 'mask0' mask exists
+
+        Returns
+        -------
+        bool:
+            ''True'' if the cube contains an internal ''mask0'' mask otherwise ''False''
+        """
+        if self.__img is None:
+            raise RuntimeError('no image is available')
+        return 'mask0' in self.__img.maskhandler('get')
+
+
+    def mask0( self, index ):
+        """Within the image, there can be an arbitrary number of INTERNAL masks. They can
+        have arbitrary names. The synthesis imaging module uses a mask named 'mask0'. This
+        mask is used in processing (it MAY represent the beam).
+
+        Parameters
+        ----------
+        index: [ int, int ]
+            list containing first the ''stokes'' index and second the ''channel'' index
+        """
+        ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
+        ### tclean does not maintain mask0. Instead, calls to tclean can result in the
+        ### internal, mask0 being lost. Because of this, once a good copy of this internal
+        ### mask is retrieved it is reused. Urvashi says that reusing one copy throughout
+        ### should be fine (Fri Mar 31 13:54:17 EDT 2023)
+        ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
+        if self.__img is None:
+            raise RuntimeError('no image is available')
+        if self.__mask0_cache is None and self.have_mask0( ):
+            self.__mask0_cache = self.__img.getregion(getmask=True)
+        if self.__mask0_cache is not None:
+            return self.__mask0_cache[:,:,index[0],index[1]]
+        return None
 
     def have_mask( self ):
         """Check to see if a mask exists.
@@ -247,14 +283,20 @@ class ImagePipe(DataPipe):
         if cmd['action'] == 'channel':
             chan = self.channel(cmd['index'])
             mask = { } if self.__msk is None else { 'msk': [ pack_arrays( self.mask(cmd['index']) ) ] }
+            mask0 = self.mask0(cmd['index'])
             if self._stats:
                 #statistics for the displayed plane of the image cubea
                 statistics = self.statistics( cmd['index'] )
-                return { 'chan': { 'img': [ pack_arrays(chan) ], **mask },
+                return { 'chan': { 'img': [ pack_arrays(chan) ],
+                                   'msk0': [ pack_arrays(mask0) ] if mask0 is not None else None,
+                                   **mask },
                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) },
                          'id': cmd['id'] }
             else:
-                return { 'chan': { 'img': [ pack_arrays(chan) ], **mask }, 'id': cmd['id'] }
+                return { 'chan': { 'img': [ pack_arrays(chan) ],
+                                   'msk0': [ pack_arrays(mask0) ] if mask0 is not None else None,
+                                   **mask },
+                         'id': cmd['id'] }
 
         elif cmd['action'] == 'spectra':
             return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
@@ -273,6 +315,7 @@ class ImagePipe(DataPipe):
         self._stats = stats
         self.__open_image( image )
         self.__open_mask( mask )
+        self.__mask0_cache = None
         self.shape = list(self.__img.shape( ))
         self.__session = None
         self.__stokes_labels = None

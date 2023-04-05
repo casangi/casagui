@@ -87,6 +87,7 @@ class CubeMask:
         self._bitmask = None                            # bitmask image
         self._bitmask_color_selector = None             # bitmask color selector
         self._bitmask_transparency_button = None        # select whether the 1s or 0s is transparent
+        self._mask0 = None                              # INTERNAL systhesis imaging mask
         self._slider = None                             # slider to move from plane to plane
         self._spectra = None                            # figure displaying spectra along the frequency axis
         self._statistics = None                         # statistics data table
@@ -901,6 +902,12 @@ class CubeMask:
                                                    color_mapper=LinearColorMapper( low=0, high=1,
                                                                                    palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
                                                    alpha=0.6, source=self._image_source )
+
+            if self._pipe['image'].have_mask0( ):
+                self._mask0 = self._image.image( image='msk0', x=0, y=0, dw=shape[0], dh=shape[1],
+                                                 color_mapper=LinearColorMapper( low=0, high=1,
+                                                                                 palette=['#000000','rgba(0, 0, 0, 0)'] ),
+                                                 source=self._image_source )
 
             self._image.grid.grid_line_width = 0.5
             self._image.plot_height = 400
