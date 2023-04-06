@@ -34,7 +34,7 @@ import shutil
 import websockets
 from uuid import uuid4
 from contextlib import asynccontextmanager
-from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d
+from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from bokeh.io import reset_output as reset_bokeh_output
@@ -332,23 +332,26 @@ class InteractiveClean:
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'update-converge': '''function update_convergence( msg ) {
                                                let convdata
+                                               let thresh_values
                                                if ( typeof msg === 'undefined' && '_convergence_data' in flux_src ) {
                                                    // use complete convergence cache attached to flux_src...
                                                    // get the convergence data for channel and stokes
                                                    const pos = img_src.cur_chan
                                                    convdata = flux_src._convergence_data.chan[pos[1]][pos[0]]
                                                    //          chan---------------------------^^^^^^  ^^^^^^----stokes
-                                                   cycle_thresh.location = flux_src._convergence_data.cyclethreshold
+                                                   thresh_values = flux_src._convergence_data.cyclethreshold
                                                } else if ( 'result' in msg ) {
                                                    // update based on msg received from conv_pipe
                                                    const convdata = msg.result.converge
-                                                   cycle_thresh.location = msg.result.cyclethreshold
+                                                   thresh_values = msg.result.cyclethreshold
                                                }
                                                const iterations = convdata.iterations
                                                const peakRes = convdata.peakRes
                                                residual_src.data = { iterations, values: peakRes, type: Array(iterations.length).fill('residual') }
                                                const modelFlux = convdata.modelFlux
                                                flux_src.data = { iterations, values: modelFlux, type: Array(iterations.length).fill('flux') }
+                                               threshold_src.data = { iterations, values: thresh_values, type: Array(iterations.length).fill('threshold') }
+
                                            }''',
 
                      'clean-refresh':   '''function refresh( clean_msg ) {
@@ -620,11 +623,11 @@ class InteractiveClean:
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
-                                 majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'][-1], error=err )
+                                 majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
 
                 return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                              convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
-                             majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'][-1], error=err )
+                             majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
@@ -650,7 +653,7 @@ class InteractiveClean:
                 return { 'action': 'update-success',
                          'result': dict(converge=self._convergence_data['chan'][msg['value'][1]][msg['value'][0]],
                 ###                                                  chan-------^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^-------stokes
-                                        cyclethreshold=self._convergence_data['major']['cyclethreshold'][-1]) }
+                                        cyclethreshold=self._convergence_data['major']['cyclethreshold']) }
             else:
                 return { 'action': 'update-failure' }
 
@@ -661,7 +664,8 @@ class InteractiveClean:
         ###
         convergence = self._convergence_data['chan'][0][self._stokes]
         self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'], type=['flux'] ) )
-        self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],     iterations=convergence['iterations'], type=['residual'] ) )
+        self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'], type=['residual'] ) )
+        self._cyclethreshold_data = ColumnDataSource( data=dict( values=self._convergence_data['major']['cyclethreshold'], iterations=convergence['iterations'], type=['threshold'] ) )
 
         ###
         ### Setup script that will be called when the user closes the
@@ -675,7 +679,7 @@ class InteractiveClean:
 
         hover = HoverTool( tooltips=[ ("", "@type @values") ] )
         self._fig['convergence'] = figure( plot_height=180, plot_width=800, tools=[ hover ], title='Convergence',
-                                           x_axis_label='Iteration (cycle threshold in red)', y_axis_label='Peak Residual'  )
+                                           x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual'  )
 
         self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
                                                     'flux_range': DataRange1d( ) }
@@ -684,6 +688,9 @@ class InteractiveClean:
         self._fig['convergence'].circle( 'iterations', 'values',   source=self._residual_data,      color=self._color['residual'], y_range_name='residual_range',size=10 )
         self._fig['convergence'].line(   'iterations', 'values', source=self._flux_data,     line_color=self._color['flux'],     y_range_name='flux_range' )
         self._fig['convergence'].circle( 'iterations', 'values', source=self._flux_data,          color=self._color['flux'],     y_range_name='flux_range', size=10 )
+        self._fig['convergence'].step( 'iterations', 'values', source=self._cyclethreshold_data,  line_color='red',              y_range_name='residual_range',
+                                       line_dash='dotted', line_width=2, mode='center' )
+        self._fig['convergence'].circle( 'iterations', 'values', source=self._cyclethreshold_data,     color='red',              y_range_name='flux_range', size=10 )
 
         self._fig['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
                                                          axis_line_color=self._color['flux'],
@@ -691,11 +698,6 @@ class InteractiveClean:
                                                          axis_label_text_color=self._color['flux'],
                                                          major_tick_line_color=self._color['flux'],
                                                          minor_tick_line_color=self._color['flux'] ), 'right')
-
-        self._fig['cyclethreshold span'] = Span( location=self._convergence_data['major']['cyclethreshold'][-1],
-                                                 dimension='width', line_color='red', line_dash='dotted', line_width=2 )
-        self._fig['convergence'].add_layout( self._fig['cyclethreshold span'] )
-
 
         # TClean Controls
         cwidth = 80
@@ -731,9 +733,10 @@ class InteractiveClean:
             self._fig['slider'].js_on_change( 'value',
                                               CustomJS( args=dict( flux_src=self._flux_data,
                                                                    residual_src=self._residual_data,
+                                                                   threshold_src=self._cyclethreshold_data,
                                                                    convergence_fig=self._fig['convergence'],
                                                                    conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                                   img_src=self._fig['image-source'], cycle_thresh=self._fig['cyclethreshold span']
+                                                                   img_src=self._fig['image-source']
                                                                   ),
                                                         code='''const pos = img_src.cur_chan;''' +
                                                                 self._js['update-converge'] + self._js['slider-update'] ) )
@@ -793,6 +796,7 @@ class InteractiveClean:
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
                                                  flux_src=self._flux_data,
                                                  residual_src=self._residual_data,
+                                                 threshold_src=self._cyclethreshold_data,
                                                  convergence_id=self._convergence_id,
                                                  convergence_fig=self._fig['convergence'],
                                                  log=self._status['log'],
@@ -801,7 +805,6 @@ class InteractiveClean:
                                                  spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
-                                                 cycle_thresh=self._fig['cyclethreshold span'],
                                                  go_to = self._control['goto']
                                                 ),
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
