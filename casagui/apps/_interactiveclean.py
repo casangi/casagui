@@ -677,7 +677,14 @@ class InteractiveClean:
                                                                  ids=self._ids['clean'] ),
                                                       code=self._js['initialize'] )
 
-        hover = HoverTool( tooltips=[ ("", "@type @values") ] )
+        TOOLTIPS='''<div>
+                        <div>
+                            <span style="font-weight: bold;">@type</span>
+                            <span>@values</span>
+                        </div>
+                    </div>'''
+
+        hover = HoverTool( tooltips=TOOLTIPS )
         self._fig['convergence'] = figure( plot_height=180, plot_width=800, tools=[ hover ], title='Convergence',
                                            x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual'  )
 
