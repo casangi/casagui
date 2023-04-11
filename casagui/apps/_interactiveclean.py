@@ -332,26 +332,24 @@ class InteractiveClean:
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'update-converge': '''function update_convergence( msg ) {
                                                let convdata
-                                               let thresh_values
                                                if ( typeof msg === 'undefined' && '_convergence_data' in flux_src ) {
                                                    // use complete convergence cache attached to flux_src...
                                                    // get the convergence data for channel and stokes
                                                    const pos = img_src.cur_chan
                                                    convdata = flux_src._convergence_data.chan[pos[1]][pos[0]]
                                                    //          chan---------------------------^^^^^^  ^^^^^^----stokes
-                                                   thresh_values = flux_src._convergence_data.cyclethreshold
                                                } else if ( 'result' in msg ) {
                                                    // update based on msg received from conv_pipe
                                                    const convdata = msg.result.converge
-                                                   thresh_values = msg.result.cyclethreshold
                                                }
                                                const iterations = convdata.iterations
                                                const peakRes = convdata.peakRes
-                                               residual_src.data = { iterations, values: peakRes, type: Array(iterations.length).fill('residual') }
+                                               const threshold = convdata.cycleThresh
                                                const modelFlux = convdata.modelFlux
-                                               flux_src.data = { iterations, values: modelFlux, type: Array(iterations.length).fill('flux') }
-                                               threshold_src.data = { iterations, values: thresh_values, type: Array(iterations.length).fill('threshold') }
-
+                                               const stopCode = convdata.stopCode
+                                               residual_src.data = { iterations, threshold, stopCode, values: peakRes, type: Array(iterations.length).fill('residual') }
+                                               flux_src.data = { iterations, threshold, stopCode, values: modelFlux, type: Array(iterations.length).fill('flux') }
+                                               threshold_src.data = { iterations, values: threshold }
                                            }''',
 
                      'clean-refresh':   '''function refresh( clean_msg ) {
@@ -663,9 +661,11 @@ class InteractiveClean:
         ### Data source that will be used for updating the convergence plot
         ###
         convergence = self._convergence_data['chan'][0][self._stokes]
-        self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'], type=['flux'] ) )
-        self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'], type=['residual'] ) )
-        self._cyclethreshold_data = ColumnDataSource( data=dict( values=self._convergence_data['major']['cyclethreshold'], iterations=convergence['iterations'], type=['threshold'] ) )
+        self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
+                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'], type=['flux'] ) )
+        self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
+                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'], type=['residual'] ) )
+        self._cyclethreshold_data = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
 
         ###
         ### Setup script that will be called when the user closes the
@@ -682,6 +682,14 @@ class InteractiveClean:
                             <span style="font-weight: bold;">@type</span>
                             <span>@values</span>
                         </div>
+                        <div>
+                            <span style="font-weight: bold; font-size: 10px">cycle threshold</span>
+                            <span>@threshold</span>
+                        </div>
+                        <div>
+                            <span style="font-weight: bold; font-size: 10px">stop code</span>
+                            <span>@stopCode</span>
+                        </div>
                     </div>'''
 
         hover = HoverTool( tooltips=TOOLTIPS )
@@ -696,8 +704,7 @@ class InteractiveClean:
         self._fig['convergence'].line(   'iterations', 'values', source=self._flux_data,     line_color=self._color['flux'],     y_range_name='flux_range' )
         self._fig['convergence'].circle( 'iterations', 'values', source=self._flux_data,          color=self._color['flux'],     y_range_name='flux_range', size=10 )
         self._fig['convergence'].step( 'iterations', 'values', source=self._cyclethreshold_data,  line_color='red',              y_range_name='residual_range',
-                                       line_dash='dotted', line_width=2, mode='center' )
-        self._fig['convergence'].circle( 'iterations', 'values', source=self._cyclethreshold_data,     color='red',              y_range_name='flux_range', size=10 )
+                                       line_dash='dotted', line_width=2 )
 
         self._fig['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
                                                          axis_line_color=self._color['flux'],

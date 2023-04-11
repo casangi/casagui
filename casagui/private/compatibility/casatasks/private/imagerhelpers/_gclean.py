@@ -207,7 +207,7 @@ class gclean:
         ### the first index in the `raw` dictionary is the channel axis
         ### each channel may have a number of polarity dictionaries
         ###
-        keep_keys = [ 'modelFlux', 'iterDone', 'peakRes' ]
+        keep_keys = [ 'modelFlux', 'iterDone', 'peakRes', 'stopCode', 'cycleThresh' ]
         ret = {}
         for channel_k,channel_v in raw[0].items( ): # 0: main field in multifield imaging TODO worry about other fields
             ret[channel_k] = {}
@@ -317,7 +317,7 @@ class gclean:
                                            timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
                                            observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
                                            robust=self._robust, npixels=self._npixels, interactive=False, niter=1, gain=0.000001, calcres=True,
-                                           restoration=False, parallel=self._parallel )
+                                           restoration=False, parallel=self._parallel, fullsummary=True )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
                 self._major_done = 0
             else:
@@ -337,7 +337,7 @@ class gclean:
                                            lownoisethreshold=self._lownoisethreshold, negativethreshold=self._negativethreshold,
                                            minbeamfrac=self._minbeamfrac, growiterations=self._growiterations, dogrowprune=self._dogrowprune,
                                            minpercentchange=self._minpercentchange, fastnoise=self._fastnoise, savemodel=self._savemodel, maxpsffraction=1,
-                                           minpsffraction=0, parallel=self._parallel )
+                                           minpsffraction=0, parallel=self._parallel, fullsummary=True )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
                 self._major_done = tclean_ret['nmajordone'] if 'nmajordone' in tclean_ret else 0
 
