@@ -699,12 +699,12 @@ class InteractiveClean:
         self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
                                                     'flux_range': DataRange1d( ) }
 
+        self._fig['convergence'].step( 'iterations', 'values', source=self._cyclethreshold_data,  line_color='red',              y_range_name='residual_range',
+                                       line_dash='dotted', line_width=2 )
         self._fig['convergence'].line(   'iterations', 'values',   source=self._residual_data, line_color=self._color['residual'], y_range_name='residual_range' )
         self._fig['convergence'].circle( 'iterations', 'values',   source=self._residual_data,      color=self._color['residual'], y_range_name='residual_range',size=10 )
         self._fig['convergence'].line(   'iterations', 'values', source=self._flux_data,     line_color=self._color['flux'],     y_range_name='flux_range' )
         self._fig['convergence'].circle( 'iterations', 'values', source=self._flux_data,          color=self._color['flux'],     y_range_name='flux_range', size=10 )
-        self._fig['convergence'].step( 'iterations', 'values', source=self._cyclethreshold_data,  line_color='red',              y_range_name='residual_range',
-                                       line_dash='dotted', line_width=2 )
 
         self._fig['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
                                                          axis_line_color=self._color['flux'],
