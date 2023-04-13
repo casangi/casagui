@@ -283,18 +283,19 @@ class ImagePipe(DataPipe):
         if cmd['action'] == 'channel':
             chan = self.channel(cmd['index'])
             mask = { } if self.__msk is None else { 'msk': [ pack_arrays( self.mask(cmd['index']) ) ] }
-            mask0 = self.mask0(cmd['index'])
+            _mask0 = self.mask0(cmd['index'])
+            mask0 = { } if _mask0 is None else { 'msk0': [ pack_arrays(_mask0) ] }
             if self._stats:
                 #statistics for the displayed plane of the image cubea
                 statistics = self.statistics( cmd['index'] )
                 return { 'chan': { 'img': [ pack_arrays(chan) ],
-                                   'msk0': [ pack_arrays(mask0) ] if mask0 is not None else None,
+                                   **mask0,
                                    **mask },
                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) },
                          'id': cmd['id'] }
             else:
                 return { 'chan': { 'img': [ pack_arrays(chan) ],
-                                   'msk0': [ pack_arrays(mask0) ] if mask0 is not None else None,
+                                   **mask0,
                                    **mask },
                          'id': cmd['id'] }
 
