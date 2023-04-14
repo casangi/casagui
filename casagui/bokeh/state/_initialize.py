@@ -38,12 +38,17 @@ from bokeh import __version__ as bokeh_version
 CASALIB_VERSION = "0.0.5"
 CASAGUIJS_VERSION = "0.0.9"
 
+casa_css = [ '''.cg-btn-selector .bk-input, .cg-btn-selector .bk-btn {
+    font-weight: bold;
+    text-align: left;
+}''' ]
+
 @static_vars( initialized=False,
               do_local_subst=not have_network( ),
               do_nonmin_bokeh_subst=False,
               bokeh_replacement_path="/tmp/bokeh.js"        # only done if do_nonmin_bokeh_subst is set
              )                                              # and replacement exists
-def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
+def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0, css=[ ] ):
     """Initialize `bokeh` for use with the ``casaguijs`` extensions.
 
     The ``casaguijs`` extensions for Bokeh are built into a stand-alone
@@ -70,6 +75,15 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
         Chrome caches the javascript files. This parameter allows for
         specifying `bokeh_dev` allows for including a development version
         for incremental updates to the ``bokeh`` library.
+    css: list of str
+        Extra "raw" CSS setup, for example::
+
+            css=[ '''.big_stuff .bk-input, .big_stuff .bk-btn {
+                       font-size:12pt;
+                       font-weight: bold;
+                       background: #F0F0F0;
+                       text-align: left;
+                    }''' ]
 
     Example
     -------
@@ -210,4 +224,12 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0 ):
 
     resources.JSResources.hashes = property(hashes)
     resources.JSResources.js_files = property(js_files)
+    resources.CSSResources._old_css_raw = resources.CSSResources.css_raw
+    def css_function( self ):
+        result = self._old_css_raw + casa_css + css
+        return result
+
+
+    resources.CSSResources.css_raw = property(css_function)
+
     initialize_bokeh.initialized = True

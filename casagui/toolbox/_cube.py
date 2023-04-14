@@ -47,7 +47,7 @@ from casagui.bokeh.state import initialize_bokeh
 from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
 from ..bokeh.utils import pack_arrays
 from ..bokeh.state import available_palettes, find_palette, default_palette
-from bokeh.layouts import row
+from bokeh.layouts import row, column
 
 import numpy as np
 
@@ -77,35 +77,39 @@ class CubeMask:
         '''
         initialize_bokeh( )
 
-        self._stop_serving_function = None              # function supplied when starting serving
-        self._image_path = image	                # path to image cube to be displayed
-        self._mask_path = mask                          # path to bitmask cube (if any)
-        self._image = None		                # figure displaying cube & mask planes
-        self._channel_label = None                      # display channel and stokes
-        self._channel_label_stokes_dropdown = None      # drop down for changing stokes when _channel_label is used
-        self._chan_image = None                         # channel image
-        self._bitmask = None                            # bitmask image
-        self._bitmask_color_selector = None             # bitmask color selector
-        self._bitmask_transparency_button = None        # select whether the 1s or 0s is transparent
-        self._mask0 = None                              # INTERNAL systhesis imaging mask
-        self._slider = None                             # slider to move from plane to plane
-        self._spectra = None                            # figure displaying spectra along the frequency axis
-        self._statistics = None                         # statistics data table
-        self._palette = None                            # palette selection
+        self._stop_serving_function = None                 # function supplied when starting serving
+        self._image_path = image                           # path to image cube to be displayed
+        self._mask_path = mask                             # path to bitmask cube (if any)
+        self._image = None                                 # figure displaying cube & mask planes
+        self._channel_label = None                         # display channel and stokes
+        self._channel_label_stokes_dropdown = None         # drop down for changing stokes when _channel_label is used
+        self._chan_image = None                            # channel image
+        self._bitmask = None                               # bitmask image
+        self._bitmask_color_selector = None                # bitmask color selector
+        self._bitmask_transparency_button = None           # select whether the 1s or 0s is transparent
+        self._mask0 = None                                 # INTERNAL systhesis imaging mask
+        self._slider = None                                # slider to move from plane to plane
+        self._spectra = None                               # figure displaying spectra along the frequency axis
+        self._statistics = None                            # statistics data table
+        self._statistics_mask = None                       # button to switch from channel statistics to mask statistics
+        self._statistics_use_mask = False                  # whether statistics calculations will be based on the masked
+                                                           # area or the whole channel
+        self._palette = None                               # palette selection
         self._help = None
-        self._image_spectra = None                      # spectra data source
-        self._image_source = None	                # ImageDataSource
+        self._image_spectra = None                         # spectra data source
+        self._image_source = None                          # ImageDataSource
         self._statistics_source = None
-        self._pipe = { 'image': None, 'control': None } # data pipes
+        self._pipe = { 'image': None, 'control': None }    # data pipes
         self._ids = { 'palette': str(uuid4( )),
                       'mask-mod': str(uuid4( )),
-                      'done': str(uuid4( ))      }      # ids used for control messages
+                      'done': str(uuid4( )),
+                      'config-statistics': str(uuid4( )) } # ids used for control messages
 
         self._fig = { }
-        self._hover = { 'spectra': None, 'image': None }# HoverTools which are used to synchronize image/spectra
-                                                        # movement/taps and and corresponding display
+        self._hover = { 'spectra': None, 'image': None }   # HoverTools which are used to synchronize image/spectra
+                                                           # movement/taps and and corresponding display
 
-        self._result = None                             # result to be filled in from Bokeh
+        self._result = None                                # result to be filled in from Bokeh
 
         self._image_server = None
         self._control_server = None
@@ -130,8 +134,9 @@ class CubeMask:
         self._js_mode_code = {
                    'bitmask-hotkey-setup':    '''
                                               function mask_mod_result( msg ) {
-                                                  if ( msg.result == 'success' )
-                                                      source.refresh( )
+                                                  if ( msg.result == 'success' ) {
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                                  }
                                               }
                                               window.hotkeys( 'escape', { scope: 'channel' },
                                                               (e) => { e.preventDefault( )
@@ -913,15 +918,6 @@ class CubeMask:
             self._image.plot_height = 400
             self._image.plot_width = 400
 
-            self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ), 
-                                                                              code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
-                                                                                      if self._mask_path is None else "" ) +
-                                                                                    '''window.hotkeys.setScope('channel')''' ) )
-            self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ),
-                                                           code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
-                                                                   if self._mask_path is None else "" ) +
-                                                                 '''window.hotkeys.setScope( )''' ) )
-
             for annotation in self._annotations:
                 self._image.add_layout(annotation)
 
@@ -1042,8 +1038,25 @@ class CubeMask:
             # using set_attributes allows the user to override defaults like 'width=400'
             self._statistics = set_attributes( DataTable( source=self._statistics_source, columns=stats_column,
                                                           width=400, height=200, autosize_mode='none' ), **kw )
+            if self._mask_path:
+                async def config_statistics( msg, self=self ):
+                    if 'value' in msg and self._statistics_use_mask != bool(msg['value']):
+                        self._statistics_use_mask = bool(msg['value'])
+                        self._pipe['image'].statistics_config( use_mask=self._statistics_use_mask )
+                        return dict( result='OK', update={ } )
+                    else:
+                        return dict( result='NOP', update={ } )
 
-        return self._statistics
+                self._pipe['control'].register( self._ids['config-statistics'], config_statistics )
+                self._statistics_mask = Dropdown( label="Channel Statistics", button_type='light', margin=(5,0,-1,0),
+                                                  menu=[ 'Channel Statistics', 'Mask Statistics' ],
+                                                  css_classes=['cg-btn-selector'] )
+
+        if self._mask_path:
+            return column( self._statistics_mask,
+                           self._statistics )
+        else:
+            return self._statistics
 
     def palette( self, **kw ):
         '''retrieve a Select widget which allow for changing the pseudocolor palette
@@ -1140,6 +1153,37 @@ class CubeMask:
                                                       stats_source=self._statistics_source ),
                                            code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
             self._slider.js_on_change( 'value', self._cb['slider'] )
+
+        if self._statistics_mask:
+            self._statistics_mask.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                    stats_source=self._statistics_source,
+                                                                    ids=self._ids,
+                                                                    ctrl=self._pipe['control'] ),
+                                                         ###
+                                                         ### (1) send message to configure statistics behavior
+                                                         ### (2) when reply is received change label and refresh channel display
+                                                         ### (3) when reply is received update statistics
+                                                         ###
+                                                         code='''if ( cb_obj.item != cb_obj.origin.label ) {
+                                                                     // >>>>---moving-to-mask-from-channel-----vvvvvvvvvvvvvvvvvvvv
+                                                                     const masking_on = cb_obj.origin.label == 'Channel Statistics'
+                                                                     ctrl.send( ids['config-statistics'],
+                                                                                { action: 'use mask', value: masking_on },
+                                                                                (msg) => { cb_obj.origin.label = cb_obj.item
+                                                                                           source.channel( source.cur_chan[1], source.cur_chan[0],
+                                                                                                           msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } ) } ) }
+                                                         ''' ) )
+
+        self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source,
+                                                                  stats_source=self._statistics_source ),
+                                                                  code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
+                                                                          if self._mask_path is None else "" ) +
+                                                       '''window.hotkeys.setScope('channel')''' ) )
+        self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source,
+                                                                  stats_source=self._statistics_source ),
+                                                                  code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
+                                                                          if self._mask_path is None else "" ) +
+                                                       '''window.hotkeys.setScope( )''' ) )
 
         stokes_labels = self._image_source.stokes_labels( )
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_label,

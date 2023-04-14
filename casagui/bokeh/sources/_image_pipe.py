@@ -320,6 +320,7 @@ class ImagePipe(DataPipe):
         self.shape = list(self.__img.shape( ))
         self.__session = None
         self.__stokes_labels = None
+        self.__mask_statistics = False
 
         super( ).register( self.dataid, self._image_message_handler )
 
@@ -338,6 +339,14 @@ class ImagePipe(DataPipe):
         csys = ia.coordsys( )
         ia.close( )
         return { 'csys': csys, 'shape': tuple(self.shape) }
+
+    def statistics_config( self, use_mask=None ):
+        '''Configure the behavior of the statistics function.
+        use_mask indicates that if a mask is available, the statistics should
+        be based upon the portion of the image included in the mask instead of
+        the whole channel.'''
+        if self.__mask_path and use_mask is not None:
+            self.__mask_statistics = bool(use_mask)
 
     def statistics( self, index ):
         """Retrieve statistics for one channel from the image cube. The `index`
@@ -367,6 +376,9 @@ class ImagePipe(DataPipe):
         ###
         ia = imagetool( )
         ia.open(self.__image_path)
-        rawstats = ia.statistics( region=reg )
+        if self.__mask_statistics:
+            rawstats = ia.statistics( region=reg, mask=self.__mask_path )
+        else:
+            rawstats = ia.statistics( region=reg )
         ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
