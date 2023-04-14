@@ -57,7 +57,12 @@ def get_world_coordinates(ia):
     return x_axes_labels, y_axes_labels
 
 
-def get_world_coordinates_wcs(csys: image.coordsys) -> list():
+#--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+# This function has not been tested. pylint indicated that 'shp' is not defined. It seems like
+# the intent was probably to have the image shape supplied as a parameter since it is not available
+# from the coordsys object.
+#--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+def get_world_coordinates_wcs(csys: image.coordsys, shp ) -> list():
     """
     .. todo::
         Support different world coordiantes

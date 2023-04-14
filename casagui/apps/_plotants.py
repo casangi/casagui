@@ -139,9 +139,9 @@ def __get_antenna_info(msname, log, exclude, checkbaselines):
         try:
             ant_name_id = antenna_names[ant_id] + " (id " + str(ant_id) + ")"
             ant_ids_used.remove(ant_id)
-            casalog.post("Exclude antenna " + ant_name_id)
+            print( f'''Exclude antenna {ant_name_id}''' )
         except ValueError:
-            casalog.post("Cannot exclude antenna " + ant_name_id + ": not in main table", "WARN")
+            print( f'''Cannot exclude antenna {ant_name_id}: not in main table''' )
 
     # apply ant_ids_used mask
     antenna_names = [antenna_names[i] for i in ant_ids_used]
