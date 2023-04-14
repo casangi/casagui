@@ -28,6 +28,8 @@ jobs:
     - name: Install websockets
       run: |
         pip install websockets
+    - name: Install certifi
+        pip install certifi
     - name: Install bokeh
       run: |
         pip install bokeh
