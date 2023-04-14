@@ -28,9 +28,9 @@ jobs:
     - name: Install websockets
       run: |
         pip install websockets
-    - name: Install certifi
+    - name: Install casatasks
       run: |
-        pip install certifi
+        pip install casatasks
     - name: Install bokeh
       run: |
         pip install bokeh
