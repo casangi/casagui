@@ -31,6 +31,10 @@ jobs:
     - name: Install casatasks
       run: |
         pip install casatasks
+    - name: Install astropy
+      run: |
+        pip install astropy
+        pip install regions
     - name: Install bokeh
       run: |
         pip install bokeh
