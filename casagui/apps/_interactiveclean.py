@@ -42,8 +42,10 @@ from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
+    # pylint: disable=no-name-in-module
     from casatasks.private.imagerhelpers._gclean import _GCV003
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+    # pylint: enable=no-name-in-module
 except:
     try:
         ###
