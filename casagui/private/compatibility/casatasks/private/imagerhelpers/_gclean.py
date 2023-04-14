@@ -199,6 +199,7 @@ class gclean:
         #                              |    | +---------------->>> major cycles done for current run
         #                              |    +------------------>>> tclean stopcode
         #                              +----------------------->>> error message
+    @staticmethod
     def __filter_convergence( raw ):
         ###
         ### this function filters out the pieces of the `raw` tclean 'summaryminor'
@@ -227,7 +228,8 @@ class gclean:
             return dict( major=dict( cyclethreshold=major_ret['cyclethreshold'].append(tclean_ret['cyclethreshold']) ),
                          chan=chan_ret )
 
-    def _update_convergence( cumm_sm, new_sm ):
+    @staticmethod
+    def __update_convergence( cumm_sm, new_sm ):
         """Accumulates the per-channel/stokes subimage 'summaryminor' records from new_sm to cumm_sm.
         param cumm_sm: cummulative summary minor records : { chan: { stoke: { key: [values] } } }
         param new_sm: new summary minor records : { chan: { stoke: { key: [values] } } }
@@ -283,7 +285,7 @@ class gclean:
             },
         }
 
-        See also: gclean._update_convergence(...)
+        See also: gclean.__update_convergence(...)
         """
         if self._finalized:
             self._convergence_result = ( f'iteration terminated',
@@ -348,8 +350,8 @@ class gclean:
                                              self._major_done,
                                              self.__add_per_major_items( tclean_ret,
                                                                          self._convergence_result[3]['major'],
-                                                                         gclean._update_convergence( self._convergence_result[3]['chan'],
-                                                                                                     new_summaryminor_rec ) ) )
+                                                                         gclean.__update_convergence( self._convergence_result[3]['chan'],
+                                                                                                      new_summaryminor_rec ) ) )
             else:
                 self._convergence_result = ( f'tclean returned an empty result',
                                              self._convergence_result[1],
