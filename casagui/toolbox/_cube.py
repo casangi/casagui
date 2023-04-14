@@ -960,7 +960,7 @@ class CubeMask:
                 ### it here [by calling self.image( )], the user will silently lose the ability to set the
                 ### maximum number of annotations per channel (along with other future parameters)
                 ###
-                raise RumtimeError('spectra( ) requires an image cube display, but one has not yet been created')
+                raise RuntimeError('spectra( ) requires an image cube display, but one has not yet been created')
 
             self._image_spectra = SpectraDataSource(image_source=self._pipe['image'])
 
@@ -1068,7 +1068,7 @@ class CubeMask:
                 ### it here [by calling self.image( )], the user will silently lose the ability to set the
                 ### maximum number of annotations per channel (along with other future parameters)
                 ###
-                raise RumtimeError('palette( ) requires an image cube display, but one has not yet been created')
+                raise RuntimeError('palette( ) requires an image cube display, but one has not yet been created')
 
             async def fetch_palette( msg, self=self ):
                 if 'value' in msg:
@@ -1100,7 +1100,7 @@ class CubeMask:
     def bitmask_controls( self ):
 
         if self._bitmask is None:
-            raise RumtimeError('cube bitmask not in use')
+            raise RuntimeError('cube bitmask not in use')
 
         ###
         ### retrieve controls for adjusting the cube bitmask
