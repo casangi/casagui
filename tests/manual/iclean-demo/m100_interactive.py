@@ -4,11 +4,13 @@
 ###    * https://casaguides.nrao.edu/index.php/First_Look_at_Imaging
 ###
 import os
+import ssl
+import certifi
 import asyncio
 import urllib
 import tarfile
 
-from casagui import iclean
+from casagui.apps import InteractiveClean
 
 ##
 ## demo measurement set to use, from:
@@ -36,34 +38,39 @@ ms_path = 'M100_combine_CO.ms'
 ##        saved_pos = fileobj.tell()
 ##      io.UnsupportedOperation: seek
 
-#ms_url = "https://bulk.cv.nrao.edu/almadata/public/working/sis14_twhya_calibrated_flagged.ms.tar"
-#ms_url = "https://casa.nrao.edu/download/devel/casagui/sis14_twhya_calibrated_flagged.ms.tar.gz"
-ms_url = None
+ms_url = "https://casa.nrao.edu/download/devel/casavis/data/M100_combine_CO.ms.tar.gz"
 ##
 ## output image file name
 ##
 img = 'test'
 
 if not os.path.isdir(ms_path):
-    tstream = urllib.request.urlopen(ms_url)
-    tar = tarfile.open(fileobj=tstream, mode="r:gz")
-    tar.extractall()
+    try:
+        context = ssl.create_default_context(cafile=certifi.where())
+        tstream = urllib.request.urlopen(ms_url, context=context, timeout=400)
+        tar = tarfile.open(fileobj=tstream, mode="r:gz")
+        tar.extractall( )
+    except urllib.error.URLError:
+        print("Failed to open connection to "+ms_url)
+        raise
 
+if not os.path.isdir(ms_path):
+    raise  RuntimeError("Failed to fetch measurement set")
 
-ic = iclean( vis=ms_path, imagename=img,
-             imsize=800,
-             cell=['0.1arcsec'],
-             specmode='cube',
-             restfreq='115.271201800GHz',
-             interpolation='nearest', 
-             pblimit=-1e-05,
-             gridder='mosaic',
-             deconvolver='hogbom',
-             nchan=70,
-             niter=50,
-             cycleniter=10,
-             cyclefactor=3,
-             threshold='0.0mJy' )
+ic = InteractiveClean( vis=ms_path, imagename=img,
+                       imsize=800,
+                       cell=['0.1arcsec'],
+                       specmode='cube',
+                       restfreq='115.271201800GHz',
+                       interpolation='nearest',
+                       pblimit=-1e-05,
+                       gridder='mosaic',
+                       deconvolver='hogbom',
+                       nchan=70,
+                       niter=50,
+                       cycleniter=10,
+                       cyclefactor=3,
+                       threshold='0.0mJy' )
 
 if True:
     print( "Result: %s" % ic( ) )
@@ -77,3 +84,4 @@ else:
         #os.system('rm -rf {output_image}.* *.html *.log'.format(output_image=output_image))
 
     print( "Result: %s" % ic.result( ) )
+    print( " Masks: %s" % repr(ic.masks( )) )
