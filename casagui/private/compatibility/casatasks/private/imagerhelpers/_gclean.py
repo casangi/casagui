@@ -68,7 +68,7 @@ class gclean:
         from casatasks import tclean
         arg_s = ', '.join( map( lambda a: self._history_filter(len(self._exe_cmds), None, repr(a)), args ) )
         kw_s = ', '.join( map( lambda kv: self._history_filter(len(self._exe_cmds), kv[0], "%s=%s" % (kv[0],repr(kv[1]))), kwargs.items()) )
-        if len(arg_s) > 0 and len(ks_s) > 0:
+        if len(arg_s) > 0 and len(kw_s) > 0:
             parameters = arg_s + ", " + kw_s
         else:
             parameters = arg_s + kw_s
@@ -82,7 +82,7 @@ class gclean:
         from casatasks import deconvolve
         arg_s = ', '.join( map( lambda a: self._history_filter(len(self._exe_cmds), None, repr(a)), args ) )
         kw_s = ', '.join( map( lambda kv: self._history_filter(len(self._exe_cmds), kv[0], "%s=%s" % (kv[0],repr(kv[1]))), kwargs.items()) )
-        if len(arg_s) > 0 and len(ks_s) > 0:
+        if len(arg_s) > 0 and len(kw_s) > 0:
             parameters = arg_s + ", " + kw_s
         else:
             parameters = arg_s + kw_s
