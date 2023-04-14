@@ -61,7 +61,7 @@ ic = InteractiveClean( vis=ms_path, imagename=img,
                        imsize=800,
                        cell=['0.1arcsec'],
                        specmode='cube',
-                       restfreq='115.271201800GHz',
+                       #restfreq='115.271201800GHz',           ## apparently 'restfreq' is not yet an option for iclean
                        interpolation='nearest',
                        pblimit=-1e-05,
                        gridder='mosaic',
