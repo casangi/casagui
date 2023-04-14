@@ -200,9 +200,9 @@ def have_network():
     except urllib.error.HTTPError:
         ### http error
         return False
-    except urllib.error.URLError:
-        return False
     except urllib.error.ContentTooShortError:
+        return False
+    except urllib.error.URLError:
         return False
     except Exception:
         return False
@@ -535,7 +535,7 @@ def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=N
         ### create a region list given the index of the polygon used, the x/y translation, and the
         ### channels the region should be found on
         ###
-        def create_regions(poly_index, xlate, channels):
+        def create_regions_rgn(poly_index, xlate, channels):
             def create_result(shape, points):
                 return [rg.fromtext(
                     f"{shape}[{points}],range=[{chan_range[0]}chan,{chan_range[1]}chan],corr=[{','.join(index_to_stokes(expand_range_incl(stokes_range)))}]" ,
@@ -556,7 +556,7 @@ def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=N
 
         ### flatten list of unique polygon regions
         result = list(chain.from_iterable(
-            [create_regions(index[0], index[1:], channels) for index, channels in unique_polygons.items()]))
+            [create_regions_rgn(index[0], index[1:], channels) for index, channels in unique_polygons.items()]))
         if ret_type == 'singleton':
             if len(result) == 0:
                 raise RuntimeError("no regions created")
@@ -573,7 +573,7 @@ def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=N
         ### create a region list given the index of the polygon used, the x/y translation, and the
         ### channels the region should be found on
         ###
-        def create_regions(poly_index, xlate, channels):
+        def create_regions_crt(poly_index, xlate, channels):
             def create_result(shape, points):
                 return [
                     f"{shape}[{points}],range=[{chan_range[0]}chan,{chan_range[1]}chan],corr=[{','.join(index_to_stokes(expand_range_incl(stokes_range)))}]"
@@ -594,7 +594,7 @@ def __convert_masks(masks, format='crtf', coord='pixel', ret_type='str', cdesc=N
         ###
         ### generate CFTF
         ###
-        result = [create_regions(index[0], index[1:], channels) for index, channels in unique_polygons.items()]
+        result = [create_regions_crt(index[0], index[1:], channels) for index, channels in unique_polygons.items()]
         if ret_type == 'str':
             return '\n'.join(chain.from_iterable(result))
         if ret_type == 'list':
