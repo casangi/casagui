@@ -21,10 +21,16 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install pylint
       run: |
         python -m pip install --upgrade pip
         pip install pylint
+    - name: Install websockets
+      run: |
+        pip install websockets
+    - name: Install bokeh
+      run: |
+        pip install bokeh
     - name: Create dummy version file
       run: |
         touch casagui/__version__.py
