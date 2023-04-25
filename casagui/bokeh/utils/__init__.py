@@ -27,7 +27,6 @@
 ########################################################################
 '''Functions use in the implementation of casagui's Bokeh extensions.'''
 
-from ._conversion import pack_arrays
 ###
 ### axes_labels has errors on import
 ###

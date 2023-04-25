@@ -40,7 +40,7 @@ from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
 
-from ..utils import pack_arrays
+from ...utils import pack_arrays
 
 class DataPipe(DataSource):
     """This class allows for communication between Python and the JavaScript implementation

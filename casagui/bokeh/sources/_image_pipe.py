@@ -48,8 +48,7 @@ except:
     from casagui.utils import warn_import
     warn_import('casatools')
 
-from ..utils import pack_arrays
-from ...utils import partition, resource_manager
+from ...utils import pack_arrays, partition, resource_manager
 
 class ImagePipe(DataPipe):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI

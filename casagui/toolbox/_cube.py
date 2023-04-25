@@ -44,8 +44,7 @@ from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool,
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
-from ..utils import find_ws_address, set_attributes, resource_manager, polygon_indexes
-from ..bokeh.utils import pack_arrays
+from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
 

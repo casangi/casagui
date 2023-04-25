@@ -54,6 +54,8 @@ except ImportError:
 
 logger = get_logger()
 
+from ._conversion import pack_arrays
+
 def static_vars(**kwargs):
     '''Initialize static function variables to for use within a function.
 
