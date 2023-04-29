@@ -982,10 +982,14 @@ class InteractiveClean:
 
         self.setup()
 
+        # Tunnel ports for Jupyter kernel connection
         print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
             You may need to change the last argument to align with your ssh config.\n")
         print(self._gen_port_fwd_cmd())
 
+        # TODO: Include?
+        # VSCode will auto-forward ports that appear in well-formatted addresses.
+        # Printing this line will cause VSCode to autoforward the ports
         # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
         input("\nPress enter when port forwarding is setup...")
 
