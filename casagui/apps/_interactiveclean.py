@@ -32,9 +32,6 @@ import copy
 import asyncio
 import shutil
 import websockets
-import http.server
-import socketserver
-from threading import Thread
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
@@ -1036,7 +1033,8 @@ class InteractiveClean:
         (asyncio.Future, dictionary of coroutines)
         '''
         def start_http_server():
-            PORT = 8000
+            import http.server
+            import socketserver
             DIRECTORY=self._webpage_path
 
             class Handler(http.server.SimpleHTTPRequestHandler):
@@ -1053,6 +1051,7 @@ class InteractiveClean:
                 httpd.serve_forever()
 
         if not self._is_notebook:
+            from threading import Thread
             thread = Thread(target=start_http_server)
             thread.daemon = True # Let Ctrl+C kill server thread
             thread.start()
