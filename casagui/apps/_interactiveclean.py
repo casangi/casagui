@@ -191,6 +191,13 @@ class InteractiveClean:
         self._control_server = None
         self._converge_server = None
 
+    '''
+        _gen_port_fwd_cmd()
+
+    Create an SSH port-forwarding command to create the tunnels necessary for remote connection.
+    NOTE: This assumes that the same remote ports are also available locally - which may
+        NOT always be true.
+    '''
     def _gen_port_fwd_cmd(self):
         hostname = os.uname()[1]
 
