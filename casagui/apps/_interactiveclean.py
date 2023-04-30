@@ -37,8 +37,8 @@ from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
-from bokeh.io import reset_output as reset_bokeh_output
-from ..utils import resource_manager, reset_resource_manager
+from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
+from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -191,6 +191,31 @@ class InteractiveClean:
         self._control_server = None
         self._converge_server = None
 
+    '''
+        _gen_port_fwd_cmd()
+
+    Create an SSH port-forwarding command to create the tunnels necessary for remote connection.
+    NOTE: This assumes that the same remote ports are also available locally - which may
+        NOT always be true.
+    '''
+    def _gen_port_fwd_cmd(self):
+        hostname = os.uname()[1]
+
+        ports = [self._pipe['control'].address[1],
+                self._pipe['converge'].address[1],
+                self._cube._pipe['image'].address[1],
+                self._cube._pipe['control'].address[1]]
+
+        # Also forward http port if serving webpage
+        if not self._is_notebook:
+            ports.append(self._http_port)
+
+        cmd = 'ssh'
+        for port in ports:
+            cmd += (' -L ' + str(port) + ':localhost:' + str(port))
+
+        cmd += ' ' + str(hostname)
+        return cmd
 
     def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='',
@@ -203,6 +228,16 @@ class InteractiveClean:
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
+
+        ###
+        ### whether or not the session is being run from a jupyter notebook or script
+        ###
+        self._is_notebook = is_notebook()
+
+        ##
+        ## the http port for serving GUI in webpage if not running in script
+        ##
+        self._http_port = None
 
         ###
         ### the asyncio future that is used to transmit the result from interactive clean
@@ -288,6 +323,11 @@ class InteractiveClean:
         ###
         ### GUI Elements
         self._imagename = imagename
+        # Create folder for the generated html webpage - needs its own folder to not name conflict (must be 'index.html')
+        webpage_dirname = imagename + '_webpage'
+        if not os.path.isdir(webpage_dirname):
+            os.makedirs(webpage_dirname)
+        self._webpage_path = os.path.abspath(webpage_dirname)
         self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         if not os.path.isdir(self._mask_path):
             self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
@@ -562,6 +602,9 @@ class InteractiveClean:
             self.__pipes_initialized = True
             self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
             self._pipe['converge'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
+
+            # Get port for serving HTTP server if running in script
+            self._http_port = find_ws_address("")[1]
 
     def _launch_gui( self ):
         '''create and show GUI
@@ -933,6 +976,11 @@ class InteractiveClean:
                                                              else help.visible = true''' ) )
 
         self._cube.connect( )
+        # Change display type depending on runtime environment
+        if self._is_notebook:
+            output_notebook()
+        else:
+            output_file(self._imagename+'_webpage/index.html')
         show(self._fig['layout'])
 
     def __call__( self ):
@@ -946,12 +994,34 @@ class InteractiveClean:
                                cell='12.0arcsec', specmode='cube',
                                interpolation='nearest', ... )( ) )
         '''
+
+        self.setup()
+
+        # Tunnel ports for Jupyter kernel connection
+        print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
+            You may need to change the last argument to align with your ssh config.\n")
+        print(self._gen_port_fwd_cmd())
+
+        # TODO: Include?
+        # VSCode will auto-forward ports that appear in well-formatted addresses.
+        # Printing this line will cause VSCode to autoforward the ports
+        # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
+        input("\nPress enter when port forwarding is setup...")
+
         async def _run_( ):
             async with self.serve( ) as s:
                 await s[0]
 
-        asyncio.run(_run_( ))
-        return self.result( )
+        if self._is_notebook:
+            ic_task = asyncio.create_task(_run_())
+        else:
+            asyncio.run(_run_( ))
+            return self.result( )
+
+    def setup( self ):
+        self.__reset( )
+        self._init_pipes()
+        self._cube._init_pipes()
 
     @asynccontextmanager
     async def serve( self ):
@@ -980,7 +1050,31 @@ class InteractiveClean:
         -------
         (asyncio.Future, dictionary of coroutines)
         '''
-        self.__reset( )
+        def start_http_server():
+            import http.server
+            import socketserver
+            PORT = self._http_port
+            DIRECTORY=self._webpage_path
+
+            class Handler(http.server.SimpleHTTPRequestHandler):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+            with socketserver.TCPServer(("", PORT), Handler) as httpd:
+                print("\nServing Interactive Clean webpage from local directory: ", DIRECTORY)
+                print("Use Control-C to stop Interactive clean.\n")
+                print("Copy and paste one of the below URLs into your browser (Chrome or Firefox) to view:")
+                print("http://localhost:"+str(PORT))
+                print("http://127.0.0.1:"+str(PORT))
+
+                httpd.serve_forever()
+
+        if not self._is_notebook:
+            from threading import Thread
+            thread = Thread(target=start_http_server)
+            thread.daemon = True # Let Ctrl+C kill server thread
+            thread.start()
+
         self._launch_gui( )
 
         async with websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl, \
