@@ -193,12 +193,15 @@ class InteractiveClean:
 
     def _gen_port_fwd_cmd(self):
         hostname = os.uname()[1]
-        host = self._pipe['control'].address[0]
 
         ports = [self._pipe['control'].address[1],
                 self._pipe['converge'].address[1],
                 self._cube._pipe['image'].address[1],
                 self._cube._pipe['control'].address[1]]
+
+        # Also forward http port if serving webpage
+        if not self._is_notebook:
+            ports.append(self._http_port)
 
         cmd = 'ssh'
         for port in ports:
@@ -223,6 +226,11 @@ class InteractiveClean:
         ### whether or not the session is being run from a jupyter notebook or script
         ###
         self._is_notebook = is_notebook()
+
+        ##
+        ## the http port for serving GUI in webpage if not running in script
+        ##
+        self._http_port = None
 
         ###
         ### the asyncio future that is used to transmit the result from interactive clean
@@ -587,6 +595,9 @@ class InteractiveClean:
             self.__pipes_initialized = True
             self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
             self._pipe['converge'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
+
+            # Get port for serving HTTP server if running in script
+            self._http_port = find_ws_address("")[1]
 
     def _launch_gui( self ):
         '''create and show GUI
@@ -1035,6 +1046,7 @@ class InteractiveClean:
         def start_http_server():
             import http.server
             import socketserver
+            PORT = self._http_port
             DIRECTORY=self._webpage_path
 
             class Handler(http.server.SimpleHTTPRequestHandler):
