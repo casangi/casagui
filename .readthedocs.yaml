@@ -19,7 +19,7 @@ build:
   tools:
     python: "3.11"
   apt_packages:
-  - libgfortran3
+  - libgfortran5
 
 # Optionally declare the Python requirements required to build your docs
 python:
