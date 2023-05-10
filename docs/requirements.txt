@@ -6,5 +6,4 @@ plotly
 pandas
 numpy
 sphinx-autoapi
---extra-index-url https://casa-pip.nrao.edu:443/repository/pypi-group/simple
 casatasks
