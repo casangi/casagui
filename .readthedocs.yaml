@@ -22,9 +22,7 @@ python:
 build:
   os: ubuntu-22.04
   apt_packages:
-    - libgfortran3
+  - libgfortran3
 
 submodules:
   include: all
-
-  version: 2
