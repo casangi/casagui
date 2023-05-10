@@ -20,8 +20,13 @@ python:
    - requirements: docs/requirements.txt
 
 build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
   apt_packages:
     - libgfortran3
 
 submodules:
   include: all
+
+  version: 2
