@@ -1021,9 +1021,19 @@ class InteractiveClean:
             async with self.serve( ) as s:
                 await s[0]
 
-        if self._is_notebook:
+        # Check for current asyncio event loop (Jupyter notebook/console/kernel)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # 'No current event loop'
+            loop = None
+
+        # Run IC as a task if event loop is already running
+        if loop and loop.is_running():
             ic_task = asyncio.create_task(_run_())
-        else:
+
+            # TODO: How to wait for task to be done before grabbing result
+            # return self.result( )
+        else: # Start loop
             asyncio.run(_run_( ))
             return self.result( )
 
