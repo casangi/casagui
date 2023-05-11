@@ -38,7 +38,7 @@ from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, S
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
-from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -179,7 +179,7 @@ class InteractiveClean:
         self.__pipes_initialized = False
         self._mask_history = [ ]
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler, notebook=self._is_notebook )
         ###
         ### error or exception result
         ###
@@ -236,6 +236,8 @@ class InteractiveClean:
         ###
         ### whether or not the session is being run from a jupyter notebook or script
         ###
+        self._is_notebook = notebook
+
         ##
         ## Whether or not to start a webserver serving the bokeh-generated index.html
         ##
