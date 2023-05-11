@@ -219,8 +219,8 @@ class InteractiveClean:
 
     def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='',
-                  nchan=-1, start='', width='', outframe='LSRK', interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1),
-                  mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False, pointingoffsetsigdev=[  ], pblimit=0.2,
+                  nchan=-1, start='', width='', outframe='LSRK', restfreq='', interpolation='linear', perchanweightdensity=True, gridder='standard',
+                  wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False, pointingoffsetsigdev=[  ], pblimit=0.2,
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
                   pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
@@ -286,11 +286,11 @@ class InteractiveClean:
         self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, antenna=antenna, scan=scan,
                                observation=observation, intent=intent, datacolumn=datacolumn, nterms=nterms, imsize=imsize, cell=cell,
                                phasecenter=phasecenter, stokes=stokes, startmodel=startmodel, specmode=specmode, reffreq=reffreq, nchan=nchan,
-                               start=start, width=width, outframe=outframe, interpolation=interpolation, perchanweightdensity=perchanweightdensity,
-                               gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm, wbawp=wbawp, usepointing=usepointing,
-                               conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, deconvolver=deconvolver, niter=niter,
-                               threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales,
-                               restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
+                               start=start, width=width, outframe=outframe, restfreq=restfreq, interpolation=interpolation,
+                               perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm,
+                               wbawp=wbawp, usepointing=usepointing, conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit,
+                               deconvolver=deconvolver, niter=niter, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor,
+                               scales=scales, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
                                sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
                                negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
                                minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=1,
@@ -386,8 +386,8 @@ class InteractiveClean:
                                                    convdata = flux_src._convergence_data.chan[pos[1]][pos[0]]
                                                    //          chan---------------------------^^^^^^  ^^^^^^----stokes
                                                } else if ( 'result' in msg ) {
-                                                   // update based on msg received from conv_pipe
-                                                   const convdata = msg.result.converge
+                                                   // update based on msg received from convergence update message
+                                                   convdata = msg.result.converge
                                                }
                                                const iterations = convdata.iterations
                                                const peakRes = convdata.peakRes

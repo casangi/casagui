@@ -121,7 +121,7 @@ class gclean:
 
     def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected',
                   imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='', nchan=-1, start='', width='', outframe='LSRK',
-                  interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True,
+                  restfreq='', interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True,
                   conjbeams=False, usepointing=False, pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0,
                   cycleniter=-1, nmajor=1, cyclefactor=1.0, scales=[], restoringbeam='', pbcor=False, nterms=int(2), weighting='natural', robust=float(0.5),
                   npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0, lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3,
@@ -141,6 +141,7 @@ class gclean:
         self._width = width
         self._outframe = outframe
         self._interpolation = interpolation
+        self._restfreq = restfreq
         self._perchanweightdensity = perchanweightdensity
         self._gridder = gridder
         self._wprojplanes = wprojplanes
@@ -312,14 +313,14 @@ class gclean:
                                            phasecenter=self._phasecenter, stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode,
                                            reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                            psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
-                                           interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
-                                           start=self._start, width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev,
-                                           pblimit=self._pblimit, deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales,
-                                           restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
-                                           timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna, scan=self._scan,
-                                           observation=self._observation, intent=self._intent, datacolumn=self._datacolumn, weighting=self._weighting,
-                                           robust=self._robust, npixels=self._npixels, interactive=False, niter=1, gain=0.000001, calcres=True,
-                                           restoration=False, parallel=self._parallel, fullsummary=True )
+                                           interpolation=self._interpolation, restfreq=self._restfreq, perchanweightdensity=self._perchanweightdensity,
+                                           nchan=self._nchan, start=self._start, width=self._width, outframe=self._outframe,
+                                           pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit, deconvolver=self._deconvolver,
+                                           cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam, pbcor=self._pbcor,
+                                           nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange, uvrange=self._uvrange,
+                                           antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
+                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels,
+                                           interactive=False, niter=1, gain=0.000001, calcres=True, restoration=False, parallel=self._parallel, fullsummary=True )
                 self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
                 self._major_done = 0
             else:
@@ -327,8 +328,8 @@ class gclean:
                                            stokes=self._stokes, specmode=self._specmode, reffreq=self._reffreq,
                                            gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight, psterm=self._psterm,
                                            wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing, interpolation=self._interpolation,
-                                           perchanweightdensity=self._perchanweightdensity, nchan=self._nchan, start=self._start, width=self._width,
-                                           outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
+                                           restfreq=self._restfreq, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan, start=self._start,
+                                           width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
                                            deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam,
                                            pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange,
                                            uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
@@ -394,7 +395,7 @@ class gclean:
                                    phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode,
                                    reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                    psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
-                                   interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
+                                   interpolation=self._interpolation, restfreq=self._restfreq, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan,
                                    start=self._start, width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev,
                                    pblimit=self._pblimit, deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales,
                                    restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw,
