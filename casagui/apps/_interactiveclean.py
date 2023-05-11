@@ -1078,7 +1078,7 @@ class InteractiveClean:
 
                 httpd.serve_forever()
 
-        if not self._is_notebook:
+        if self._is_remote and not self._is_notebook:
             from threading import Thread
             thread = Thread(target=start_http_server)
             thread.daemon = True # Let Ctrl+C kill server thread
