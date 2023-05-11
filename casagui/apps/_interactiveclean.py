@@ -224,10 +224,15 @@ class InteractiveClean:
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
                   pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
-                  fastnoise=True, savemodel='none', parallel=False, nmajor=1 ):
+                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, remote=False):
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
+
+        ###
+        ### Whether or not the Interactive Clean session is running remotely
+        ###
+        self._is_remote = remote
 
         ###
         ### whether or not the session is being run from a jupyter notebook or script
@@ -997,16 +1002,18 @@ class InteractiveClean:
 
         self.setup()
 
-        # Tunnel ports for Jupyter kernel connection
-        print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
-            You may need to change the last argument to align with your ssh config.\n")
-        print(self._gen_port_fwd_cmd())
+        # If Interactive Clean is being run remotely, print helper info for port tunneling
+        if self._is_remote:
+            # Tunnel ports for Jupyter kernel connection
+            print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
+                You may need to change the last argument to align with your ssh config.\n")
+            print(self._gen_port_fwd_cmd())
 
-        # TODO: Include?
-        # VSCode will auto-forward ports that appear in well-formatted addresses.
-        # Printing this line will cause VSCode to autoforward the ports
-        # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
-        input("\nPress enter when port forwarding is setup...")
+            # TODO: Include?
+            # VSCode will auto-forward ports that appear in well-formatted addresses.
+            # Printing this line will cause VSCode to autoforward the ports
+            # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
+            input("\nPress enter when port forwarding is setup...")
 
         async def _run_( ):
             async with self.serve( ) as s:
