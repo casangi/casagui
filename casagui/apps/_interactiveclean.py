@@ -712,9 +712,11 @@ class InteractiveClean:
         ###
         convergence = self._convergence_data['chan'][0][self._stokes]
         self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'], type=['flux'] ) )
+                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'],
+                                                           type=['flux'] * len(convergence['iterations']) ) )
         self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'], type=['residual'] ) )
+                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'],
+                                                           type=['residual'] * len(convergence['iterations'])) )
         self._cyclethreshold_data = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
 
         ###
