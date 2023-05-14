@@ -223,7 +223,7 @@ class InteractiveClean:
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
                   pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
-                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, remote=False, serve_webpage=False):
+                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, notebook=False, remote=False, serve_webpage=False):
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
@@ -1012,15 +1012,14 @@ class InteractiveClean:
         # If Interactive Clean is being run remotely, print helper info for port tunneling
         if self._is_remote:
             # Tunnel ports for Jupyter kernel connection
-            print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
-                You may need to change the last argument to align with your ssh config.\n")
+            print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding. "
+                  +"You may need to change the last argument to align with your ssh config.\n")
             print(self._gen_port_fwd_cmd())
 
-            # TODO: Include?
-            # VSCode will auto-forward ports that appear in well-formatted addresses.
-            # Printing this line will cause VSCode to autoforward the ports
-            # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
-            input("\nPress enter when port forwarding is setup...")
+            # Require user to indicate tunnels are established when running in notebooks
+            # This needs to happen because you can't refresh the notebook window like you can in a webpage
+            if self._is_notebook:
+                input("\nPress enter when port forwarding is setup...")
 
         async def _run_( ):
             async with self.serve( ) as s:
@@ -1034,10 +1033,14 @@ class InteractiveClean:
 
         # Run IC as a task if event loop is already running
         if loop and loop.is_running():
-            ic_task = asyncio.create_task(_run_())
-
             # TODO: How to wait for task to be done before grabbing result
-            # return self.result( )
+            # Many approaches to do this, but what's best?
+            # Maybe make _call_ always async?
+            # Just have _call_ not return anything and make user explicity ask for result?
+            self._ic_task = asyncio.create_task(_run_())
+            return None
+            # Returning the task results in output of websocket errors, so keep strong
+            # reference to the task internally
         else: # Start loop
             asyncio.run(_run_( ))
             return self.result( )
