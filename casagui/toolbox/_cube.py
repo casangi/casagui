@@ -44,7 +44,7 @@ from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool,
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.state import initialize_bokeh
-from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
+from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes
 
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
@@ -55,7 +55,7 @@ class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image, mask=None, abort=None ):
+    def __init__( self, image, mask=None, abort=None, notebook=False ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -77,7 +77,7 @@ class CubeMask:
         '''
         initialize_bokeh( )
 
-        self._is_notebook = is_notebook()
+        self._is_notebook = notebook
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)

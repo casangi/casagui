@@ -38,7 +38,7 @@ from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, S
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer
 from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
-from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import resource_manager, reset_resource_manager
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -179,7 +179,7 @@ class InteractiveClean:
         self.__pipes_initialized = False
         self._mask_history = [ ]
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler, notebook=self._is_notebook )
         ###
         ### error or exception result
         ###
@@ -207,9 +207,8 @@ class InteractiveClean:
                 self._cube._pipe['control'].address[1]]
 
         # Also forward http port if serving webpage
-        if not self._is_notebook:
+        if self._serve_webpage:
             ports.append(self._http_port)
-
         cmd = 'ssh'
         for port in ports:
             cmd += (' -L ' + str(port) + ':localhost:' + str(port))
@@ -224,7 +223,7 @@ class InteractiveClean:
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
                   pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
-                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, remote=False):
+                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, notebook=False, remote=False, serve_webpage=False):
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
@@ -237,7 +236,12 @@ class InteractiveClean:
         ###
         ### whether or not the session is being run from a jupyter notebook or script
         ###
-        self._is_notebook = is_notebook()
+        self._is_notebook = notebook
+
+        ##
+        ## Whether or not to start a webserver serving the bokeh-generated index.html
+        ##
+        self._serve_webpage = serve_webpage
 
         ##
         ## the http port for serving GUI in webpage if not running in script
@@ -608,8 +612,9 @@ class InteractiveClean:
             self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
             self._pipe['converge'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
 
-            # Get port for serving HTTP server if running in script
-            self._http_port = find_ws_address("")[1]
+            # Get port for serving HTTP server if serving
+            if self._serve_webpage:
+                self._http_port = find_ws_address("")[1]
 
     def _launch_gui( self ):
         '''create and show GUI
@@ -1007,23 +1012,36 @@ class InteractiveClean:
         # If Interactive Clean is being run remotely, print helper info for port tunneling
         if self._is_remote:
             # Tunnel ports for Jupyter kernel connection
-            print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding.\
-                You may need to change the last argument to align with your ssh config.\n")
+            print("\nImportant: Copy the following line and run in your local terminal to establish port forwarding. "
+                  +"You may need to change the last argument to align with your ssh config.\n")
             print(self._gen_port_fwd_cmd())
 
-            # TODO: Include?
-            # VSCode will auto-forward ports that appear in well-formatted addresses.
-            # Printing this line will cause VSCode to autoforward the ports
-            # print("Cmd: " + str(repr(self.auto_fwd_ports_vscode())))
-            input("\nPress enter when port forwarding is setup...")
+            # Require user to indicate tunnels are established when running in notebooks
+            # This needs to happen because you can't refresh the notebook window like you can in a webpage
+            if self._is_notebook:
+                input("\nPress enter when port forwarding is setup...")
 
         async def _run_( ):
             async with self.serve( ) as s:
                 await s[0]
 
-        if self._is_notebook:
-            ic_task = asyncio.create_task(_run_())
-        else:
+        # Check for current asyncio event loop (Jupyter notebook/console/kernel)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # 'No current event loop'
+            loop = None
+
+        # Run IC as a task if event loop is already running
+        if loop and loop.is_running():
+            # TODO: How to wait for task to be done before grabbing result
+            # Many approaches to do this, but what's best?
+            # Maybe make _call_ always async?
+            # Just have _call_ not return anything and make user explicity ask for result?
+            self._ic_task = asyncio.create_task(_run_())
+            return None
+            # Returning the task results in output of websocket errors, so keep strong
+            # reference to the task internally
+        else: # Start loop
             asyncio.run(_run_( ))
             return self.result( )
 
@@ -1059,30 +1077,8 @@ class InteractiveClean:
         -------
         (asyncio.Future, dictionary of coroutines)
         '''
-        def start_http_server():
-            import http.server
-            import socketserver
-            PORT = self._http_port
-            DIRECTORY=self._webpage_path
-
-            class Handler(http.server.SimpleHTTPRequestHandler):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, directory=DIRECTORY, **kwargs)
-
-            with socketserver.TCPServer(("", PORT), Handler) as httpd:
-                print("\nServing Interactive Clean webpage from local directory: ", DIRECTORY)
-                print("Use Control-C to stop Interactive clean.\n")
-                print("Copy and paste one of the below URLs into your browser (Chrome or Firefox) to view:")
-                print("http://localhost:"+str(PORT))
-                print("http://127.0.0.1:"+str(PORT))
-
-                httpd.serve_forever()
-
-        if not self._is_notebook:
-            from threading import Thread
-            thread = Thread(target=start_http_server)
-            thread.daemon = True # Let Ctrl+C kill server thread
-            thread.start()
+        if self._serve_webpage:
+            self.start_http_server()
 
         self._launch_gui( )
 
@@ -1091,6 +1087,31 @@ class InteractiveClean:
                    self._cube.serve( self.__stop ) as cube:
             self.__result_future = asyncio.Future( )
             yield ( self.__result_future, { 'ctrl': ctrl, 'conv': conv, 'cube': cube } )
+
+    def http_server_process( self ):
+        import http.server
+        import socketserver
+        PORT = self._http_port
+        DIRECTORY = self._webpage_path
+
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=DIRECTORY, **kwargs)
+
+        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            print("\nServing Interactive Clean webpage from local directory: ", DIRECTORY)
+            print("Use Control-C to stop Interactive clean.\n")
+            print("Copy and paste one of the below URLs into your browser (Chrome or Firefox) to view:")
+            print("http://localhost:"+str(PORT))
+            print("http://127.0.0.1:"+str(PORT))
+
+            httpd.serve_forever()
+
+    def start_http_server( self ):
+            from threading import Thread
+            thread = Thread(target=self.http_server_process)
+            thread.daemon = True # Let Ctrl+C kill server thread
+            thread.start()
 
     def __retrieve_result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
