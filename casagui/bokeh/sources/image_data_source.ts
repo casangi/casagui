@@ -54,6 +54,11 @@ export class ImageDataSource extends ColumnDataSource {
             this.data = data.chan
         }, this.imid, [ 0, 0 ] )
     }
+
+    wcs( ): {[key: string]: any} | null {
+        return this.image_source.wcs( )
+    }
+
     static init_ImageDataSource( ): void {
         this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
             init_script: [ Any ],

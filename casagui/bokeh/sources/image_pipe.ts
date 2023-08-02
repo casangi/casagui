@@ -1,6 +1,11 @@
 import { DataPipe } from "./data_pipe"
 import * as p from "@bokehjs/core/properties"
 
+declare global {
+    // loaded into "window" by casalib
+    interface Window { coordtxl: any }
+}
+
 declare var object_id: ( obj: { [key: string]: any } ) => string
 
 // Data source where the data is defined column-wise, i.e. each key in the
@@ -12,6 +17,7 @@ export namespace ImagePipe {
     export type Props = DataPipe.Props & {
         dataid: p.Property<string>
         shape: p.Property<[number,number,number,number]>
+        fits_header_json: p.Property<string | null>
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         spectra: p.Property<( index: [number,number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         refresh: p.Property<( cb: (msg:{[key: string]: any}) => any, id: string, default_index: [number] ) => void>
@@ -24,9 +30,14 @@ export class ImagePipe extends DataPipe {
     properties: ImagePipe.Props
 
     position: {[key: string]: any} = { }
+    _wcs: {[key: string]: any} | null = null
+
 
     constructor(attrs?: Partial<ImagePipe.Attrs>) {
-        super(attrs);
+        super(attrs)
+        if ( this.fits_header_json ) {
+            this._wcs = new window.coordtxl.WCSTransform( new window.coordtxl.MapKeywordProvider(JSON.parse(this.fits_header_json)) )
+        }
     }
 
     // fetch channel
@@ -59,10 +70,15 @@ export class ImagePipe extends DataPipe {
         }
     }
 
+    wcs( ): {[key: string]: any} | null {
+        return this._wcs
+    }
+
     static init_ImagePipe( ): void {
         this.define<ImagePipe.Props>(({ String, Tuple, Number }) => ({
             dataid: [ String ],
-            shape: [Tuple(Number,Number,Number,Number)]
+            shape: [Tuple(Number,Number,Number,Number)],
+            fits_header_json: [ String ]
         }));
     }
 }

@@ -76,6 +76,7 @@ class ImagePipe(DataPipe):
 
     shape = Tuple( Int, Int, Int, Int, help="shape: [ RA, DEC, Stokes, Spectral ]" )
     dataid = String( )
+    fits_header_json = Nullable( String, help="""JSON representation of image FITS header for world coordinate labeling""" )
 
     __implementation__ = TypeScript( "" )
 
@@ -317,6 +318,10 @@ class ImagePipe(DataPipe):
         self.__open_mask( mask )
         self.__mask0_cache = None
         self.shape = list(self.__img.shape( ))
+        if not self.fits_header_json:
+            __hdr_dict = self.__img.fitsheader(exclude="HISTORY")
+            if __hdr_dict:
+                self.fits_header_json = json.dumps(pack_arrays(__hdr_dict), ensure_ascii=True)
         self.__session = None
         self.__stokes_labels = None
         self.__mask_statistics = False

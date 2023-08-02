@@ -43,6 +43,7 @@ from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool,
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, LinearColorMapper
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
+from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.state import initialize_bokeh
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
 
@@ -890,6 +891,7 @@ class CubeMask:
                                                   tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
+            self._image.xaxis.formatter = WcsTicks( axis="x", image_source=self._image_source )
 
             self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 
