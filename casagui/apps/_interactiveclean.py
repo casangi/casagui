@@ -304,8 +304,6 @@ class InteractiveClean:
         err, stopcode, majordone, self._convergence_data = next(self._clean)
         if stopcode is None and err:
             raise RuntimeError(err)
-        if stopcode > 1 and stopcode < 9: # 1: iteration limit hit, 9: major cycle limit hit
-            self._clean.finalize()
         if len(self._convergence_data['chan'].keys()) == 0:
             raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
         self._convergence_id = str(uuid4( ))
