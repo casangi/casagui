@@ -46,6 +46,11 @@ export class ImageDataSource extends ColumnDataSource {
                                        this.data = data.chan
                                    }, this.imid )
     }
+
+    signal_change( ): void {
+        this.change.emit( )
+    }
+
     refresh( cb?: (msg:{[key: string]: any}) => any ): void {
         // supply default index value because the ImagePipe will have no cached
         // index values for this.imid if there have been no updates yet...

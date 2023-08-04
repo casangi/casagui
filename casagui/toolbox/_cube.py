@@ -32,6 +32,7 @@ calling application. Once all of the widgets have been created. The
 ``connect`` member function creates all of the Bokeh/JavaScript callbacks
 that allow the widgets to interact'''
 
+import math
 from os import path
 import asyncio
 from uuid import uuid4
@@ -892,6 +893,8 @@ class CubeMask:
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
             self._image.xaxis.formatter = WcsTicks( axis="x", image_source=self._image_source )
+            self._image.yaxis.formatter = WcsTicks( axis="y", image_source=self._image_source )
+            self._image.xaxis.major_label_orientation = math.pi/8
 
             self._image.x_range.range_padding = self._image.y_range.range_padding = 0
 
@@ -1137,7 +1140,17 @@ class CubeMask:
             raise RuntimeError('cube image not in use')
         self._channel_label = PreText( text='Channel 0', min_width=100 )
         self._channel_label_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
-        self._channel_label_group = row( self._channel_label, self._channel_label_stokes_dropdown )
+        self._channel_label_coordinates_dropdown = Dropdown( label='world', button_type='light', margin=(-1, 0, 0, 0),
+                                                             sizing_mode='scale_height', menu=['pixel','world'] )
+        self._channel_label_coordinates_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                                   xaxis=self._image.xaxis.formatter,
+                                                                                   yaxis=self._image.yaxis.formatter ),
+                                                                                   code='''xaxis.coordinates(this.item)
+                                                                                           yaxis.coordinates(this.item)
+                                                                                           source.signal_change( )
+                                                                                           this.origin.label = this.item''' ) )
+        self._channel_label_group = row( self._channel_label, self._channel_label_stokes_dropdown,
+                                         self._channel_label_coordinates_dropdown )
         return self._channel_label_group
 
     def connect( self ):
