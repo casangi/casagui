@@ -1,6 +1,6 @@
 {
   "name": "casalib",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "TypeScript library for CASA development",
   "author": "CASA Visualization Team <aips2-request@nrao.edu>",
   "repository": "https://https://github.com/casangi/casagui",

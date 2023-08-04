@@ -35,8 +35,8 @@ from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
 from bokeh import __version__ as bokeh_version
 
-CASALIB_VERSION = "0.0.7"
-CASAGUIJS_VERSION = "0.0.9"
+CASALIB_VERSION = "0.0.8"
+CASAGUIJS_VERSION = "0.0.10"
 
 casa_css = [ '''.cg-btn-selector .bk-input, .cg-btn-selector .bk-btn {
     font-weight: bold;
