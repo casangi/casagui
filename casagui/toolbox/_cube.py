@@ -46,6 +46,7 @@ from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.state import initialize_bokeh
+from casagui.bokeh.components import SVGIcon
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
 
 from ..bokeh.state import available_palettes, find_palette, default_palette
@@ -98,7 +99,7 @@ class CubeMask:
         self._statistics_use_mask = False                  # whether statistics calculations will be based on the masked
                                                            # area or the whole channel
         self._palette = None                               # palette selection
-        self._help = None
+        self._help_button = None                           # help button that created new tab/window (instead of hide/show Div)
         self._image_spectra = None                         # spectra data source
         self._image_source = None                          # ImageDataSource
         self._statistics_source = None
@@ -1364,6 +1365,25 @@ class CubeMask:
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
         set to ``False``, but it can be toggled based on GUI actions.
         '''
+        if self._help_button is None:
+            self._help_button = set_attributes( Button( label="", max_width=35, max_height=35, name='help',
+                                                        icon=SVGIcon(icon_name='help', size=1.4) ), **kw )
+            self._help_button.js_on_click( CustomJS( args=dict( text=self.__help_string( ) ),
+                                                     code='''const wnd = window.open("about:blank","Interactive Clean Help")
+                                                             wnd.document.write(text)''' ) )
+        return self._help_button
+
+    @asynccontextmanager
+    async def serve( self, stop_function ):
+        self._stop_serving_function = stop_function
+        async with websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] ) as im, \
+             websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl:
+            yield { 'im': im, 'ctrl': ctrl }
+
+    def __help_string( self, rows=[ ] ):
+        '''Retrieve the help Bokeh object. When returned the ``visible`` property is
+        set to ``False``, but it can be toggled based on GUI actions.
+        '''
         mask_control = { 'no-mask': '''
                              <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
                              <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
@@ -1392,35 +1412,31 @@ class CubeMask:
                              <tr><td><b>escape</b></td><td>remove displayed region</td></tr>'''
                          }
 
-        if self._help is None:
-            # using set_attributes allows the user to override defaults like 'width=650'
-            self._help =set_attributes(
-                Div( text='''<style>
-                                 #makemaskhelp td, #makemaskhelp th {
-                                     border: 1px solid #ddd;
-                                     text-align: left;
-                                     padding: 8px;
-                                 }
-                                 #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
-                             </style>
-                             <table id="makemaskhelp">
-                               <tr><th>buttons/key(s)</th><th>description</th></tr>
-                               EXTRAROWS
-                               <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>right</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               <tr><td><b>option</b>-<b>left</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
-                               MASKCONTROL
-                           </table>'''.replace('option','option' if platform == 'darwin' else 'alt')
-                                      .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>')
-                                      .replace('EXTRAROWS','\n'.join(rows))
-                                      .replace('MASKCONTROL', mask_control['no-mask'] if self._mask_path is None else mask_control['mask']),
-                     visible=False, width=650 ), **kw )
-        return self._help
-
-    @asynccontextmanager
-    async def serve( self, stop_function ):
-        self._stop_serving_function = stop_function
-        async with websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] ) as im, \
-             websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl:
-            yield { 'im': im, 'ctrl': ctrl }
+        return \
+'''<html>
+  <head>
+    <title>IC Help</title>
+    <style>
+        #makemaskhelp td, #makemaskhelp th {
+            border: 1px solid #ddd;
+            text-align: left;
+            padding: 8px;
+        }
+        #makemaskhelp tr:nth-child(even){background-color: #f2f2f2}
+    </style>
+  </head>
+  <body>
+    <table id="makemaskhelp">
+      <tr><th>buttons/key(s)</th><th>description</th></tr>
+      EXTRAROWS
+      <tr><td><b>option</b>-<b>up</b></td><td>to next channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+      <tr><td><b>option</b>-<b>down</b></td><td>to previous channel (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+      <tr><td><b>option</b>-<b>right</b></td><td>to next stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+      <tr><td><b>option</b>-<b>left</b></td><td>to previous stokes axis (<b>ctrl</b> or <b>cmd</b> can be used)</td></tr>
+      MASKCONTROL
+    </table>
+  </body>
+</html>'''.replace('option','option' if platform == 'darwin' else 'alt') \
+          .replace('<b>delete</b>','<b>delete</b>' if platform == 'darwin' else '<b>backspace</b>') \
+          .replace('EXTRAROWS','\n'.join(rows)) \
+          .replace('MASKCONTROL', mask_control['no-mask'] if self._mask_path is None else mask_control['mask'])

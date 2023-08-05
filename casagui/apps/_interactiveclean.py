@@ -773,12 +773,6 @@ class InteractiveClean:
                                                    icon=SVGIcon(icon_name="iclean-finish", size=2.5) )
         self._control['clean']['stop'] = Button( label="", button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
                                                  icon=SVGIcon(icon_name="iclean-stop", size=2.5) )
-        width = 35
-        height = 35
-        self._control['help'] = Button( label="", max_width=width, max_height=height, name='help',
-                                        icon=SVGIcon(icon_name='help', size=1.4) )
-
-
         self._control['nmajor'] = TextInput( title='nmajor', value="%s" % self._params['nmajor'], width=90 )
         self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
@@ -937,6 +931,8 @@ class InteractiveClean:
 
         mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( )
 
+        help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
+                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
         self._fig['layout'] = column(
                                   row(
                                       column(
@@ -955,30 +951,20 @@ class InteractiveClean:
                                       ),
                                       column( self._cube.channel_label( ),
                                               self._fig['image'],
-                                              row( Spacer(height=self._control['help'].height, sizing_mode="scale_width"),
+                                              row( Spacer(height=help_button.height, sizing_mode="scale_width"),
                                                    self._cube.palette( ),
                                                    mask_clean_notclean_pick,
                                                    mask_color_pick,
                                                    mask_alpha_pick,
-                                                   self._control['help'],
-                                                   Spacer(height=self._control['help'].height, width=30)
+                                                   help_button,
+                                                   Spacer(height=help_button.height, width=30)
                                               )
                                       ),
-                                      self._cube.help( width=450, height=100,
-                                                       rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>',
-
-                                                             ]
-                                                     )
                                   ),
                                   self._fig['spectra'] if self._fig['spectra'] else Div( ),
                                   self._fig['convergence'],
                                   Spacer(width=380, height=40, sizing_mode='scale_width'),
                                   self._status['log'] )
-
-        self._control['help'].js_on_click( CustomJS( args=dict( help=self._cube.help( ) ),
-                                                     code='''if ( help.visible == true ) help.visible = false
-                                                             else help.visible = true''' ) )
 
         self._cube.connect( )
         # Change display type depending on runtime environment
