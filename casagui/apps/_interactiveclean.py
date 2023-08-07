@@ -744,7 +744,7 @@ class InteractiveClean:
 
         hover = HoverTool( tooltips=TOOLTIPS )
         self._fig['convergence'] = figure( plot_height=180, plot_width=800, tools=[ hover ], title='Convergence',
-                                           x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual'  )
+                                           x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual' )
 
         self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
                                                     'flux_range': DataRange1d( ) }
