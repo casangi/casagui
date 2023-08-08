@@ -65,5 +65,8 @@ class ImageDataSource(ColumnDataSource):
         self.num_chans = list(self.image_source.shape[-2:])
         self.cur_chan  = [ 0, 0 ]
 
+    def pixel_value( self, chan, index ):
+        return self.image_source.pixel_value( chan, index )
+
     def stokes_labels( self ):
         return self.image_source.stokes_labels( )

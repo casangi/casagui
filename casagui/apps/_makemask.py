@@ -112,7 +112,7 @@ class MakeMask:
         self._help_text = self._cube.help( rows=[ '<tr><td><i>red check button</i></td><td>clicking the red check button will close the dialog and return masks to python</td></tr>' ] )
 
         self._image = self._cube.image( )
-        self._layout = column( self._cube.channel_label( ),
+        self._layout = column( row( self._cube.channel_ctrl( ), self._cube.coord_ctrl( ) ),
                                self._image,
                                row( self._cube.slider( ), self._help, self._done ),
                                self._help_text )

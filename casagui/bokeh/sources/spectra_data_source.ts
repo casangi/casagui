@@ -28,8 +28,8 @@ export class SpectraDataSource extends ColumnDataSource {
     initialize(): void {
         super.initialize();
     }
-    spectra( r: number, d: number, s: number = 0 ): void {
-        this.image_source.spectra( [r, d, s], (data: any) => this.data = data.spectrum, this.imid )
+    spectra( r: number, d: number, s: number = 0, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ): void {
+        this.image_source.spectra( [r, d, s], (data: any) => this.data = data.spectrum, this.imid, squash_queue )
     }
     refresh( ): void {
         // supply default index value because the ImagePipe will have no cached

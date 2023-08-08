@@ -85,8 +85,12 @@ class CubeMask:
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
         self._image = None                                 # figure displaying cube & mask planes
-        self._channel_label = None                         # display channel and stokes
-        self._channel_label_stokes_dropdown = None         # drop down for changing stokes when _channel_label is used
+        self._channel_ctrl = None                          # display channel and stokes
+        self._channel_ctrl_stokes_dropdown = None          # drop down for changing stokes when _channel_ctrl is used
+        self._channel_ctrl_group = None                    # row for channel control group
+        self._coord_ctrl_dropdown = None                   # select pixel or world
+        self._coord_ctrl_group = None                      # row for coordinate control group
+        self._pixel_tracking_text = None                   # cursor tracking pixel value
         self._chan_image = None                            # channel image
         self._bitmask = None                               # bitmask image
         self._bitmask_color_selector = None                # bitmask color selector
@@ -107,7 +111,8 @@ class CubeMask:
         self._ids = { 'palette': str(uuid4( )),
                       'mask-mod': str(uuid4( )),
                       'done': str(uuid4( )),
-                      'config-statistics': str(uuid4( )) } # ids used for control messages
+                      'config-statistics': str(uuid4( )),
+                      'pixel-value': str(uuid4( )) } # ids used for control messages
 
         self._fig = { }
         self._hover = { 'spectra': None, 'image': None }   # HoverTools which are used to synchronize image/spectra
@@ -999,32 +1004,6 @@ class CubeMask:
             self._spectra.line( x='x', y='y', source=self._image_spectra )
             self._spectra.grid.grid_line_width = 0.5
 
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
-                                                     state=dict(frozen=False) ),
-                                          code = """if ( ! specfig.disabled && ! imagefig.disabled ) {
-                                                        if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
-                                                            var geometry = cb_data['geometry'];
-                                                            var x_pos = Math.floor(geometry.x);
-                                                            var y_pos = Math.floor(geometry.y);
-                                                            specds.spectra(x_pos,y_pos)
-                                                            if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                                specfig.title.text = `Spectrum (${x_pos},${y_pos})`
-                                                            } else {
-                                                                specfig.title.text = 'Spectrum'
-                                                            }
-                                                        } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                            state.frozen = false
-                                                        } else if ( cb_obj.event_name === 'tap' ) {
-                                                            state.frozen = true
-                                                        }
-                                                    }""" )
-
-            self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
-
-            self._image.js_on_event('mouseenter',self._cb['impos'])
-            self._image.js_on_event('tap',self._cb['impos'])
-            self._image.add_tools(self._hover['image'])
-
         return self._spectra
 
     def coorddesc( self ):
@@ -1133,26 +1112,49 @@ class CubeMask:
         return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
 
 
-    def channel_label( self ):
+    def channel_ctrl( self ):
         '''Return a text label for the current channel being displayed.
         It will be updated as the channel or stokes axis changes.
         '''
         if self._image is None:
             raise RuntimeError('cube image not in use')
-        self._channel_label = PreText( text='Channel 0', min_width=100 )
-        self._channel_label_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
-        self._channel_label_coordinates_dropdown = Dropdown( label='world', button_type='light', margin=(-1, 0, 0, 0),
+        self._channel_ctrl = PreText( text='Channel 0', min_width=100 )
+        self._channel_ctrl_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
+        self._channel_ctrl_group = row( self._channel_ctrl, self._channel_ctrl_stokes_dropdown )
+        return self._channel_ctrl_group
+
+    def coord_ctrl( self ):
+        '''Return a text label for the current channel being displayed.
+        It will be updated as the channel or stokes axis changes.
+        '''
+        if self._image is None:
+            raise RuntimeError('cube image not in use')
+        self._coord_ctrl_dropdown = Dropdown( label='world', button_type='light', margin=(-1, 0, 0, 0),
                                                              sizing_mode='scale_height', menu=['pixel','world'] )
-        self._channel_label_coordinates_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
-                                                                                   xaxis=self._image.xaxis.formatter,
-                                                                                   yaxis=self._image.yaxis.formatter ),
-                                                                                   code='''xaxis.coordinates(this.item)
-                                                                                           yaxis.coordinates(this.item)
-                                                                                           source.signal_change( )
-                                                                                           this.origin.label = this.item''' ) )
-        self._channel_label_group = row( self._channel_label, self._channel_label_stokes_dropdown,
-                                         self._channel_label_coordinates_dropdown )
-        return self._channel_label_group
+        self._coord_ctrl_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                    xaxis=self._image.xaxis.formatter,
+                                                                    yaxis=self._image.yaxis.formatter ),
+                                                                    code='''xaxis.coordinates(this.item)
+                                                                            yaxis.coordinates(this.item)
+                                                                            source.signal_change( )
+                                                                            this.origin.label = this.item''' ) )
+
+        self._coord_ctrl_group = row( self._coord_ctrl_dropdown )
+        return self._coord_ctrl_group
+
+    def pixel_tracking_text( self ):
+
+        self._pixel_tracking_text = PreText( text='', min_width=300 )
+
+        async def pixel_value( msg, self=self ):
+            if msg['action'] == 'pixel':
+                chan = msg['value']['chan']
+                index = msg['value']['index']
+                return dict( result='success', update=dict(pixel=self._image_source.pixel_value( chan, index ),
+                                                           index=index, chan=chan) )
+
+        self._pipe['control'].register( self._ids['pixel-value'], pixel_value )
+        return self._pixel_tracking_text
 
     def connect( self ):
         '''Connect the callbacks which are used by the masking GUIs that
@@ -1203,31 +1205,36 @@ class CubeMask:
                                                        '''window.hotkeys.setScope( )''' ) )
 
         stokes_labels = self._image_source.stokes_labels( )
-        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_label,
-                                                                          stokes_label=self._channel_label_stokes_dropdown ),
-                                                               ### the label manipulation portion of 'code' is '' when self._channel_label is None
+        self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_ctrl,
+                                                                          stokes_label=self._channel_ctrl_stokes_dropdown ),
+                                                               ### the label manipulation portion of 'code' is '' when self._channel_ctrl is None
                                                                ### so stokes_label.label and label.text will not be updated when they are not used
                                                                code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
                                                                            stokes_label.label = ( %s );''' %
                                                                         ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
                                                                                           zip( range(len(stokes_labels)), stokes_labels )) ) + " : ''" ) if
-                                                                        self._channel_label else '' ) +
+                                                                        self._channel_ctrl else '' ) +
                                                                       ( ( '''if ( window.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                           self._slider else '') +
                                                                         (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
                                                                         if self._mask_path is None else '' ) ) ) )
 
-        if self._channel_label:
+        if self._channel_ctrl:
             ###
             ### allow switching to stokes planes
             ###
-            self._channel_label_stokes_dropdown.menu = stokes_labels
-            self._channel_label_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
+            self._channel_ctrl_stokes_dropdown.menu = stokes_labels
+            self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
                                                                        code='''if ( cb_obj.item != cb_obj.origin.label ) {
                                                                                    cb_obj.origin.label = cb_obj.item
                                                                                    source.channel( source.cur_chan[1], %s )
                                                                                }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
                                                                                                          zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
+
+        ###
+        ### cursor movement code snippets
+        movement_code_spectrum_update = ''
+        movement_code_pixel_update = ''
         if self._spectra:
             ###
             ### this is set up in connect( ) because slider must be updated if it is used othersize
@@ -1244,6 +1251,76 @@ class CubeMask:
 
             self._spectra.js_on_event('tap', self._cb['sptap'])
 
+            ###
+            ### code for spectrum update due to cursor movement
+            ###
+            movement_code_spectrum_update = """if ( ! specfig.disabled && ! imagefig.disabled ) {
+                                                   if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
+                                                       var geometry = cb_data['geometry'];
+                                                       var x_pos = Math.floor(geometry.x);
+                                                       var y_pos = Math.floor(geometry.y);
+                                                       specds.spectra(x_pos,y_pos,0,true)
+                                                       if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                           specfig.title.text = `Spectrum (${x_pos},${y_pos})`
+                                                       } else {
+                                                           specfig.title.text = 'Spectrum'
+                                                       }
+                                                   } else if ( cb_obj.event_name === 'mouseenter' ) {
+                                                       state.frozen = false
+                                                   } else if ( cb_obj.event_name === 'tap' ) {
+                                                       state.frozen = true
+                                                   }
+                                               }"""
+
+
+        if self._pixel_tracking_text:
+            ###
+            ### code for updating pixel value due to cursor movements
+            ###
+            movement_code_pixel_update = '''if ( cb_obj.event_type === 'move' ) {
+                                                function update_pixel( msg ) {
+                                                    if ( msg.update &&
+                                                         msg.update.pixel &&
+                                                         msg.update.index &&
+                                                         msg.update.index.length == 2 ) {
+                                                        const digits = 5
+                                                        if ( pix_wrld && pix_wrld.label == 'pixel' ) {
+                                                            pixlabel.text = '' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
+                                                                            " \u2192 " + msg.update.pixel.toExponential(digits)
+                                                        } else {
+                                                            const pt = new window.coordtxl.Point2D( Number(msg.update.index[0]),
+                                                                                                    Number(msg.update.index[1]) )
+                                                            imageds.wcs( ).imageToWorldCoords(pt,false)
+                                                            let wcstr = new window.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
+                                                            pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits)
+                                                        }
+                                                    }
+                                                }
+                                                if ( state.frozen == false ) {
+                                                    var geometry = cb_data['geometry'];
+                                                    var x_pos = Math.floor(geometry.x);
+                                                    var y_pos = Math.floor(geometry.y);
+                                                    if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                        ctrl.send( ids['pixel-value'],
+                                                                   { action: 'pixel',
+                                                                     value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
+                                                                     update_pixel, true )
+                                                    }
+                                                }
+                                            }'''
+
+        if movement_code_spectrum_update or movement_code_pixel_update:
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
+                                                     imageds=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
+                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
+                                                     state=dict(frozen=False) ),
+                                          code = movement_code_spectrum_update + movement_code_pixel_update )
+
+            self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
+
+            self._image.js_on_event('mouseenter',self._cb['impos'])
+            self._image.js_on_event('tap',self._cb['impos'])
+            self._image.add_tools(self._hover['image'])
 
 
         ## this is in the connect function to allow for access to self._statistics_source

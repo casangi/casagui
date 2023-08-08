@@ -117,11 +117,34 @@ class ImagePipe(DataPipe):
             raise RuntimeError(f'mismatch between image shape ({self.__img.shape( )}) and mask shape ({mskshape})')
         if self.__chan_shape is None: self.__chan_shape = list(mskshape[0:2])
 
+    def pixel_value( self, chan, index ):
+        channel = self.__get_chan(chan)
+        index[0] = min( index[0], channel.shape[0] - 1 )
+        index[1] = min( index[1], channel.shape[1] - 1 )
+        index[0] = max( index[0], 0 )
+        index[1] = max( index[1], 0 )
+        return np.squeeze(channel[index[0],index[1]])
+
     def stokes_labels( self ):
         """Returns stokes plane labels"""
         if self.__stokes_labels is None:
             self.__stokes_labels = self.__img.coordsys( ).stokes( )
         return self.__stokes_labels
+
+    def __get_chan( self, index ):
+        if self.__cached_chan is None or \
+           self.__cached_chan_index[0] != index[0] or \
+           self.__cached_chan_index[1] != index[1]:
+            if self.__img is None:
+                raise RuntimeError('no image is available')
+            index[0] = min( index[0], self.__chan_shape[0] - 1 )
+            index[1] = min( index[1], self.__chan_shape[1] - 1 )
+            index[0] = max( index[0], 0 )
+            index[1] = min( index[1], 0 )
+            self.__cached_chan_index = index
+            self.__cached_chan = self.__img.getchunk( blc=[0,0] + index,
+                                                      trc=self.__chan_shape + index )
+        return self.__cached_chan
 
     ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
     ### the element type of image pixels retrieved from the CASA image are float64, but it
@@ -152,11 +175,9 @@ class ImagePipe(DataPipe):
             raise RuntimeError('no image is available')
         if np.issubdtype( element_type, np.integer ):
             return quantize( element_type,
-                             np.squeeze( self.__img.getchunk( blc=[0,0] + index,
-                                                              trc=self.__chan_shape + index) ) ).transpose( )
+                             np.squeeze( self.__get_chan(index) ) ).transpose( )
         else:
-            return np.squeeze( self.__img.getchunk( blc=[0,0] + index,
-                                                    trc=self.__chan_shape + index) ).astype(element_type).transpose( )
+            return np.squeeze( self.__get_chan(index) ).astype(element_type).transpose( )
 
     def have_mask0( self ):
         """Check to see if the synthesis imaging 'mask0' mask exists
@@ -325,6 +346,12 @@ class ImagePipe(DataPipe):
         self.__session = None
         self.__stokes_labels = None
         self.__mask_statistics = False
+
+        ###
+        ### the last channel retrieved is kept around for pixel retrieval
+        ###
+        self.__cached_chan = None
+        self.__cached_chan_index = None
 
         super( ).register( self.dataid, self._image_message_handler )
 

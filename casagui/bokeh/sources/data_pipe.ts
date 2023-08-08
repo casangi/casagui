@@ -163,11 +163,33 @@ export class DataPipe extends DataSource {
         this.incoming_callbacks[id] = cb
     }
 
-    send( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any ): void {
+    send( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ): void {
         let msg = { id, message, direction: 'j2p', session: object_id(this) }
         if ( id in this.pending ) {
             if ( id in this.send_queue ) {
-                this.send_queue[id].push( { cb, msg } )
+                if ( typeof squash_queue == 'boolean' && squash_queue && this.send_queue[id].length > 0 ) {
+                    // throw away existing message if squash_queue is true
+                    this.send_queue[id][0].msg = msg
+                    this.send_queue[id][0].cb = cb
+                } else if (typeof squash_queue == 'function' && this.send_queue[id].length > 0 ) {
+                    // use predicate to attempt to find queued message to replace
+                    let found = false
+                    for ( const elem of this.send_queue[id] ) {
+                        if ( squash_queue( elem.msg.message ) ) {
+                            // throw away message selected by squash_queue predicate
+                            elem.msg = msg
+                            elem.cb = cb
+                            found = true
+                        }
+                    }
+                    if ( ! found ) {
+                        // queue message
+                        this.send_queue[id].push( { cb, msg } )
+                    }
+                } else {
+                    // queue message
+                    this.send_queue[id].push( { cb, msg } )
+                }
             } else {
                 this.send_queue[id] = [ { cb, msg } ]
             }
