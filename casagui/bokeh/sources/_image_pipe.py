@@ -137,10 +137,13 @@ class ImagePipe(DataPipe):
            self.__cached_chan_index[1] != index[1]:
             if self.__img is None:
                 raise RuntimeError('no image is available')
+            ###
+            ### ensure that the channel index is within cube shape
+            ###
             index[0] = min( index[0], self.__chan_shape[0] - 1 )
             index[1] = min( index[1], self.__chan_shape[1] - 1 )
             index[0] = max( index[0], 0 )
-            index[1] = min( index[1], 0 )
+            index[1] = max( index[1], 0 )
             self.__cached_chan_index = index
             self.__cached_chan = self.__img.getchunk( blc=[0,0] + index,
                                                       trc=self.__chan_shape + index )
