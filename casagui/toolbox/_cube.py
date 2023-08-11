@@ -894,7 +894,7 @@ class CubeMask:
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
-            self._image = set_attributes( figure( output_backend="webgl",
+            self._image = set_attributes( figure( plot_height=400, plot_width=400, output_backend="webgl",
                                                   tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
@@ -927,8 +927,6 @@ class CubeMask:
                                                  source=self._image_source )
 
             self._image.grid.grid_line_width = 0.5
-            self._image.plot_height = 400
-            self._image.plot_width = 400
 
             for annotation in self._annotations:
                 self._image.add_layout(annotation)
@@ -1064,6 +1062,23 @@ class CubeMask:
 
             self._pipe['control'].register( self._ids['palette'], fetch_palette )
 
+#            self._palette = Dropdown( label=default_palette( ), button_type='light', margin=(-1, 0, 0, 0),
+#                                      sizing_mode='scale_height', menu=available_palettes( ) )
+#            self._palette.js_on_click( CustomJS( args=dict( image=self._chan_image,
+#                                                                  ids=self._ids,
+#                                                                  ctrl=self._pipe['control'] ),
+#                                                 code='''function receive_palette( msg ) {
+#                                                             if ( 'result' in msg && msg.result != null ) {
+#                                                                 let cm = image.glyph.color_mapper
+#                                                                 cm.palette = msg.result
+#                                                                 cm.change.emit( )
+#                                                             }
+#                                                         }
+#                                                         this.origin.label = this.item
+#                                                         ctrl.send( ids['palette'],
+#                                                                    { action: 'palette', value: this.item },
+#                                                                    receive_palette )''' ) )
+#
             self._palette = set_attributes( Select( options=available_palettes( ),
                                                     width=120, value=default_palette( ) ), **kw )
 
@@ -1083,7 +1098,7 @@ class CubeMask:
         return self._palette
 
 
-    def bitmask_controls( self ):
+    def bitmask_controls( self, **kw ):
 
         if self._bitmask is None:
             raise RuntimeError('cube bitmask not in use')
@@ -1100,7 +1115,7 @@ class CubeMask:
                                                                  gl.change.emit( )''' ) )
 
         ### setting button background color does not work with Bokeh 2.4.3
-        self._bitmask_transparency_button = Button( label='masked', width=80 )
+        self._bitmask_transparency_button = set_attributes( Button( label='masked', width=80 ), **kw )
         self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
                                                         code='''let cm = bitmask.glyph.color_mapper
                                                                 let one = cm.palette[0]
@@ -1259,7 +1274,7 @@ class CubeMask:
                                                        var geometry = cb_data['geometry'];
                                                        var x_pos = Math.floor(geometry.x);
                                                        var y_pos = Math.floor(geometry.y);
-                                                       specds.spectra(x_pos,y_pos,0,true)
+                                                       specds.spectra( x_pos, y_pos, 0, true )
                                                        if ( isFinite(x_pos) && isFinite(y_pos) ) {
                                                            specfig.title.text = `Spectrum (${x_pos},${y_pos})`
                                                        } else {

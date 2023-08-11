@@ -622,7 +622,7 @@ def set_attributes(obj, **kw):
         ``obj`` parameter
     '''
     for k, v in kw.items():
-        setattr(obj, k, v)
+        if hasattr(obj,k): setattr(obj, k, v)
     return obj
 
 

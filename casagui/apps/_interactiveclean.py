@@ -35,9 +35,13 @@ import websockets
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
+from bokeh.models.widgets import Panel, Tabs
+###  Bokeh > 3.0
+#from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
-from bokeh.layouts import column, row, Spacer
+from bokeh.layouts import column, row, Spacer, layout
 from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
+
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
@@ -621,7 +625,7 @@ class InteractiveClean:
         ###
         self._init_pipes( )
 
-        self._status['log'] = Div( text='''<hr style="width:790px">%s''' % ''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
+        self._status['log'] = Div( text='''<hr>%s''' % ''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
         ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
         self._status['stopcode'] = Div( text="<div>initial residual image</div>" ) if image_channels > 1 else Div( text="<div>initial <b>single-channel</b> residual image</div>" )
 
@@ -743,7 +747,7 @@ class InteractiveClean:
                     </div>'''
 
         hover = HoverTool( tooltips=TOOLTIPS )
-        self._fig['convergence'] = figure( plot_height=180, plot_width=800, tools=[ hover ], title='Convergence',
+        self._fig['convergence'] = figure( plot_height=180, plot_width=450, tools=[ hover ], title='Convergence',
                                            x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual' )
 
         self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
@@ -780,13 +784,13 @@ class InteractiveClean:
         self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
 
 
-        self._fig['image'] = self._cube.image( )
+        self._fig['image'] = self._cube.image( sizing_mode='stretch_both' )
         self._fig['image-source'] = self._cube.js_obj( )
 
         if image_channels > 1:
             self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
             self._fig['slider'] = self._cube.slider( )
-            self._fig['spectra'] = self._cube.spectra( )
+            self._fig['spectra'] = self._cube.spectra( plot_width=450 )
 
             self._fig['slider'].js_on_change( 'value',
                                               CustomJS( args=dict( flux_src=self._flux_data,
@@ -929,45 +933,63 @@ class InteractiveClean:
         # convergence
         # log
 
-        mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( )
+        mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( button_type='light' )
 
         help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
+                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ],
+                                       button_type='light' )
+
+        ###
+        ### For cube imaging, tabify the spectrum and convergence plots
+        ###
+        self._spec_conv_tabs = None
+        if self._fig['spectra']:
+            self._spec_conv_tabs = Tabs( tabs=[ Panel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
+                                                Panel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
+                                         sizing_mode='stretch_both' )
+
         self._fig['layout'] = column(
                                   row(
-                                      column(
-                                          row( self._control['nmajor'],
-                                               self._control['niter'],
-                                               Spacer(width=10, sizing_mode='scale_height'),
-                                               self._control['clean']['continue'],
-                                               self._control['clean']['finish'] ),
-                                          row( self._control['cycleniter'],
-                                               self._control['cycle_factor'],
-                                               self._control['threshold'],
-                                               self._control['clean']['stop'] ),
-                                          row( self._fig['slider'], self._control['goto'] ) if self._fig['slider'] else Div( ),
-                                          row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
-                                          self._cube.statistics( sizing_mode = "stretch_height" ),
-                                      ),
-                                      column( row( self._cube.channel_ctrl( ), self._cube.coord_ctrl( ) ),
-                                              self._fig['image'],
-                                              self._cube.pixel_tracking_text( ),
-                                              row( Spacer(height=help_button.height, sizing_mode="scale_width"),
+                                      column( row( self._cube.channel_ctrl( ), self._cube.coord_ctrl( ),
+                                                   Spacer(height=help_button.height, sizing_mode="scale_width"),
                                                    self._cube.palette( ),
                                                    mask_clean_notclean_pick,
                                                    mask_color_pick,
                                                    mask_alpha_pick,
-                                                   help_button,
-                                                   Spacer(height=help_button.height, width=30)
-                                              )
+                                                   help_button, Spacer(height=help_button.height, width=7, sizing_mode="fixed") ),
+                                              self._fig['image'],
+                                              self._cube.pixel_tracking_text( ),
+                                              sizing_mode='stretch_width'
                                       ),
-                                  ),
-                                  self._fig['spectra'] if self._fig['spectra'] else Div( ),
-                                  self._fig['convergence'],
-                                  Spacer(width=380, height=40, sizing_mode='scale_width'),
-                                  self._status['log'] )
+                                      Spacer(width=5,height=5,sizing_mode='fixed'),
+                                      column(
+                                          row(
+                                              column (
+                                                  row( self._control['clean']['stop'],
+                                                       self._control['clean']['continue'],
+                                                       self._control['clean']['finish'] ),
+                                                  row( self._control['nmajor'],
+                                                       self._control['niter'],
+                                                       self._control['threshold'] )
+                                              ),
+                                              Div( style={ 'border-left': "2px solid red",
+                                                           'height': "110px" } ),
+                                              column ( self._control['cycleniter'],
+                                                       self._control['cycle_factor'] )
+                                          ),
+                                          row( self._fig['slider'], self._control['goto'] ) if self._fig['slider'] else Div( ),
+                                          row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
+                                          self._cube.statistics( sizing_mode = "stretch_width" ),
+                                          width_policy='fixed'
+                                      ),
+                                      sizing_mode='stretch_width' ),
+                                  self._spec_conv_tabs if self._spec_conv_tabs else self._fig['convergence'],
+                                  self._status['log'],
+                                  sizing_mode='stretch_both'
+                              )
 
         self._cube.connect( )
+
         # Change display type depending on runtime environment
         if self._is_notebook:
             output_notebook()
