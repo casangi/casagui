@@ -469,7 +469,7 @@ class InteractiveClean:
                                                cyclefactor.disabled = false
                                                btns['stop'].disabled = false
                                                if ( slider ) slider.disabled = false
-                                               if ( go_to ) go_to.disabled = true
+                                               if ( go_to ) go_to.disabled = false
                                                image_fig.disabled = false
                                                if ( spectra_fig ) spectra_fig.disabled = false
                                                if ( ! only_stop ) {
@@ -660,22 +660,22 @@ class InteractiveClean:
                 err, stopcode, majordone, self._convergence_data = await self._clean.__anext__( )
 
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or err:
-                    return dict( result='error', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='error', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, majordone=majordone, error=err )
                 if len(self._convergence_data['chan']) == 0:
-                    return dict( result='no-action', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='no-action', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, iterdone=0, majordone=majordone, error=err )
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                                  majordone=majordone, error=err )
                 else:
-                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                                  convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                                  majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
 
-                return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p style="width:790px">{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
                              convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                              majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
             elif msg['action'] == 'stop':

@@ -218,13 +218,45 @@ class DataPipe(DataSource):
                             raise RuntimeError(f'incoming js request with no callback: {msg}')
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
                         if inspect.isawaitable(result):
-                            await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                     #'message': pack_arrays(await result),
-                                                                     'message': pack_arrays(await result),
-                                                                     'direction': msg['direction'] }))
+                            return_message = pack_arrays(await result)
+                            try:
+                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                         #'message': pack_arrays(await result),
+                                                                         'message': return_message,
+                                                                         'direction': msg['direction'] }))
+                            except Exception as e:
+                                print('************************************************************************************************************************')
+                                print( 'EXCEPTION ENCOUNTERED <1>' )
+                                print( str(e) )
+                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
+                                print( msg )
+                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
+                                print( return_message )
+                                print('************************************************************************************************************************')
+                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                         'message': { 'error': "exception encountered",
+                                                                                      'errant': str(return_message),
+                                                                                      'exception': str(e) },
+                                                                         'direction': str(msg['direction']) }))
                         else:
-                            await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                     'message': pack_arrays(result),
-                                                                     'direction': msg['direction'] }))
+                            return_message = pack_arrays(result)
+                            try:
+                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                         'message': return_message,
+                                                                         'direction': msg['direction'] }))
+                            except Exception as e:
+                                print('************************************************************************************************************************')
+                                print( 'EXCEPTION ENCOUNTERED <2>' )
+                                print( str(e) )
+                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
+                                print( msg )
+                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
+                                print( return_message )
+                                print('************************************************************************************************************************')
+                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
+                                                                         'message': { 'error': "exception encountered",
+                                                                                      'errant': str(return_message),
+                                                                                      'exception': str(e) },
+                                                                         'direction': str(msg['direction']) }))
         finally:
             self.__websocket = None
