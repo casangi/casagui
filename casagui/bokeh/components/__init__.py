@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2021,2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -26,8 +26,4 @@
 #
 ########################################################################
 '''Custom Bokeh GUI Components'''
-
-from ._iclean_slider import ICleanSlider
-from ._svg_icon import SVGIcon
-from ._iclean_button import ICleanButton
-from ._button_group import ICleanButtonGroup
+from ._svg_icon import svg_icon
