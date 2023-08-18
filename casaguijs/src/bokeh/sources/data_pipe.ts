@@ -1,7 +1,9 @@
 import { DataSource } from "@bokehjs/models/sources/data_source"
 import * as p from "@bokehjs/core/properties"
-import { is_NDArray_ref, decode_NDArray } from "@bokehjs/core/util/serialization"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
+
+// @ts-ignore: unused symbols due to ctor being commented out because properties are no longer initialized BEFORE the constructor is called
+import { is_NDArray_ref, decode_NDArray } from "../../util/serialization"
 
 // global object_id function supplied by casalib
 declare var object_id: ( obj: { [key: string]: any } ) => string
@@ -20,7 +22,7 @@ export namespace DataPipe {
     export type Attrs = p.AttrsOf<Props>
 
     export type Props = DataSource.Props & {
-        init_script: p.Property<CallbackLike0<DataSource> | null>;
+        init_script: p.Property<CallbackLike0<DataPipe> | null>;
         address: p.Property<[string,number]>
     }
 }
@@ -28,7 +30,9 @@ export namespace DataPipe {
 export interface DataPipe extends DataPipe.Attrs {}
 
 export class DataPipe extends DataSource {
-    properties: DataPipe.Props
+    declare properties: DataPipe.Props
+
+    static __module__ = "casagui.bokeh.sources._data_pipe"
 
     websocket: any
     // used to queue up messages sent to a particular id which already has outstanding
@@ -42,6 +46,7 @@ export class DataPipe extends DataSource {
 
     constructor(attrs?: Partial<DataPipe.Attrs>) {
         super(attrs);
+/************************************************************************************************************************
         let ws_address = `ws://${this.address[0]}:${this.address[1]}`
         console.log( "datapipe url:", ws_address )
 
@@ -150,6 +155,7 @@ export class DataPipe extends DataSource {
             }
         }
         connect_to_server( )
+************************************************************************************************************************/
     }
     initialize(): void {
         super.initialize();
@@ -213,10 +219,10 @@ export class DataPipe extends DataSource {
         }
     }
 
-    static init_DataPipe( ): void {
-        this.define<DataPipe.Props>(({ Tuple, String, Number, Any }) => ({
-            init_script: [ Any ],
-            address: [Tuple(String,Number)],
-        }));
+    static {
+        this.define<DataPipe.Props>(({ Any, Tuple, String, Number }) => ({
+            init_script: [ Any, null ],
+            address: [Tuple(String,Number)]
+        }))
     }
 }

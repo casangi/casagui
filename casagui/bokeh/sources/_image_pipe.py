@@ -37,6 +37,7 @@ from . import DataPipe
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
+from ..state import casalib_url, casaguijs_url
 
 import numpy as np
 try:
@@ -78,7 +79,7 @@ class ImagePipe(DataPipe):
     dataid = String( )
     fits_header_json = Nullable( String, help="""JSON representation of image FITS header for world coordinate labeling""" )
 
-    __implementation__ = TypeScript( "" )
+    __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
     def __open_image( self, image ):
         if self.__img is not None:
@@ -296,7 +297,7 @@ class ImagePipe(DataPipe):
         ### should return spectral freq etc.
         ### here for X rather than just the index
         try:
-            return { 'x': range(len(result)), 'y': list(result) }
+            return { 'x': list(range(len(result))), 'y': list(result) }
         except Exception:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is

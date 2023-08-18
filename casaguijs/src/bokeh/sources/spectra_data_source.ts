@@ -21,6 +21,8 @@ export class SpectraDataSource extends ColumnDataSource {
 
     imid: string
 
+    static __module__ = "casagui.bokeh.sources._spectra_data_source"
+
     constructor(attrs?: Partial<SpectraDataSource.Attrs>) {
         super(attrs);
         this.imid = uuid4( )
@@ -36,7 +38,8 @@ export class SpectraDataSource extends ColumnDataSource {
         // index values for this.imid if there have been no updates yet...
         this.image_source.refresh( (data: any) => this.data = data.spectrum, this.imid, [ 0, 0, 0 ] )
     }
-    static init_SpectraDataSource( ): void {
+
+    static {
         this.define<SpectraDataSource.Props>(({ Ref }) => ({
             image_source: [ Ref(ImagePipe) ],
         }));

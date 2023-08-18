@@ -46,7 +46,7 @@ from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.state import initialize_bokeh
-from casagui.bokeh.components import SVGIcon
+from casagui.bokeh.components import svg_icon
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
 
 from ..bokeh.state import available_palettes, find_palette, default_palette
@@ -894,7 +894,7 @@ class CubeMask:
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
-            self._image = set_attributes( figure( plot_height=400, plot_width=400, output_backend="webgl",
+            self._image = set_attributes( figure( height=400, width=400, output_backend="webgl",
                                                   tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",
                                                           "save","reset" ],
                                                   tooltips=None ), **kw )
@@ -994,7 +994,7 @@ class CubeMask:
 
             self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
 
-            self._spectra = set_attributes( figure( plot_height=180, plot_width=800,
+            self._spectra = set_attributes( figure( height=180, width=800,
                                                     title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
             self._spectra.add_layout(self._sp_span)
 
@@ -1459,7 +1459,7 @@ class CubeMask:
         '''
         if self._help_button is None:
             self._help_button = set_attributes( Button( label="", max_width=35, max_height=35, name='help',
-                                                        icon=SVGIcon(icon_name='help', size=1.4) ), **kw )
+                                                        icon=svg_icon(icon_name='help', size=25) ), **kw )
             self._help_button.js_on_click( CustomJS( args=dict( text=self.__help_string( ) ),
                                                      code='''const wnd = window.open("about:blank","Interactive Clean Help")
                                                              wnd.document.write(text)''' ) )

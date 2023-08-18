@@ -35,9 +35,7 @@ import websockets
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
-from bokeh.models.widgets import Panel, Tabs
-###  Bokeh > 3.0
-#from bokeh.models import TabPanel, Tabs
+from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer, layout
 from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
@@ -65,7 +63,7 @@ except:
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask
-from casagui.bokeh.components import SVGIcon
+from casagui.bokeh.components import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
 
@@ -747,7 +745,7 @@ class InteractiveClean:
                     </div>'''
 
         hover = HoverTool( tooltips=TOOLTIPS )
-        self._fig['convergence'] = figure( plot_height=180, plot_width=450, tools=[ hover ], title='Convergence',
+        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ], title='Convergence',
                                            x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual' )
 
         self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
@@ -772,11 +770,11 @@ class InteractiveClean:
         cheight = 50
         self._control['clean'] = { }
         self._control['clean']['continue'] = Button( label="", max_width=cwidth, max_height=cheight, name='continue',
-                                                     icon=SVGIcon(icon_name="iclean-continue", size=2.5) )
+                                                     icon=svg_icon(icon_name="iclean-continue", size=25) )
         self._control['clean']['finish'] = Button( label="", max_width=cwidth, max_height=cheight, name='finish',
-                                                   icon=SVGIcon(icon_name="iclean-finish", size=2.5) )
+                                                   icon=svg_icon(icon_name="iclean-finish", size=25) )
         self._control['clean']['stop'] = Button( label="", button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
-                                                 icon=SVGIcon(icon_name="iclean-stop", size=2.5) )
+                                                 icon=svg_icon(icon_name="iclean-stop", size=25) )
         self._control['nmajor'] = TextInput( title='nmajor', value="%s" % self._params['nmajor'], width=90 )
         self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
@@ -790,7 +788,7 @@ class InteractiveClean:
         if image_channels > 1:
             self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
             self._fig['slider'] = self._cube.slider( )
-            self._fig['spectra'] = self._cube.spectra( plot_width=450 )
+            self._fig['spectra'] = self._cube.spectra( width=450 )
 
             self._fig['slider'].js_on_change( 'value',
                                               CustomJS( args=dict( flux_src=self._flux_data,
@@ -944,8 +942,8 @@ class InteractiveClean:
         ###
         self._spec_conv_tabs = None
         if self._fig['spectra']:
-            self._spec_conv_tabs = Tabs( tabs=[ Panel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
-                                                Panel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
+            self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
+                                                TabPanel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
 
         self._fig['layout'] = column(
@@ -972,7 +970,7 @@ class InteractiveClean:
                                                        self._control['niter'],
                                                        self._control['threshold'] )
                                               ),
-                                              Div( style={ 'border-left': "2px solid red",
+                                              Div( styles={ 'border-left': "2px solid red",
                                                            'height': "110px" } ),
                                               column ( self._control['cycleniter'],
                                                        self._control['cycle_factor'] )

@@ -22,10 +22,12 @@ export namespace WcsTicks {
 export interface WcsTicks extends WcsTicks.Attrs {}
 
 export class WcsTicks extends TickFormatter {
-    properties: WcsTicks.Props
+    declare properties: WcsTicks.Props
 
     _axis: string | null = null
     _coord: string = "world"
+
+    static __module__ = "casagui.bokeh.format._wcs_ticks"
 
     constructor(attrs?: Partial<WcsTicks.Attrs>) {
         super(attrs);
@@ -81,7 +83,7 @@ export class WcsTicks extends TickFormatter {
         return this._coord
     }
 
-    static init_WcsTicks( ): void {
+    static {
         this.define<WcsTicks.Props>(({ Ref, String }) => ({
             axis: [ String ],
             image_source: [ Ref(ImageDataSource) ],

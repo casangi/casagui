@@ -32,6 +32,7 @@ from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance, Tuple, Int, Nullable
 from bokeh.models.callbacks import Callback
 from ._image_pipe import ImagePipe
+from ..state import casalib_url, casaguijs_url
 
 class ImageDataSource(ColumnDataSource):
     """Implementation of a ``ColumnDataSource`` customized for planes from
@@ -53,7 +54,7 @@ class ImageDataSource(ColumnDataSource):
     num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
     cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
 
-    __implementation__ = TypeScript("")
+    __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )

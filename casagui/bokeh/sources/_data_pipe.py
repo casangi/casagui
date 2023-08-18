@@ -41,6 +41,7 @@ from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
 
 from ...utils import pack_arrays
+from ..state import casalib_url, casaguijs_url
 
 class DataPipe(DataSource):
     """This class allows for communication between Python and the JavaScript implementation
@@ -68,7 +69,7 @@ class DataPipe(DataSource):
 
     address = Tuple( String, Int, help="two integer sequence representing the address and port to use for the websocket" )
 
-    __implementation__ = TypeScript( "" )
+    __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
     def __init__( self, *args, abort=None, **kwargs ):
         super( ).__init__( *args, **kwargs )

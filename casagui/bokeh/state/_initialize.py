@@ -93,7 +93,19 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0, css=[ ] ):
 
     if initialize_bokeh.initialized:
         ### only initialize once...
+
         return
+
+
+    initialize_bokeh.initialized = True
+    resources.Resources._old_js_files = resources.Resources.js_files
+    def js_files( self ):
+        orig_result = resources.Resources._old_js_files.fget(self)
+        return [x for x in orig_result if not x.endswith('casaguijs.min.js')] + [x for x in orig_result if x.endswith('casaguijs.min.js')]
+        return self._old_js_files( )
+
+    resources.Resources.js_files = property(js_files)
+    return
 
     ###
     ### if no network is available, substitute local JavaScript libraries
@@ -180,11 +192,11 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0, css=[ ] ):
     ### substitute our function for the Bokeh function that retrieves
     ### the security hashes for the javascript files...
     ###
-    resources.JSResources._old_hashes = resources.JSResources.hashes     # pylint: disable=protected-access
-                                                                         # could find no other way to add our library
-                                                                         # to the libraries loaded by Bokeh; maintainers
-                                                                         # had no solutions to offer, see:
-                                                                         # https://discourse.bokeh.org/t/pre-built-extensions-without-bokeh-server/7992
+#   resources.JS_RESOURCES._old_hashes = resources.JS_RESOURCES.hashes     # pylint: disable=protected-access
+#                                                                        # could find no other way to add our library
+#                                                                        # to the libraries loaded by Bokeh; maintainers
+#                                                                        # had no solutions to offer, see:
+#                                                                        # https://discourse.bokeh.org/t/pre-built-extensions-without-bokeh-server/7992
     def hashes( self ):
         result = self._old_hashes                                        # pylint: disable=protected-access
         if bokehlib is not None and bokehlib in library_hashes:
@@ -197,7 +209,7 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0, css=[ ] ):
     ### substitute our function for the Bokeh function that retrieves
     ### the javascript files...
     ###
-    resources.JSResources._old_js_files = resources.JSResources.js_files # pylint: disable=protected-access
+#   resources.JS_RESOURCES._old_js_files = resources.JS_RESOURCES.js_files # pylint: disable=protected-access
     def js_files( self ):
         if initialize_bokeh.do_local_subst:
             result = [ ]
@@ -222,14 +234,14 @@ def initialize_bokeh( js=None, bokeh=None, bokeh_dev=0, css=[ ] ):
 
         return result
 
-    resources.JSResources.hashes = property(hashes)
-    resources.JSResources.js_files = property(js_files)
-    resources.CSSResources._old_css_raw = resources.CSSResources.css_raw
+    resources.JS_RESOURCES.hashes = property(hashes)
+    resources.JS_RESOURCES.js_files = property(js_files)
+#   resources.CSS_RESOURCES._old_css_raw = resources.CSS_RESOURCES.css_raw
     def css_function( self ):
         result = self._old_css_raw + casa_css + css
         return result
 
 
-    resources.CSSResources.css_raw = property(css_function)
+    resources.CSS_RESOURCES.css_raw = property(css_function)
 
     initialize_bokeh.initialized = True

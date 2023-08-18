@@ -11,7 +11,7 @@ export namespace ImageDataSource {
   export type Attrs = p.AttrsOf<Props>
 
   export type Props = ColumnDataSource.Props & {
-      init_script: p.Property<CallbackLike0<ColumnDataSource> | null>;
+      init_script: p.Property<CallbackLike0<ImageDataSource> | null>;
       image_source: p.Property<ImagePipe>
       num_chans: p.Property<[Number,Number]>          // [ stokes, spectral ]
       cur_chan:  p.Property<[Number,Number]>          // [ stokes, spectral ]
@@ -21,9 +21,11 @@ export namespace ImageDataSource {
 export interface ImageDataSource extends ImageDataSource.Attrs {}
 
 export class ImageDataSource extends ColumnDataSource {
-    properties: ImageDataSource.Props
+    declare properties: ImageDataSource.Props
 
     imid: string
+
+    static __module__ = "casagui.bokeh.sources._image_data_source"
 
     constructor(attrs?: Partial<ImageDataSource.Attrs>) {
         super(attrs);
@@ -64,9 +66,9 @@ export class ImageDataSource extends ColumnDataSource {
         return this.image_source.wcs( )
     }
 
-    static init_ImageDataSource( ): void {
+    static {
         this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
-            init_script: [ Any ],
+            init_script: [ Any, null ],
             image_source: [ Ref(ImagePipe) ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],

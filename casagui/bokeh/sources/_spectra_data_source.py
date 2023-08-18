@@ -31,6 +31,7 @@ from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance
 from . import ImagePipe
+from ..state import casalib_url, casaguijs_url
 
 
 class SpectraDataSource(ColumnDataSource):
@@ -47,7 +48,7 @@ class SpectraDataSource(ColumnDataSource):
 
     image_source = Instance(ImagePipe)
 
-    __implementation__ = TypeScript("")
+    __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )

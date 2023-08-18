@@ -29,6 +29,7 @@ from bokeh.models import TickFormatter
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance, String
 from casagui.bokeh.sources import ImageDataSource
+from ..state import casalib_url, casaguijs_url
 
 class WcsTicks(TickFormatter):
 
@@ -38,7 +39,7 @@ class WcsTicks(TickFormatter):
     ## source containing the WCS information
     image_source = Instance(ImageDataSource)
 
-    __implementation__ = TypeScript("")
+    __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )

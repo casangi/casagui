@@ -33,7 +33,7 @@ from bokeh.layouts import row, column
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS
 from casagui.toolbox import CubeMask
-from casagui.bokeh.components import SVGIcon
+from casagui.bokeh.components import svg_icon
 from bokeh.io import reset_output as reset_bokeh_output
 from ..utils import resource_manager, reset_resource_manager
 
@@ -104,9 +104,9 @@ class MakeMask:
         width = 35
         height = 35
         self._done = Button( label="", button_type="danger", max_width=width, max_height=height, name='done',
-                             icon=SVGIcon(icon_name='makemask-done', size=1.4) )
+                             icon=svg_icon(icon_name='makemask-done', size=14) )
         self._help = Button( label="", max_width=width, max_height=height, name='help',
-                             icon=SVGIcon(icon_name='help', size=1.4) )
+                             icon=svg_icon(icon_name='help', size=14) )
 
         ### CubeMask provides a help table
         self._help_text = self._cube.help( rows=[ '<tr><td><i>red check button</i></td><td>clicking the red check button will close the dialog and return masks to python</td></tr>' ] )

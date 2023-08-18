@@ -27,17 +27,20 @@ export namespace ImagePipe {
 export interface ImagePipe extends ImagePipe.Attrs {}
 
 export class ImagePipe extends DataPipe {
-    properties: ImagePipe.Props
+    declare properties: ImagePipe.Props
+
+    static __module__ = "casagui.bokeh.sources._image_pipe"
 
     position: {[key: string]: any} = { }
     _wcs: {[key: string]: any} | null = null
 
-
     constructor(attrs?: Partial<ImagePipe.Attrs>) {
         super(attrs)
+/************************************************************************************************************************
         if ( this.fits_header_json ) {
             this._wcs = new window.coordtxl.WCSTransform( new window.coordtxl.MapKeywordProvider(JSON.parse(this.fits_header_json)) )
         }
+************************************************************************************************************************/
     }
 
     // fetch channel
@@ -74,11 +77,11 @@ export class ImagePipe extends DataPipe {
         return this._wcs
     }
 
-    static init_ImagePipe( ): void {
-        this.define<ImagePipe.Props>(({ String, Tuple, Number }) => ({
+    static {
+        this.define<ImagePipe.Props>(({Number, Nullable, String, Tuple }) => ({
             dataid: [ String ],
-            shape: [Tuple(Number,Number,Number,Number)],
-            fits_header_json: [ String ]
+            shape: [ Tuple(Number,Number,Number,Number) ],
+            fits_header_json: [ Nullable(String), null ]
         }));
     }
 }

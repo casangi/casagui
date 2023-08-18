@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022
+# Copyright (C) 2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,10 +25,24 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''Bokeh state management functions (both within the Bokeh distribution
-and with the Bokeh extensions found in ``casagui.bokeh``.'''
+'''This contains functions which return the URLs to the ``casagui``
+JavaScript libraries. The ``casalib`` library has Bokeh independent
+functions while the `casaguijs` library has the Bokeh extensions'''
+from ...utils import static_vars
+from os import path
 
-from ._initialize import initialize_bokeh
-from ._session import setup_session as initialize_session
-from ._palette import available_palettes, find_palette, default_palette
-from ._javascript import casalib_url, casaguijs_url
+@static_vars( library_path=None )
+def casalib_url( ):
+    if casalib_url.library_path is None:
+        casalib_url.library_path = path.join(path.dirname(path.dirname(path.dirname(__file__))), '__js__', 'casalib.min.js')
+    if not path.isfile(casalib_url.library_path):
+        raise RuntimeError( f''''casalib' JavaScript library not found at '{casalib_url.library_path}\'''' )
+    return f'''file://{casalib_url.library_path}'''
+
+@static_vars( library_path=None )
+def casaguijs_url( ):
+    if casaguijs_url.library_path is None:
+        casaguijs_url.library_path = path.join(path.dirname(path.dirname(path.dirname(__file__))), '__js__', 'casaguijs.min.js')
+    if not path.isfile(casaguijs_url.library_path):
+        raise RuntimeError( f''''casaguijs' JavaScript library not found at '{casaguijs_url.library_path}\'''' )
+    return f'''file://{casaguijs_url.library_path}'''
