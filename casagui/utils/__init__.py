@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2021,2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -55,44 +55,9 @@ except ImportError:
 logger = get_logger()
 
 from ._conversion import pack_arrays
-
-def static_vars(**kwargs):
-    '''Initialize static function variables to for use within a function.
-
-    This function is used as a decorator which allows for the initialization of
-    static local variables for use within a function. It is used like:
-
-            @static_vars(counter=0)
-            def foo():
-                foo.counter += 1
-                print "Counter is %d" % foo.counter
-
-    This is used from:
-    https://stackoverflow.com/questions/279561/what-is-the-python-equivalent-of-static-variables-inside-a-function?rq=1
-
-    Parameters
-    ----------
-    Initialized static local variables.
-    '''
-
-    def decorate(func):
-        for k, v in kwargs.items():
-            setattr(func, k, v)
-        return func
-
-    return decorate
-
-
-def static_dir(func):
-    '''return a list of static variables associated with ``func``
-
-    Parameters
-    ----------
-    func: function
-        function with static variables
-    '''
-    return [a for a in dir(func) if a[0] != '_']
-
+from ._conversion import strip_arrays
+from ._conversion import serialize, deserialize
+from ._static import static_vars, static_dir
 
 @static_vars(mgr=None)
 def resource_manager( ):

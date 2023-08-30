@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2021,2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -49,7 +49,7 @@ except:
     from casagui.utils import warn_import
     warn_import('casatools')
 
-from ...utils import pack_arrays, partition, resource_manager
+from ...utils import pack_arrays, partition, resource_manager, strip_arrays
 
 class ImagePipe(DataPipe):
     """The `ImagePipe` allows for updates to Bokeh plots from a CASA or CNGI
@@ -117,6 +117,11 @@ class ImagePipe(DataPipe):
         if self.__img is not None and all(self.__img.shape( ) != mskshape):
             raise RuntimeError(f'mismatch between image shape ({self.__img.shape( )}) and mask shape ({mskshape})')
         if self.__chan_shape is None: self.__chan_shape = list(mskshape[0:2])
+
+    def __close_mask( self ):
+        if self.__msk is not None:
+            self.__msk.close( )
+            self.__msk = None
 
     def pixel_value( self, chan, index ):
         channel = self.__get_chan(chan)
@@ -253,6 +258,10 @@ class ImagePipe(DataPipe):
                  np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
                                                 trc=self.__chan_shape + index) ) )
 
+    def set_mask_name( self, new_mask_path ):
+        self.__close_mask( )
+        self.__open_mask( new_mask_path )
+
     def put_mask( self, index, mask ):
         """Replace one channel mask with the mask specified as the second parameter.
         The `index` should be a two element list of integers. The first integer is the
@@ -346,7 +355,7 @@ class ImagePipe(DataPipe):
         if not self.fits_header_json:
             __hdr_dict = self.__img.fitsheader(exclude="HISTORY")
             if __hdr_dict:
-                self.fits_header_json = json.dumps(pack_arrays(__hdr_dict), ensure_ascii=True)
+                self.fits_header_json = json.dumps(strip_arrays(__hdr_dict))
         self.__session = None
         self.__stokes_labels = None
         self.__mask_statistics = False

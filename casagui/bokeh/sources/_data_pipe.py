@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021, 2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -33,14 +33,13 @@ with CASA images but ``DataPipe`` can have generic messages.'''
 import inspect
 import threading
 import asyncio
-import json
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
 
-from ...utils import pack_arrays
+from ...utils import serialize, deserialize
 from ..state import casalib_url, casaguijs_url
 
 class DataPipe(DataSource):
@@ -150,7 +149,7 @@ class DataPipe(DataSource):
         """
         with self.__lock:
             if self.__websocket is not None:
-                msg = { 'id': ident, 'message': pack_arrays(message), 'direction': 'p2j' }
+                msg = { 'id': ident, 'message': message, 'direction': 'p2j' }
                 if ident in self.__pending:
                     self.__enqueue_send( ident, msg, callback )
                 else:
@@ -158,10 +157,10 @@ class DataPipe(DataSource):
                         self.__enqueue_send( ident, msg, callback )
                         existing = self.__dequeue_send(ident)
                         self.__put_pending(ident, existing['cb'])
-                        await self.__websocket.send(json.dumps( existing['msg'] ))
+                        await self.__websocket.send(serialize( existing['msg'] ))
                     else:
                         await self.__put_pending(ident, callback)
-                        await self.__websocket.send(json.dumps( msg ))
+                        await self.__websocket.send(serialize( msg ))
 
     async def process_messages( self, websocket ):
         """Process messages related to image display updates.
@@ -176,7 +175,7 @@ class DataPipe(DataSource):
         try:
             self.__websocket = websocket
             async for message in websocket:
-                msg = json.loads(message)
+                msg = deserialize(message)
                 if 'session' not in msg:
                     await self.__websocket.close( )
                     err = RuntimeError(f'session not in: {msg}')
@@ -204,7 +203,7 @@ class DataPipe(DataSource):
                         cb = self.__get_pending(msg['id'])
                         outgo = self.__dequeue_send(msg['id'])
                         if outgo is not None:
-                            await websocket.send(json.dumps(outgo['msg']))
+                            await websocket.send(serialize(outgo['msg']))
                             self.__put_pending(msg['id'],outgo['cb'])
                         if cb is not None:
                             if inspect.isawaitable(cb):
@@ -219,45 +218,33 @@ class DataPipe(DataSource):
                             raise RuntimeError(f'incoming js request with no callback: {msg}')
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
                         if inspect.isawaitable(result):
-                            return_message = pack_arrays(await result)
                             try:
-                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                         #'message': pack_arrays(await result),
-                                                                         'message': return_message,
-                                                                         'direction': msg['direction'] }))
+                                return_message = await result
+                                await self.__websocket.send( serialize( { 'id': msg['id'],
+                                                                          'message': return_message,
+                                                                          'direction': msg['direction'] } ) )
                             except Exception as e:
                                 print('************************************************************************************************************************')
-                                print( 'EXCEPTION ENCOUNTERED <1>' )
-                                print( str(e) )
-                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
-                                print( msg )
-                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
-                                print( return_message )
+                                print( f'''EXCEPTION ENCOUNTERED: {repr(e)}''' )
                                 print('************************************************************************************************************************')
-                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                         'message': { 'error': "exception encountered",
-                                                                                      'errant': str(return_message),
-                                                                                      'exception': str(e) },
-                                                                         'direction': str(msg['direction']) }))
+                                await self.__websocket.send( serialize( { 'id': msg['id'],
+                                                                          'message': { 'error': "exception encountered",
+                                                                                       'errant': str(return_message),
+                                                                                       'exception': repr(e) },
+                                                                          'direction': str(msg['direction']) } ) )
                         else:
-                            return_message = pack_arrays(result)
                             try:
-                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                         'message': return_message,
-                                                                         'direction': msg['direction'] }))
+                                await self.__websocket.send( serialize( { 'id': msg['id'],
+                                                                          'message': result,
+                                                                          'direction': msg['direction'] } ) )
                             except Exception as e:
                                 print('************************************************************************************************************************')
-                                print( 'EXCEPTION ENCOUNTERED <2>' )
-                                print( str(e) )
-                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
-                                print( msg )
-                                print('---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----')
-                                print( return_message )
+                                print( f'''EXCEPTION ENCOUNTERED: {repr(e)}''' )
                                 print('************************************************************************************************************************')
-                                await self.__websocket.send(json.dumps({ 'id': msg['id'],
-                                                                         'message': { 'error': "exception encountered",
-                                                                                      'errant': str(return_message),
-                                                                                      'exception': str(e) },
-                                                                         'direction': str(msg['direction']) }))
+                                await self.__websocket.send( serialize( { 'id': msg['id'],
+                                                                          'message': { 'error': "exception encountered",
+                                                                                       'errant': str(result),
+                                                                                       'exception': repr(e) },
+                                                                          'direction': str(msg['direction']) } ) )
         finally:
             self.__websocket = None

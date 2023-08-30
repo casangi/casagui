@@ -1,7 +1,7 @@
 ########################################################################3
 #  _gclean.py
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2021,2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -29,10 +29,16 @@ import os
 import asyncio
 from functools import reduce
 import copy
+import shutil
+import subprocess
 
+###
+### import check versions
+###
 _GCV001 = True
 _GCV002 = True
 _GCV003 = True
+_GCV004 = True
 
 # from casatasks.private.imagerhelpers._gclean import gclean
 class gclean:
@@ -73,6 +79,7 @@ class gclean:
         else:
             parameters = arg_s + kw_s
         self._exe_cmds.append( "tclean( %s )" % parameters )
+        self._exe_cmds_per_iter[-1] += 1
         return tclean( *args, **kwargs )
 
     def _deconvolve( self, *args, **kwargs ):
@@ -87,11 +94,41 @@ class gclean:
         else:
             parameters = arg_s + kw_s
         self._exe_cmds.append( "deconvolve( %s )" % parameters )
+        self._exe_cmds_per_iter[-1] += 1
         return deconvolve( *args, **kwargs )
 
-    def cmds( self ):
-        """ Returns the history of all tclean calls for this instance. """
-        return self._exe_cmds
+    def __rename_mask( self, new_mask_path ):
+        self.__validate_mask( new_mask_path )
+        if os.path.exists( new_mask_path ):
+            raise RuntimeError( f'''new mask path already exists: {new_mask_path}''' )
+        if self._mask != '':
+            raise RuntimeError( f'''internal error, mask should not be renamed when it has been supplied by the user: {self._mask}''' )
+        if self._effective_mask == '':
+            dm = self.__default_mask_name( )
+            if not os.path.exists(dm):
+                raise RuntimeError( 'no existing mask found, cannot rename' )
+            self._effective_mask = dm
+        if not os.path.isdir(self._effective_mask):
+            raise RuntimeError( f'''existing mask path does not exist or is not a directory: {self._effective_mask}''' )
+        os.rename( self._effective_mask, new_mask_path )
+        if not os.path.isdir(new_mask_path):
+            raise RuntimeError( f'''rename of {self._effective_mask} to {new_mask_path} failed''' )
+        self._exe_cmds.append( f'''os.rename( {repr(self._effective_mask)}, {repr(new_mask_path)} )''' )
+        self._exe_cmds_per_iter[-1] += 1
+        self._effective_mask = new_mask_path
+
+    def _remove_tree( self, directory ):
+        if os.path.isdir(directory):
+            shutil.rmtree(directory)
+            self._exe_cmds.append( f'''shutil.rmtree( {repr(directory)} )''' )
+            self._exe_cmds_per_iter[-1] += 1
+
+    def cmds( self, history=False ):
+        """ Returns the history of all tclean calls for this instance. If ``history``
+        is set to True then the full history will be returned, otherwise the commands
+        executed for generating the latest result are returned.
+        """
+        return self._exe_cmds if history else self._exe_cmds[-self._exe_cmds_per_iter[-1]:]
 
     def update( self, msg ):
         """ Interactive clean parameters update.
@@ -116,17 +153,23 @@ class gclean:
                 self._cyclefactor = int(msg['cyclefactor'])
             except ValueError:
                 pass
-        if 'mask' in msg:
-            self._mask = msg['mask']
+        if 'mask' in msg and not os.path.exists( self._effective_mask ):
+            ###
+            ### the assumption here is that if the _effective_mask exists in the filesystem then
+            ### we should not be getting masks provided from the GUI represented as region
+            ### specifications (instead the mask changes should be reflected in the mask cube
+            ### on disk).
+            ###
+            self._effective_mask = msg['mask']
 
     def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected',
-                  imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='', nchan=-1, start='', width='', outframe='LSRK',
-                  restfreq='', interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True,
-                  conjbeams=False, usepointing=False, pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0,
-                  cycleniter=-1, nmajor=1, cyclefactor=1.0, scales=[], restoringbeam='', pbcor=False, nterms=int(2), weighting='natural', robust=float(0.5),
-                  npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0, lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3,
-                  growiterations=75, dogrowprune=True, minpercentchange=-1.0, fastnoise=True, savemodel='none', usemask='user', mask='', parallel=False,
-                  history_filter=lambda index, arg, history_value: history_value ):
+                  imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='', nchan=-1, start='', width='',
+                  outframe='LSRK', veltype='radio', restfreq='', interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1),
+                  mosweight=True, psterm=False, wbawp=True, conjbeams=False, usepointing=False, pointingoffsetsigdev=[  ], pblimit=0.2, deconvolver='hogbom',
+                  smallscalebias=0.0, niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, nmajor=1, cyclefactor=1.0, scales=[], restoringbeam='', pbcor=False,
+                  nterms=int(2), weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
+                  lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0, fastnoise=True,
+                  savemodel='none', usemask='user', mask='', parallel=False, history_filter=lambda index, arg, history_value: history_value ):
         self._vis = vis
         self._imagename = imagename
         self._imsize = imsize
@@ -140,8 +183,9 @@ class gclean:
         self._start = start
         self._width = width
         self._outframe = outframe
-        self._interpolation = interpolation
+        self._veltype = veltype
         self._restfreq = restfreq
+        self._interpolation = interpolation
         self._perchanweightdensity = perchanweightdensity
         self._gridder = gridder
         self._wprojplanes = wprojplanes
@@ -153,6 +197,7 @@ class gclean:
         self._pointingoffsetsigdev = pointingoffsetsigdev
         self._pblimit = pblimit
         self._deconvolver = deconvolver
+        self._smallscalebias = smallscalebias
         self._niter = niter
         self._threshold = threshold
         self._cycleniter = cycleniter
@@ -164,6 +209,7 @@ class gclean:
         self._pbcor = pbcor
         self._nterms = nterms
         self._exe_cmds = [ ]
+        self._exe_cmds_per_iter = [ ]
         self._history_filter = history_filter
         self._finalized = False
         self._field = field
@@ -191,7 +237,30 @@ class gclean:
         self._savemodel = savemodel
         self._parallel = parallel
         self._usemask = usemask
+
+        ###
+        ### 'self._mask' always contains the mask as supplied by the user while 'self._effective_mask' is
+        ### the mask currently in play as interactive clean progresses. When the user has supplied a mask,
+        ### it should be the same as 'self._mask' but when the mask is managed internally by iclean/gclean
+        ### the two will diverge.
+        ###
         self._mask = mask
+
+        if self._mask != '':
+            ###
+            ### If the user supplies a mask that exists on disk, then we need to make sure it does not have
+            ### 'tclean's default name because 'tclean' will raise an exception. Further, we should not
+            ### modify this mask with the machinations we employ when "self._mask == ''"
+            ###
+            self.__validate_mask( self._mask )
+            self._effective_mask = self._mask
+        else:
+            ###
+            ### If the user supplies '' for the mask, then the mask name must be managed to prevent 'tclean'
+            ### from scribbling over our mask (if it were named '<imagename>.mask') while still using the
+            ### default mask created on the first run of 'tclean' for subsequent runs of 'tclean'.
+            ###
+            self._effective_mask = ''
 
         self._major_done = 0
         self._convergence_result = (None,None,None,{ 'chan': None, 'major': None })
@@ -307,33 +376,48 @@ class gclean:
             ### CALL SEQUENCE:
             ###       tclean(niter=0),deconvolve(niter=0),tclean(niter=100),deconvolve(niter=0),tclean(niter=100),tclean(niter=0,restoration=True)
             ###
+            self._exe_cmds_per_iter.append(0)
             if self._convergence_result[1] is None:
                 # initial call to tclean(...) creates the initial dirty image with niter=0
-                tclean_ret = self._tclean( vis=self._vis, mask=self._mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                tclean_ret = self._tclean( vis=self._vis, mask=self._effective_mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
                                            phasecenter=self._phasecenter, stokes=self._stokes, startmodel=self._startmodel, specmode=self._specmode,
                                            reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                            psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,
-                                           interpolation=self._interpolation, restfreq=self._restfreq, perchanweightdensity=self._perchanweightdensity,
-                                           nchan=self._nchan, start=self._start, width=self._width, outframe=self._outframe,
-                                           pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit, deconvolver=self._deconvolver,
-                                           cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam, pbcor=self._pbcor,
-                                           nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange, uvrange=self._uvrange,
-                                           antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
-                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels,
-                                           interactive=False, niter=1, gain=0.000001, calcres=True, restoration=False, parallel=self._parallel, fullsummary=True )
-                self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
+                                           interpolation=self._interpolation, perchanweightdensity=self._perchanweightdensity,
+                                           nchan=self._nchan, start=self._start, width=self._width, veltype=self._veltype, restfreq=self._restfreq,
+                                           outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
+                                           deconvolver=self._deconvolver, smallscalebias=self._smallscalebias, cyclefactor=self._cyclefactor,
+                                           scales=self._scales, restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms,
+                                           field=self._field, spw=self._spw, timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna,
+                                           scan=self._scan, observation=self._observation, intent=self._intent, datacolumn=self._datacolumn,
+                                           weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=False, niter=1,
+                                           gain=0.000001, calcres=True, restoration=False, parallel=self._parallel, fullsummary=True )
+                if self._mask == '':
+                    ### first time through the tclean generated mask is preserved as <imagename>.$pid.mask
+                    image_pieces = os.path.splitext(os.path.basename(self._imagename))
+                    self.__rename_mask( os.path.join( os.path.dirname(self._imagename), f'{image_pieces[0]}.{os.getpid()}.mask' ) )
+                self._deconvolve( imagename=self._imagename, mask=self._effective_mask, niter=0, usemask=self._usemask, restoration=False,
+                                  deconvolver=self._deconvolver )
+                ### tclean/deconvolve copies the user supplied mask
+                if self._mask == '':
+                    self._remove_tree(self.__default_mask_name( ))
                 self._major_done = 0
             else:
-                tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell, phasecenter=self._phasecenter,
-                                           stokes=self._stokes, specmode=self._specmode, reffreq=self._reffreq,
+                ### tclean/deconvolve copies the user supplied mask
+                if self._mask == '':
+                    self._remove_tree(self.__default_mask_name( ))
+                tclean_ret = self._tclean( vis=self._vis, mask=self._effective_mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+                                           phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode, reffreq=self._reffreq,
                                            gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight, psterm=self._psterm,
                                            wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing, interpolation=self._interpolation,
-                                           restfreq=self._restfreq, perchanweightdensity=self._perchanweightdensity, nchan=self._nchan, start=self._start,
-                                           width=self._width, outframe=self._outframe, pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit,
-                                           deconvolver=self._deconvolver, cyclefactor=self._cyclefactor, scales=self._scales, restoringbeam=self._restoringbeam,
-                                           pbcor=self._pbcor, nterms=self._nterms, field=self._field, spw=self._spw, timerange=self._timerange,
-                                           uvrange=self._uvrange, antenna=self._antenna, scan=self._scan, observation=self._observation, intent=self._intent,
-                                           datacolumn=self._datacolumn, weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=False,
+                                           perchanweightdensity=self._perchanweightdensity, nchan=self._nchan, start=self._start,
+                                           width=self._width, veltype=self._veltype, restfreq=self._restfreq, outframe=self._outframe,
+                                           pointingoffsetsigdev=self._pointingoffsetsigdev, pblimit=self._pblimit, deconvolver=self._deconvolver,
+                                           smallscalebias=self._smallscalebias, cyclefactor=self._cyclefactor, scales=self._scales,
+                                           restoringbeam=self._restoringbeam, pbcor=self._pbcor, nterms=self._nterms, field=self._field,
+                                           spw=self._spw, timerange=self._timerange, uvrange=self._uvrange, antenna=self._antenna,
+                                           scan=self._scan, observation=self._observation, intent=self._intent, datacolumn=self._datacolumn,
+                                           weighting=self._weighting, robust=self._robust, npixels=self._npixels, interactive=False,
                                            niter=self._niter, restart=True, calcpsf=False, calcres=False, restoration=False, threshold=self._threshold,
                                            nsigma=self._nsigma, cycleniter=self._cycleniter, nmajor=self._nmajor, gain=self._gain,
                                            sidelobethreshold=self._sidelobethreshold, noisethreshold=self._noisethreshold,
@@ -341,7 +425,14 @@ class gclean:
                                            minbeamfrac=self._minbeamfrac, growiterations=self._growiterations, dogrowprune=self._dogrowprune,
                                            minpercentchange=self._minpercentchange, fastnoise=self._fastnoise, savemodel=self._savemodel, maxpsffraction=1,
                                            minpsffraction=0, parallel=self._parallel, fullsummary=True )
-                self._deconvolve( imagename=self._imagename, niter=0, usemask=self._usemask, restoration=False, deconvolver=self._deconvolver )
+                ### tclean/deconvolve copies the user supplied mask
+                if self._mask == '':
+                    self._remove_tree(self.__default_mask_name( ))
+                self._deconvolve( imagename=self._imagename, niter=0, mask=self._effective_mask, usemask=self._usemask, restoration=False,
+                                  deconvolver=self._deconvolver )
+                ### tclean/deconvolve copies the user supplied mask
+                if self._mask == '':
+                    self._remove_tree(self.__default_mask_name( ))
                 self._major_done = tclean_ret['nmajordone'] if 'nmajordone' in tclean_ret else 0
 
             if len(tclean_ret) > 0 and 'summaryminor' in tclean_ret and sum(map(len,tclean_ret['summaryminor'].values())) > 0:
@@ -380,6 +471,20 @@ class gclean:
     def __aiter__( self ):
         return self
 
+    def __split_filename( self, path ):
+        return os.path.splitext(os.path.basename(path))
+
+    def __default_mask_name( self ):
+        imgparts = self.__split_filename( self._imagename )
+        return f'''{imgparts[0]}.mask'''
+
+    def __validate_mask( self, mask_path ):
+        if mask_path == self.__default_mask_name( ):
+            raise RuntimeError( f'''tclean does not support user supplied mask names like '<imagename>.mask': {mask_path}''' )
+
+    def mask(self):
+        return self.__default_mask_name if self._effective_mask == '' else self._effective_mask
+
     def reset(self):
         #if not self._finalized:
         #    raise RuntimeError('attempt to reset a gclean run that has not been finalized')
@@ -391,7 +496,7 @@ class gclean:
 
     def restore(self):
         """ Restores the final image, and returns a path to the restored image. """
-        tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, imsize=self._imsize, cell=self._cell,
+        tclean_ret = self._tclean( vis=self._vis, imagename=self._imagename, mask=self._effective_mask, imsize=self._imsize, cell=self._cell,
                                    phasecenter=self._phasecenter, stokes=self._stokes, specmode=self._specmode,
                                    reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, mosweight=self._mosweight,
                                    psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, usepointing=self._usepointing,

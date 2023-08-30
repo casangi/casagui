@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021
+# Copyright (C) 2021,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -28,9 +28,39 @@
 '''Contains for conversion of data passed between Python and JavaScript
 via websockets'''
 
+import json
 import numpy as np
-from ._serialization import transform_array
+from bokeh.util.serialization import transform_array
+from bokeh.core.serialization import Serializer, Deserializer
+from bokeh.core.json_encoder import serialize_json
+from ._static import static_vars
 
+def strip_arrays( val ):
+    '''convert all numpy arrays contained within val to lists
+    '''
+    if isinstance( val, dict ):
+        result = { }
+        for k, v in val.items( ):
+            result[k] = strip_arrays(v)
+        return result
+    if isinstance( val, np.ndarray ):
+        return val.tolist( )
+    if isinstance( val, range ):
+        return list(val)
+    return val
+
+@static_vars( encoder=Serializer(deferred=False) )
+def serialize( val ):
+    '''convert python values to a string that can be sent via websockets
+    '''
+    return serialize_json(serialize.encoder.serialize(val))
+
+@static_vars( decoder=Deserializer( ) )
+def deserialize( val ):
+    '''convert an encoded value received from websockets
+    '''
+    value = json.loads(val)
+    return deserialize.decoder.deserialize(value)
 
 def pack_arrays( val ):
     """Convert `numpy` N dimensional arrays stored within a dictionary to
@@ -54,7 +84,7 @@ def pack_arrays( val ):
             result[k] = pack_arrays(v)
         return result
     if isinstance( val, np.ndarray ):
-        return transform_array(val,force_list=True)
+        return transform_array(val)
     if isinstance( val, range ):
         return list(val)
     return val

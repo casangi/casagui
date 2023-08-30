@@ -1,9 +1,7 @@
 import { DataSource } from "@bokehjs/models/sources/data_source"
 import * as p from "@bokehjs/core/properties"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
-
-// @ts-ignore: unused symbols due to ctor being commented out because properties are no longer initialized BEFORE the constructor is called
-import { is_NDArray_ref, decode_NDArray } from "../../util/serialization"
+import { serialize, deserialize } from "../util/conversions"
 
 // global object_id function supplied by casalib
 declare var object_id: ( obj: { [key: string]: any } ) => string
@@ -46,7 +44,14 @@ export class DataPipe extends DataSource {
 
     constructor(attrs?: Partial<DataPipe.Attrs>) {
         super(attrs);
-/************************************************************************************************************************
+        /**********************************************************
+        *** With Bokeh 3.0 properties are no longer initialized ***
+        *** before the constructor is called...                 ***
+        **********************************************************/
+    }
+
+    initialize(): void {
+        super.initialize();
         let ws_address = `ws://${this.address[0]}:${this.address[1]}`
         console.log( "datapipe url:", ws_address )
 
@@ -66,28 +71,15 @@ export class DataPipe extends DataSource {
             }
 
             this.websocket.onmessage = (event: any) => {
-                //--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                // helper function
-                //--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                function expand_arrays(obj: any) {
-                    const res: any = Array.isArray(obj) ? new Array( ) : { }
-                    for (const key in obj) {
-                        let value = obj[key];
-                        if( is_NDArray_ref(value) ) {
-                            const buffers0 = new Map<string, ArrayBuffer>( )
-                            res[key] = decode_NDArray(value,buffers0)
-                        } else {
-                            res[key] = typeof value === 'object' && value !== null ? expand_arrays(value) : value
-                        }
-                    }
-                    return res
-                }
-                //--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                 if (typeof event.data === 'string' || event.data instanceof String) {
-                    let obj = JSON.parse( event.data )
-                    let data = expand_arrays( obj )
+                    let data = deserialize( event.data )
+                    // @ts-ignore: 'data' is of type 'unknown'
                     if ( 'id' in data && 'direction' in data && 'message' in data ) {
+                        // @ts-ignore: 'data' is of type 'unknown'
                         let { id, message, direction }: { id: string, message: any, direction: string} = data
+                        if ( typeof message  === 'undefined' ) {
+                            console.log( 'Error, event failure', data )
+                        }
                         if ( direction == 'j2p' ) {
                             if ( id in this.pending ) {
                                 let { cb }: { cb: (x:any) => any } = this.pending[id]
@@ -96,17 +88,20 @@ export class DataPipe extends DataSource {
                                     // send next message queued by 'id'
                                     let {cb, msg} = this.send_queue[id].shift( )
                                     this.pending[id] = { cb }
-                                    this.websocket.send(JSON.stringify(msg))
+                                    this.websocket.send(serialize(msg))
                                 }
-                                // post message
-                                cb( message )
+                                if ( typeof message === 'undefined' )
+                                    console.log( 'DROPPING ERROR FOR NOW (maybe need error callbacks)', data )
+                                else
+                                    // post message
+                                    cb( message )
                             } else {
                                 console.log("message received but could not find id")
                             }
                         } else {
                             if ( id in this.incoming_callbacks ) {
                                 let result = this.incoming_callbacks[id](message)
-                                this.websocket.send( JSON.stringify({ id, direction, message: result, session: object_id(this) }))
+                                this.websocket.send( serialize({ id, direction, message: result, session: object_id(this) }))
                             }
                         }
                     } else {
@@ -120,7 +115,7 @@ export class DataPipe extends DataSource {
 
             this.websocket.onopen = ( ) => {
                 if ( ! reconnections ) {
-                    this.websocket.send(JSON.stringify({ id: 'initialize', direction: 'j2p', session: object_id(this) }))
+                    this.websocket.send(serialize({ id: 'initialize', direction: 'j2p', session: object_id(this) }))
                 } else if ( reconnections.connected == false ) {
                     console.log( `connection reestablished at ${new Date( )}` )
                 }
@@ -154,11 +149,14 @@ export class DataPipe extends DataSource {
                 }
             }
         }
+        /**********************************************
+        *** initial connection to python websocket  ***
+        **********************************************/
         connect_to_server( )
-************************************************************************************************************************/
-    }
-    initialize(): void {
-        super.initialize();
+
+        //
+        // Run any initialization script
+        //
         const execute = () => {
             if ( this.init_script != null ) this.init_script!.execute( this )
         }
@@ -171,7 +169,10 @@ export class DataPipe extends DataSource {
 
     send( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ): void {
         let msg = { id, message, direction: 'j2p', session: object_id(this) }
-        if ( id in this.pending ) {
+        // queue message if:
+        //    (1) websocket is not yet initialized
+        //    (2) a result indicated by id is pending
+        if ( ! this.websocket || id in this.pending ) {
             if ( id in this.send_queue ) {
                 if ( typeof squash_queue == 'boolean' && squash_queue && this.send_queue[id].length > 0 ) {
                     // throw away existing message if squash_queue is true
@@ -210,11 +211,11 @@ export class DataPipe extends DataSource {
                     // src/bokeh/sources/data_pipe.ts:100:45 - error TS2448: Block-scoped variable 'cb' used before its declaration.
                     let { cb, msg } = this.send_queue[id].shift( )
                     this.pending[id] = { cb }
-                    this.websocket.send(JSON.stringify(msg))
+                    this.websocket.send(serialize(msg))
                 }
             } else {
                 this.pending[id] = { cb }
-                this.websocket.send(JSON.stringify(msg))
+                this.websocket.send(serialize(msg))
             }
         }
     }

@@ -36,11 +36,17 @@ export class ImagePipe extends DataPipe {
 
     constructor(attrs?: Partial<ImagePipe.Attrs>) {
         super(attrs)
-/************************************************************************************************************************
+        /**********************************************************
+        *** With Bokeh 3.0 properties are no longer initialized ***
+        *** before the constructor is called...                 ***
+        **********************************************************/
+    }
+
+    initialize(): void {
+        super.initialize();
         if ( this.fits_header_json ) {
             this._wcs = new window.coordtxl.WCSTransform( new window.coordtxl.MapKeywordProvider(JSON.parse(this.fits_header_json)) )
         }
-************************************************************************************************************************/
     }
 
     // fetch channel

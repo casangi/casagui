@@ -41,6 +41,8 @@ export class ImageDataSource extends ColumnDataSource {
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
+                                       if ( typeof data === 'undefined' || typeof data.chan === 'undefined' )
+                                           console.log( 'ImageDataSource ERROR ENCOUNTERED <1>', data )
                                        this.cur_chan = [ s, c ]
                                        if ( cb ) {
                                            cb(data)
@@ -57,6 +59,8 @@ export class ImageDataSource extends ColumnDataSource {
         // supply default index value because the ImagePipe will have no cached
         // index values for this.imid if there have been no updates yet...
         this.image_source.refresh( (data: any) => {
+            if ( typeof data === 'undefined' || typeof data.chan === 'undefined' )
+                console.log( 'ImageDataSource ERROR ENCOUNTERED <2>', data )
             if ( cb ) { cb(data) }
             this.data = data.chan
         }, this.imid, [ 0, 0 ] )

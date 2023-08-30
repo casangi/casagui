@@ -42,6 +42,7 @@ from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave
 from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, LinearColorMapper
+from bokeh.models import WheelZoomTool, LassoSelectTool
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
@@ -103,7 +104,7 @@ class CubeMask:
         self._statistics_use_mask = False                  # whether statistics calculations will be based on the masked
                                                            # area or the whole channel
         self._palette = None                               # palette selection
-        self._help_button = None                           # help button that created new tab/window (instead of hide/show Div)
+        self._help_button = None                           # help button that creates a new tab/window (instead of hide/show Div)
         self._image_spectra = None                         # spectra data source
         self._image_source = None                          # ImageDataSource
         self._statistics_source = None
@@ -822,6 +823,23 @@ class CubeMask:
             return { f(chan_or_poly[0]): chan_or_poly[1] for chan_or_poly in vec }
         return { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
 
+    def mask( self ):
+        return self._mask_path
+
+    def set_mask_name( self, new_mask_path ):
+        self._mask_path = new_mask_path
+        self._pipe['image'].set_mask_name( new_mask_path )
+
+    def set_all_mask_pixels( self, value ):
+        '''Set all pixels to the specified boolean value.
+        '''
+        shape = self._pipe['image'].shape
+        for stokes in range(shape[2]):
+            for chan in range(shape[3]):
+                mask = self._pipe['image'].mask( [stokes,chan], True )
+                mask[:] = 1.0 if value else 0.0
+                self._pipe['image'].put_mask( [stokes,chan], mask )
+
     def image( self, maxanno=50, **kw ):
         '''Create the 2D raster display which displays image planes. This widget is should be
         created for all ``cube_mask`` objects because this is the GUI component that ties
@@ -894,10 +912,20 @@ class CubeMask:
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
-            self._image = set_attributes( figure( height=400, width=400, output_backend="webgl",
-                                                  tools=[ "lasso_select","box_select","pan,wheel_zoom","box_zoom",
-                                                          "save","reset" ],
+            self._image = set_attributes( figure( height=self._pipe['image'].shape[1], width=self._pipe['image'].shape[0],
+                                                  output_backend="webgl", match_aspect=True,
+                                                  tools=[ "lasso_select","box_select","pan",
+                                                          "wheel_zoom","save","reset" ],
                                                   tooltips=None ), **kw )
+            ###
+            ### set tools that are active by default
+            ###
+            self._image.toolbar.active_scroll = self._image.select_one(WheelZoomTool)
+            self._image.toolbar.active_drag = self._image.select_one(LassoSelectTool)
+
+            ###
+            ### set tick formatting
+            ###
             self._image.xaxis.formatter = WcsTicks( axis="x", image_source=self._image_source )
             self._image.yaxis.formatter = WcsTicks( axis="y", image_source=self._image_source )
             self._image.xaxis.major_label_orientation = math.pi/8
@@ -1367,8 +1395,8 @@ class CubeMask:
                                                                       source._masking_enabled = true
                                                                       source.disable_masking = ( ) => source._masking_enabled = false
                                                                       source.enable_masking = ( ) => source._masking_enabled = true
-                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
-                                                                      source.breadcrumbs = ( ) => source._mask_breadcrumbs
+                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : null
+                                                                      source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
                                                                       source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
                                                                       source.update_statistics = ( data ) => stats_source.data = data
                                                                    """ )
@@ -1454,15 +1482,21 @@ class CubeMask:
         return self._result
 
     def help( self, rows=[ ], **kw ):
-        '''Retrieve the help Bokeh object. When returned the ``visible`` property is
-        set to ``False``, but it can be toggled based on GUI actions.
+        '''Retrieve the help Bokeh object. When this button is clicked, a tab/window
+        containing the help information is opened or receives focus.
         '''
         if self._help_button is None:
             self._help_button = set_attributes( Button( label="", max_width=35, max_height=35, name='help',
                                                         icon=svg_icon(icon_name='help', size=25) ), **kw )
             self._help_button.js_on_click( CustomJS( args=dict( text=self.__help_string( ) ),
-                                                     code='''const wnd = window.open("about:blank","Interactive Clean Help")
-                                                             wnd.document.write(text)''' ) )
+                                                     code='''console.log(text)
+                                                             if ( window._iclean_help && ! window._iclean_help.closed ) {
+                                                                 window._iclean_help.focus( )
+                                                             } else {
+                                                                 window._iclean_help = window.open("about:blank","Interactive Clean Help")
+                                                                 window._iclean_help.document.write(text)
+                                                                 window._iclean_help.document.close( )
+                                                             }''' ) )
         return self._help_button
 
     @asynccontextmanager
@@ -1507,7 +1541,7 @@ class CubeMask:
         return \
 '''<html>
   <head>
-    <title>IC Help</title>
+    <title>Interactive Clean Help</title>
     <style>
         #makemaskhelp td, #makemaskhelp th {
             border: 1px solid #ddd;

@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022
+# Copyright (C) 2022,2023
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -45,7 +45,7 @@ from ..utils import resource_manager, reset_resource_manager, is_notebook
 try:
     ## gclean version number needed for proper interactive clean behavior
     # pylint: disable=no-name-in-module
-    from casatasks.private.imagerhelpers._gclean import _GCV003
+    from casatasks.private.imagerhelpers._gclean import _GCV004
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
     # pylint: enable=no-name-in-module
 except:
@@ -54,7 +54,7 @@ except:
         ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
         ###
         #print('warning: using tclean compatibility layer...')
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV003
+        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV004
         from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
     except:
         _gclean = None
@@ -181,7 +181,7 @@ class InteractiveClean:
         self.__pipes_initialized = False
         self._mask_history = [ ]
 
-        self._cube = CubeMask( self._residual_path, mask=self._mask_path, abort=self._abort_handler )
+        self._cube = CubeMask( self._residual_path, mask=self._clean.mask( ), abort=self._abort_handler )
         ###
         ### error or exception result
         ###
@@ -219,12 +219,12 @@ class InteractiveClean:
         cmd += ' ' + str(hostname)
         return cmd
 
-    def __init__( self, vis, imagename, mask=None, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
+    def __init__( self, vis, imagename, mask='', initial_mask_pixel=False, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='',
-                  nchan=-1, start='', width='', outframe='LSRK', restfreq='', interpolation='linear', perchanweightdensity=True, gridder='standard',
+                  nchan=-1, start='', width='', veltype='radio', restfreq='', outframe='LSRK', interpolation='linear', perchanweightdensity=True, gridder='standard',
                   wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False, pointingoffsetsigdev=[  ], pblimit=0.2,
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
-                  pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
+                  smallscalebias=0.0, pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
                   fastnoise=True, savemodel='none', parallel=False, nmajor=1, remote=False):
 
@@ -265,9 +265,19 @@ class InteractiveClean:
 
         ###
         ### Auto Masking et al.
-        ###     if the user has specified a mask cube, it OVERRIDES the default, generated mask name
-        self._mask_path = ''
         self._usemask = 'user'
+
+        ###
+        ### If the user has supplied a mask, do NOT modify it after initial tclean/deconvolve call...
+        ### otherwise if the 'initial_mask_pixel' is a boolean then initialize the mask pixels
+        ### to 'initial_mask_pixel' before loading the GUI...
+        ###
+        if type(initial_mask_pixel) is bool:
+            self._reset_mask_pixels = True
+            self._reset_mask_pixels_value = initial_mask_pixel
+        else:
+            self._reset_mask_pixels = False
+            self._reset_mask_pixels_value = None
         if isinstance( mask, MaskMode ):
             if mask == MaskMode.AUTOMT:
                 self._usemask = 'auto-multithresh'
@@ -276,8 +286,8 @@ class InteractiveClean:
             else:
                 raise RuntimeError( 'internal consistence error for MaskMode' )
         elif isinstance( mask, str ) and os.path.isdir( mask ):
-            ### override default mask name
-            self._mask_path = mask
+            ### user has supplied a mask on disk
+            self._reset_mask_pixels = False
 
         ###
         ### clean generator
@@ -288,15 +298,16 @@ class InteractiveClean:
         self._clean = _gclean( vis=vis, imagename=imagename, field=field, spw=spw, timerange=timerange,  uvrange=uvrange, antenna=antenna, scan=scan,
                                observation=observation, intent=intent, datacolumn=datacolumn, nterms=nterms, imsize=imsize, cell=cell,
                                phasecenter=phasecenter, stokes=stokes, startmodel=startmodel, specmode=specmode, reffreq=reffreq, nchan=nchan,
-                               start=start, width=width, outframe=outframe, restfreq=restfreq, interpolation=interpolation,
+                               start=start, width=width, outframe=outframe, veltype=veltype, restfreq=restfreq, interpolation=interpolation,
                                perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm,
                                wbawp=wbawp, usepointing=usepointing, conjbeams=conjbeams, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit,
-                               deconvolver=deconvolver, niter=niter, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor,
-                               scales=scales, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, gain=gain,
-                               sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold,
-                               negativethreshold=negativethreshold, minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
+                               deconvolver=deconvolver, smallscalebias=smallscalebias, niter=niter, threshold=threshold, nsigma=nsigma,
+                               cycleniter=cycleniter, cyclefactor=cyclefactor, scales=scales, restoringbeam=restoringbeam, pbcor=pbcor,
+                               weighting=weighting, robust=robust, npixels=npixels, gain=gain, sidelobethreshold=sidelobethreshold,
+                               noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold,
+                               minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
                                minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=1,
-                               usemask=self._usemask, mask=self._mask_path
+                               usemask=self._usemask, mask=mask
                       )
         ###
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
@@ -330,17 +341,21 @@ class InteractiveClean:
         self._imagename = imagename
         # Create folder for the generated html webpage - needs its own folder to not name conflict (must be 'index.html')
         webpage_dirname = imagename + '_webpage'
-        if not os.path.isdir(webpage_dirname):
-            os.makedirs(webpage_dirname)
+        ### Directory is created when an HTTP server is running
+        ### (MAX)
+#       if not os.path.isdir(webpage_dirname):
+#          os.makedirs(webpage_dirname)
         self._webpage_path = os.path.abspath(webpage_dirname)
         self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
-        if not os.path.isdir(self._mask_path):
-            self._mask_path = ("%s.mask" % imagename) if self._clean.has_next() else None
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
         self._ids = { }
         self._last_mask_breadcrumbs = ''
+        ###
+        ### tclean/deconvolve log page
+        ###
+        self.__log_button = None
         ###
         ### ColumnDataSource for convergence plot
         ###
@@ -383,8 +398,8 @@ class InteractiveClean:
                                                    // use complete convergence cache attached to flux_src...
                                                    // get the convergence data for channel and stokes
                                                    const pos = img_src.cur_chan
-                                                   convdata = flux_src._convergence_data.chan[pos[1]][pos[0]]
-                                                   //          chan---------------------------^^^^^^  ^^^^^^----stokes
+                                                   convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
+                                                   //          chan-------------------------------^^^^^^      ^^^^^^----stokes
                                                } else if ( 'result' in msg ) {
                                                    // update based on msg received from convergence update message
                                                    convdata = msg.result.converge
@@ -511,7 +526,18 @@ class InteractiveClean:
                                                }
                                            }''',
 
-                       'clean-gui-update': '''function update_gui( msg ) {
+                       'clean-gui-update': '''function update_log( log_lines ) {
+                                               let b = logbutton
+                                               b._log = b._log.concat( log_lines )
+                                               if ( b._window && ! b._window.closed ) {
+                                                   for ( const line of log_lines ) {
+                                                       const p = b._window.document.createElement('p')
+                                                       p.appendChild( b._window.document.createTextNode(line) )
+                                                       b._window.document.body.appendChild(p)
+                                                   }
+                                               }
+                                           }
+                                           function update_gui( msg ) {
                                                if ( msg.error ) {
                                                    // *******************************************************************************************
                                                    // ******** error occurs and is signaled by _gclean, e.g. continuing when niter is 0  ********
@@ -522,17 +548,17 @@ class InteractiveClean:
                                                    state.stopped = false
                                                    update_status( msg.error )
                                                    if ( 'cmd' in msg ) {
-                                                       log.text = log.text + msg.cmd
+                                                       update_log( msg.cmd )
                                                    }
                                                } else if ( msg.result === 'no-action' ) {
                                                    update_status( 'status' in msg ? msg.status : 'nothing done' )
                                                    enable( false )
                                                    if ( 'cmd' in msg ) {
-                                                       log.text = log.text + msg.cmd
+                                                       update_log( msg.cmd )
                                                    }
                                                } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
-                                                       log.text = log.text + msg.cmd
+                                                       update_log( msg.cmd )
                                                    }
                                                    refresh( msg )
                                                    // stopcode == 1: iteration limit hit
@@ -582,7 +608,7 @@ class InteractiveClean:
                                                } else if ( msg.result === 'error' ) {
                                                    img_src.drop_breadcrumb('E')
                                                    if ( 'cmd' in msg ) {
-                                                       log.text = log.text + msg.cmd
+                                                       update_log( msg.cmd )
                                                    }
                                                    state.mode = 'interactive'
                                                    btns['stop'].button_type = "danger"
@@ -623,8 +649,7 @@ class InteractiveClean:
         ###
         self._init_pipes( )
 
-        self._status['log'] = Div( text='''<hr>%s''' % ''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]) )
-        ###                        >>>--------tclean+deconvolve----------------------------------------------------------------------------------------^^^^^
+        self._status['log'] = self._clean.cmds( )
         self._status['stopcode'] = Div( text="<div>initial residual image</div>" ) if image_channels > 1 else Div( text="<div>initial <b>single-channel</b> residual image</div>" )
 
         ###
@@ -641,7 +666,7 @@ class InteractiveClean:
                         return dict( result='error', stopcode=1, iterdone=0, majordone=0, error="major cycle limit is not an integer" )
 
                 if 'mask' in msg['value']:
-                    if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
+                    if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] is not None and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
                         mask_dir = "%s.mask" % self._imagename
                         shutil.rmtree(mask_dir)
@@ -651,29 +676,33 @@ class InteractiveClean:
                         msg['value']['mask'] = convert_masks(masks=new_mask, coord='pixel', cdesc=self._cube.coorddesc())
 
                     else:
-                        msg['value']['mask'] = ''
+                        ##### seemingly the mask path used to be spliced in?
+                        #msg['value']['mask'] = self._mask_path
+                        pass
                 else:
-                    msg['value']['mask'] = ''
+                    ##### seemingly the mask path used to be spliced in?
+                    #msg['value']['mask'] = self._mask_path
+                    pass
+
                 self._clean.update( { **msg['value'] } )
                 err, stopcode, majordone, self._convergence_data = await self._clean.__anext__( )
-
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or err:
-                    return dict( result='error', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone, error=err )
                 if len(self._convergence_data['chan']) == 0:
-                    return dict( result='no-action', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, iterdone=0, majordone=majordone, error=err )
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                                  majordone=majordone, error=err )
                 else:
-                    return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                                  majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
 
-                return dict( result='update', stopcode=stopcode, cmd=''.join([ f'<p>{cmd}</p>' for cmd in self._clean.cmds( )[-2:] ]),
+                return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                              convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
                              majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
             elif msg['action'] == 'stop':
@@ -719,6 +748,45 @@ class InteractiveClean:
                                                            type=['residual'] * len(convergence['iterations'])) )
         self._cyclethreshold_data = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
 
+
+        ###
+        ### help page for cube interactions
+        ###
+        help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
+                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ],
+                                       button_type='light' )
+
+        ###
+        ### button to display the tclean log
+        ###
+        self.__log_button = Button( label="", max_width=help_button.width, max_height=help_button.height, name='log',
+                                    icon=svg_icon(icon_name="iclean-log", size=25), button_type='light' )
+        self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
+                                                 code='''function format_log( elem ) {
+                                                             return `<html>
+                                                                     <head>
+                                                                         <style type="text/css">
+                                                                             body {
+                                                                                 counter-reset: section;
+                                                                             }
+                                                                             p:before {
+                                                                                 font-weight: bold;
+                                                                                 counter-increment: section;
+                                                                                 content: "" counter(section) ": ";
+                                                                             }
+                                                                         </style>
+                                                                     </head>
+                                                                     <body>
+                                                                         <h1>Interactive Clean History</h1>
+                                                                     ` + elem.map((x) => `<p>${x}</p>`).join('\\n') + '</body>\\n</html>'
+                                                         }
+                                                         let b = cb_obj.origin
+                                                         if ( ! b._window || b._window.closed ) {
+                                                             b._window = window.open("about:blank","Interactive Clean Log")
+                                                             b._window.document.write(format_log(b._log))
+                                                             b._window.document.close( )
+                                                         }''' ) )
+
         ###
         ### Setup script that will be called when the user closes the
         ### browser tab that is running interactive clean
@@ -726,8 +794,14 @@ class InteractiveClean:
         self._pipe['control'].init_script = CustomJS( args=dict( flux_src=self._flux_data,
                                                                  residual_src=self._residual_data,
                                                                  ctrl_pipe=self._pipe['control'],
-                                                                 ids=self._ids['clean'] ),
-                                                      code=self._js['initialize'] )
+                                                                 ids=self._ids['clean'],
+                                                                 logbutton=self.__log_button,
+                                                                 log=self._status['log'] ),
+                                                      code=self._js['initialize'] +
+                                                           '''if ( ! logbutton._log ) {
+                                                                  /*** store log list with log button for access in other callbacks ***/
+                                                                  logbutton._log = log
+                                                              }''' )
 
         TOOLTIPS='''<div>
                         <div>
@@ -782,7 +856,7 @@ class InteractiveClean:
         self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
 
 
-        self._fig['image'] = self._cube.image( sizing_mode='stretch_both' )
+        self._fig['image'] = self._cube.image( height_policy='max', width_policy='max' )
         self._fig['image-source'] = self._cube.js_obj( )
 
         if image_channels > 1:
@@ -845,6 +919,7 @@ class InteractiveClean:
             self._fig['slider'] = None
             self._fig['spectra'] = None
 
+
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
                                                  ctrl_pipe=self._pipe['control'], conv_pipe=self._pipe['converge'],
@@ -859,7 +934,7 @@ class InteractiveClean:
                                                  threshold_src=self._cyclethreshold_data,
                                                  convergence_id=self._convergence_id,
                                                  convergence_fig=self._fig['convergence'],
-                                                 log=self._status['log'],
+                                                 logbutton=self.__log_button,
                                                  slider=self._fig['slider'],
                                                  image_fig=self._fig['image'],
                                                  spectra_fig=self._fig['spectra'],
@@ -921,21 +996,7 @@ class InteractiveClean:
         self._control['clean']['finish'].js_on_click( self._cb['clean'] )
         self._control['clean']['stop'].js_on_click( self._cb['clean'] )
 
-        # Generates the HTML for the controls layout:
-        # nmajor niter cycleniter cycle_factor threshold  -----------
-        #                  slider                         -  image  -    help
-        # goto    continue finish stop                    -----------    help
-        # status: stopcode                                               help
-        # stats                                                          help
-        # spectra
-        # convergence
-        # log
-
         mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( button_type='light' )
-
-        help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ],
-                                       button_type='light' )
 
         ###
         ### For cube imaging, tabify the spectrum and convergence plots
@@ -954,36 +1015,34 @@ class InteractiveClean:
                                                    mask_clean_notclean_pick,
                                                    mask_color_pick,
                                                    mask_alpha_pick,
-                                                   help_button, Spacer(height=help_button.height, width=7, sizing_mode="fixed") ),
+                                                   self.__log_button,
+                                                   help_button,
+                                                  ),
                                               self._fig['image'],
                                               self._cube.pixel_tracking_text( ),
-                                              sizing_mode='stretch_width'
+                                              height_policy='max', width_policy='max',
                                       ),
-                                      Spacer(width=5,height=5,sizing_mode='fixed'),
                                       column(
-                                          row(
-                                              column (
-                                                  row( self._control['clean']['stop'],
-                                                       self._control['clean']['continue'],
-                                                       self._control['clean']['finish'] ),
-                                                  row( self._control['nmajor'],
-                                                       self._control['niter'],
-                                                       self._control['threshold'] )
-                                              ),
-                                              Div( styles={ 'border-left': "2px solid red",
-                                                           'height': "110px" } ),
-                                              column ( self._control['cycleniter'],
-                                                       self._control['cycle_factor'] )
-                                          ),
-                                          row( self._fig['slider'], self._control['goto'] ) if self._fig['slider'] else Div( ),
+                                          row( self._control['clean']['stop'],
+                                               self._control['clean']['continue'],
+                                               self._control['clean']['finish'] ),
+                                          row( self._control['nmajor'],
+                                               self._control['niter'],
+                                               self._control['threshold'] ),
+                                          row( self._control['goto'] if self._fig['slider'] else Div( ),
+                                               row( self._control['cycleniter'],
+                                                    self._control['cycle_factor'], background="lightgray" ) ),
+                                          self._fig['slider'] if self._fig['slider'] else Div( ),
                                           row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
-                                          self._cube.statistics( sizing_mode = "stretch_width" ),
-                                          width_policy='fixed'
+                                          self._cube.statistics( width=280 ),
+                                          height_policy='max',
                                       ),
-                                      sizing_mode='stretch_width' ),
-                                  self._spec_conv_tabs if self._spec_conv_tabs else self._fig['convergence'],
-                                  self._status['log'],
-                                  sizing_mode='stretch_both'
+                                      width_policy='max', height_policy='max' ),
+                                  row(
+                                      self._spec_conv_tabs if self._spec_conv_tabs else self._fig['convergence'],
+                                      width_policy='max',
+                                  ),
+                                  width_policy='max', height_policy='max',
                               )
 
         self._cube.connect( )
@@ -992,7 +1051,10 @@ class InteractiveClean:
         if self._is_notebook:
             output_notebook()
         else:
-            output_file(self._imagename+'_webpage/index.html')
+            ### Directory is created when an HTTP server is running
+            ### (MAX)
+###         output_file(self._imagename+'_webpage/index.html')
+            pass
         show(self._fig['layout'])
 
     def __call__( self ):
@@ -1036,6 +1098,13 @@ class InteractiveClean:
         self.__reset( )
         self._init_pipes()
         self._cube._init_pipes()
+        ###
+        ### The first time through, reinitialize the mask pixel values if the
+        ### user has not supplied a mask...
+        ###
+        if self._reset_mask_pixels:
+            self._reset_mask_pixels = False
+            self._cube.set_all_mask_pixels(self._reset_mask_pixels_value)
 
     @asynccontextmanager
     async def serve( self ):
@@ -1083,11 +1152,15 @@ class InteractiveClean:
 
                 httpd.serve_forever()
 
-        if not self._is_notebook:
-            from threading import Thread
-            thread = Thread(target=start_http_server)
-            thread.daemon = True # Let Ctrl+C kill server thread
-            thread.start()
+         ###
+         ### Launching a webserver allows for remote connecton to the interactive clean running on a remote system
+         ### but we need to figure out how we want to manage remote execution.
+         ### (MAX)
+#        if not self._is_notebook:
+#            from threading import Thread
+#            thread = Thread(target=start_http_server)
+#            thread.daemon = True # Let Ctrl+C kill server thread
+#            thread.start()
 
         self._launch_gui( )
 
@@ -1145,4 +1218,4 @@ class InteractiveClean:
         -------
         list[str]  tclean calls made during the interactive clean session.
         '''
-        return self._clean.cmds( )
+        return self._clean.cmds( True )
