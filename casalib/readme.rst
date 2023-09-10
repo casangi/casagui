@@ -14,13 +14,8 @@ Build and Install
 #. ``yarn build``
 #. ``yarn esbuild-browser``
 
-After the build is complete, commit the artifacts to the `casagui-js <https://github.com/casangi/casagui-js>`_ repository, e.g.::
+After the build is complete, commit the artifacts to the JavaScript directory in the :code:`casagui` Python package, e.g.::
 
-  bash$ cp dist/esbuild/casalib-v0.0.3.min.js* ~/develop/casagui-js/runtime/0.0.6
-  bash$ cd ~/develop/casagui-js/runtime
-  bash$ git add casalib-v0.0.3.min.js*
-  bash$ git commit -m 'update hotkeys-js to 3.10.1'
-  bash$ git push
+  bash$ cp dist/esbuild/casalib.min.js ../casagui/__js__/casalib.min.js
 
-The `casagui-js runtime <https://github.com/casangi/casagui-js/tree/main/runtime>`_ files are made available through `https://cdn.jsdelivr.net/gh/casangi/casagui-js@main/runtime/0.0.6/casalib-v0.0.3.min.js`. In this example, the :code:`casaguijs` version would be :code:`0.0.6`. All of the files for version :code:`0.0.6` of :code:`casaguijs`, are in a :code:`0.0.6` sub-directory. :code:`casalib` has a separate version number, in this case :code:`0.0.3`. These are old version numbers and the current version of these libraries must be substituted.
-
+The :code:`casagui` JavaScript libraries are installed as part of the Python package and are loaded directly from disk at Bokeh startup time. The version of these JavaScript libraries is intended to match whatever version of Bokeh that :code:`casagui` currently depends upon.

@@ -20,9 +20,9 @@
     "docs": "typedoc --entryPoints src/main.ts",
     "build": "tsc -p tsconfig.json",
     "build-all": "yarn clean && yarn build && yarn esbuild-node && yarn esbuild-browser",
-    "esbuild-browser": "esbuild src/browser.ts --bundle --minify --sourcemap=external --outfile=dist/esbuild/casalib-v$npm_package_version.min.js",
+    "esbuild-browser": "esbuild src/browser.ts --bundle --minify --sourcemap=external --outfile=dist/esbuild/casalib.min.js",
     "esbuild-browser:dev": "esbuild src/browser.ts --bundle --sourcemap=external --outfile=dist/esbuild/casalib.js",
-    "esbuild-browser:watch": "esbuild src/browser.ts --bundle --watch --outfile=dist/esbuild/casalib-v$npm_package_version.min.js"
+    "esbuild-browser:watch": "esbuild src/browser.ts --bundle --watch --outfile=dist/esbuild/casalib.min.js"
   },
   "devDependencies": {
     "@types/jest": "^27.4.1",
@@ -39,7 +39,9 @@
   },
   "private": false,
   "dependencies": {
+    "@types/d3-contour": "^3.0.3",
     "coordtxl": "^0.1.4",
+    "d3-contour": "^4.0.2",
     "hotkeys-js": "^3.10.1"
   }
 }

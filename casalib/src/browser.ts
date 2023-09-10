@@ -7,8 +7,9 @@ import { ReconnectState } from "./reconnect_state"
 
 import * as coordtxl from 'coordtxl'
 import hotkeys from 'hotkeys-js'
+import { contours } from 'd3-contour'
 
-export { coordtxl, hotkeys }
+export { coordtxl, hotkeys, contours }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).object_id = object_id;
@@ -16,3 +17,5 @@ export { coordtxl, hotkeys }
 (window as any).ReconnectState = ReconnectState;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).coordtxl = coordtxl;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).contours = contours;
