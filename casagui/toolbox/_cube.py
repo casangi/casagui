@@ -145,6 +145,16 @@ class CubeMask:
         ###########################################################################################################################
         self._js_mode_code = {
                    'bitmask-hotkey-setup':    '''
+                                              function state_translate_selection( dx, dy ) {
+                                                  /* register_mask_change('T') */
+                                                  const shape = source.image_source.shape
+                                                  if ( dx > 0 && (Math.ceil(Math.max( ...annotations[0].xs )) + dx) >= shape[0] ) return;
+                                                  if ( dy > 0 && (Math.ceil(Math.max( ...annotations[0].ys )) + dy) >= shape[1] ) return;
+                                                  if ( dx < 0 && (Math.floor(Math.min( ...annotations[0].xs )) + dx) <= 0 ) return;
+                                                  if ( dy < 0 && (Math.floor(Math.min( ...annotations[0].ys )) + dy) <= 0 ) return;
+                                                  if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
+                                                  if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
+                                              }
                                               function mask_mod_result( msg ) {
                                                   if ( msg.result == 'success' ) {
                                                       source.refresh( msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
@@ -202,6 +212,42 @@ class CubeMask:
                                                                                     action: 'not',
                                                                                     value: { chan: source.cur_chan } },
                                                                                   mask_mod_result ) } )
+                                               // move selection set up one pixel  -- bitmask-cube mode
+                                               window.hotkeys( 'up', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 0, 1 ) } )
+                                               // move selection set up several pixel -- bitmask-cube mode
+                                               window.hotkeys( 'shift+up', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set down one pixel -- bitmask-cube mode
+                                               window.hotkeys( 'down', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 0, -1 ) } )
+                                               // move selection set down several pixel -- bitmask-cube mode
+                                               window.hotkeys( 'shift+down', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set left one pixel -- bitmask-cube mode
+                                               window.hotkeys( 'left', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( -1, 0 ) } )
+                                               // move selection set left several pixel -- bitmask-cube mode
+                                               window.hotkeys( 'shift+left', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
+                                               // move selection set right one pixel -- bitmask-cube mode
+                                               window.hotkeys( 'right', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        state_translate_selection( 1, 0 ) } )
+                                               // move selection set right several pixel -- bitmask-cube mode
+                                               window.hotkeys( 'shift+right', { scope: 'channel' },
+                                                               (e) => { e.preventDefault( )
+                                                                        const shape = source.image_source.shape
+                                                                        state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
                                               ''',
                    'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
                                                window.hotkeys( 'alt+]', { scope: 'channel' },
@@ -1549,7 +1595,15 @@ class CubeMask:
                              <tr><td><b>ctrl</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
                              <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
                              <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
-                             <tr><td><b>escape</b></td><td>remove displayed region</td></tr>'''
+                             <tr><td><b>escape</b></td><td>remove displayed region</td></tr>
+                             <tr><td><b>down</b></td><td>move selected region down one pixel</td></tr>
+                             <tr><td><b>up</b></td><td>move selected region up one pixel</td></tr>
+                             <tr><td><b>left</b></td><td>move selected region one pixel to the left</td></tr>
+                             <tr><td><b>right</b></td><td>move selected region one pixel to the right</td></tr>
+                             <tr><td><b>shift</b>-<b>up</b></td><td>move selected region up several pixels</td></tr>
+                             <tr><td><b>shift</b>-<b>down</b></td><td>move selected region down several pixels</td></tr>
+                             <tr><td><b>shift</b>-<b>left</b></td><td>move selected region several pixels to the left</td></tr>
+                             <tr><td><b>shift</b>-<b>right</b></td><td>move selected region several pixels to the right</td></tr>'''
                          }
 
         return \
