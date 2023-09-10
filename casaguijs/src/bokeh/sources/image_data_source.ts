@@ -1,8 +1,13 @@
 import { ColumnDataSource } from "@bokehjs/models/sources/column_data_source"
 import * as p from "@bokehjs/core/properties"
 import {uuid4} from "@bokehjs/core/util/string"
-import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
+import { CallbackLike0 } from "@bokehjs/models/callbacks/callback"
 import { ImagePipe } from "./image_pipe"
+
+declare global {
+    // loaded into "window" by casalib
+    interface Window { contours: any  }
+}
 
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
@@ -13,8 +18,9 @@ export namespace ImageDataSource {
   export type Props = ColumnDataSource.Props & {
       init_script: p.Property<CallbackLike0<ImageDataSource> | null>;
       image_source: p.Property<ImagePipe>
-      num_chans: p.Property<[Number,Number]>          // [ stokes, spectral ]
-      cur_chan:  p.Property<[Number,Number]>          // [ stokes, spectral ]
+      _mask_contour_source: p.Property<ColumnDataSource | null>   // source for multi_polygon contours
+      num_chans: p.Property<[Number,Number]>                     // [ stokes, spectral ]
+      cur_chan:  p.Property<[Number,Number]>                     // [ stokes, spectral ]
   }
 }
 
@@ -38,15 +44,37 @@ export class ImageDataSource extends ColumnDataSource {
         }
         execute( )
     }
+
+    _mask_contour( mask: any[] ): {[key: string]: any} {
+        // converts d3-contours (https://github.com/d3/d3-contour) generated contours into bokeh's multi-polygon format
+        function split( pairs: any ) {
+            // d3-contours are represented as a list of tuples, but bokeh needs to lists one each of x and y coordinates
+            // @ts-ignore: Parameter 'acc' implicitly has an 'any' type.
+            return pairs.reduce( (acc, pair) => { acc[0].push(pair[0]); acc[1].push(pair[1]); return acc }, [[],[]] )
+        }
+
+        const d3contours = window.contours( ).size(this.image_source.shape.slice(0,2)).thresholds([1])(mask[0])[0]
+        //             Parameter 'x' implicitly has an 'any' type.
+        // @ts-ignore: Parameter 'y' implicitly has an 'any' type.
+        const split_tuples = d3contours.coordinates.map( x => x.map( y => split(y) ) )
+        // @ts-ignore: Parameter 'ps' implicitly has an 'any' type.
+        const reformatted = { xs: [ split_tuples.map( ps => ps.map(  x => x[0] ) ) ],
+        // @ts-ignore: Parameter 'ps' implicitly has an 'any' type.
+                              ys: [ split_tuples.map( ps => ps.map(  y => y[1] ) ) ]  }
+        return reformatted
+    }
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
                                        if ( typeof data === 'undefined' || typeof data.chan === 'undefined' )
                                            console.log( 'ImageDataSource ERROR ENCOUNTERED <1>', data )
                                        this.cur_chan = [ s, c ]
-                                       if ( cb ) {
-                                           cb(data)
+                                       if ( this._mask_contour_source != null && 'chan' in data && 'msk' in data.chan ) {
+                                           data.msk_contour = this._mask_contour( data.chan.msk )
+                                           // bokeh does not allow adding extraneous attributes so 'msk_contour' must be outside of 'chan'
+                                           this._mask_contour_source.data = data.msk_contour
                                        }
+                                       if ( cb ) { cb(data) }
                                        this.data = data.chan
                                    }, this.imid )
     }
@@ -61,6 +89,11 @@ export class ImageDataSource extends ColumnDataSource {
         this.image_source.refresh( (data: any) => {
             if ( typeof data === 'undefined' || typeof data.chan === 'undefined' )
                 console.log( 'ImageDataSource ERROR ENCOUNTERED <2>', data )
+            if ( this._mask_contour_source != null && 'chan' in data && 'msk' in data.chan ) {
+                data.msk_contour = this._mask_contour( data.chan.msk )
+                // bokeh does not allow adding extraneous attributes so 'msk_contour' must be outside of 'chan'
+                this._mask_contour_source.data = data.msk_contour
+            }
             if ( cb ) { cb(data) }
             this.data = data.chan
         }, this.imid, [ 0, 0 ] )
@@ -74,6 +107,7 @@ export class ImageDataSource extends ColumnDataSource {
         this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
             init_script: [ Any, null ],
             image_source: [ Ref(ImagePipe) ],
+            _mask_contour_source: [ Ref(ColumnDataSource), null ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],
         }));

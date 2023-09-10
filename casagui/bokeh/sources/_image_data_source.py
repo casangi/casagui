@@ -51,6 +51,9 @@ class ImageDataSource(ColumnDataSource):
     """)
 
     image_source = Instance(ImagePipe)
+    _mask_contour_source = Nullable(Instance(ColumnDataSource), help='''
+    data source for updating contour polygons
+    ''')
     num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
     cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
 
@@ -65,6 +68,11 @@ class ImageDataSource(ColumnDataSource):
             self.data['msk'] = [ self.image_source.mask( [0,0] ) ]
         self.num_chans = list(self.image_source.shape[-2:])
         self.cur_chan  = [ 0, 0 ]
+
+    def mask_contour_source( self, data ):
+        if not self._mask_contour_source:
+            self._mask_contour_source = ColumnDataSource( data=data )
+        return self._mask_contour_source
 
     def pixel_value( self, chan, index ):
         return self.image_source.pixel_value( chan, index )
