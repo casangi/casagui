@@ -30,6 +30,7 @@ generated HTML that is used to display the Bokeh plots that ``casagui``'s
 applications produce'''
 import os
 import re
+from os import path
 from os.path import dirname, join, basename, abspath
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
