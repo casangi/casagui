@@ -94,6 +94,8 @@ class CubeMask:
         self._pixel_tracking_text = None                   # cursor tracking pixel value
         self._chan_image = None                            # channel image
         self._bitmask = None                               # bitmask image
+        self._bitmask_contour = None                       # bitmask MultiPolygon contour
+        self._bitmask_contour_ds = None                    # bitmask MultiPolygon contour data source
         self._bitmask_color_selector = None                # bitmask color selector
         self._bitmask_transparency_button = None           # select whether the 1s or 0s is transparent
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
@@ -947,6 +949,11 @@ class CubeMask:
                                                    color_mapper=LinearColorMapper( low=0, high=1,
                                                                                    palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
                                                    alpha=0.6, source=self._image_source )
+                self._bitmask.visible = False
+                self._bitmask_contour_ds = self._image_source.mask_contour_source( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
+                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color='#FFFF00',
+                                                                    source=self._bitmask_contour_ds )
+                self._bitmask_contour.visible = True
 
             if self._pipe['image'].have_mask0( ):
                 self._mask0 = self._image.image( image='msk0', x=0, y=0, dw=shape[0], dh=shape[1],
@@ -1090,23 +1097,6 @@ class CubeMask:
 
             self._pipe['control'].register( self._ids['palette'], fetch_palette )
 
-#            self._palette = Dropdown( label=default_palette( ), button_type='light', margin=(-1, 0, 0, 0),
-#                                      sizing_mode='scale_height', menu=available_palettes( ) )
-#            self._palette.js_on_click( CustomJS( args=dict( image=self._chan_image,
-#                                                                  ids=self._ids,
-#                                                                  ctrl=self._pipe['control'] ),
-#                                                 code='''function receive_palette( msg ) {
-#                                                             if ( 'result' in msg && msg.result != null ) {
-#                                                                 let cm = image.glyph.color_mapper
-#                                                                 cm.palette = msg.result
-#                                                                 cm.change.emit( )
-#                                                             }
-#                                                         }
-#                                                         this.origin.label = this.item
-#                                                         ctrl.send( ids['palette'],
-#                                                                    { action: 'palette', value: this.item },
-#                                                                    receive_palette )''' ) )
-#
             self._palette = set_attributes( Select( options=available_palettes( ),
                                                     width=120, value=default_palette( ) ), **kw )
 
@@ -1134,6 +1124,9 @@ class CubeMask:
         ###
         ### retrieve controls for adjusting the cube bitmask
         ###
+        ###    NOTE: the self._bitmask_color_selector change function is setup
+        ###          in the "connect" member function
+        ###
         self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
@@ -1143,14 +1136,32 @@ class CubeMask:
                                                                  gl.change.emit( )''' ) )
 
         ### setting button background color does not work with Bokeh 2.4.3
-        self._bitmask_transparency_button = set_attributes( Button( label='masked', width=80 ), **kw )
-        self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask ),
+        self._bitmask_transparency_button = set_attributes( Dropdown( label='contour', button_type='light', margin=(-1, 0, 0, 0),
+                                                                      sizing_mode='scale_height', menu=['contour','masked','unmasked'] ), **kw )
+        self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask, contour=self._bitmask_contour,
+                                                                            contour_ds=self._bitmask_contour_ds,
+                                                                            selector=self._bitmask_color_selector ),
                                                         code='''let cm = bitmask.glyph.color_mapper
-                                                                let one = cm.palette[0]
-                                                                cm.palette[0] = cm.palette[1]
-                                                                cm.palette[1] = one
-                                                                cb_obj.origin.label = cb_obj.origin.label == 'masked' ? 'unmasked' : 'masked'
-                                                                cm.change.emit( )''' ) )
+                                                                if ( bitmask._transparent == null ) {
+                                                                    bitmask._transparent = cm.palette[0]
+                                                                }
+                                                                if ( this.item == 'masked' ) {
+                                                                    cm.palette[0] = bitmask._transparent
+                                                                    cm.palette[1] = selector.color
+                                                                    contour.visible = false
+                                                                    bitmask.visible = true
+                                                                    cm.change.emit( )
+                                                                } else if ( this.item == 'unmasked' ) {
+                                                                    cm.palette[0] = selector.color
+                                                                    cm.palette[1] = bitmask._transparent
+                                                                    contour.visible = false
+                                                                    bitmask.visible = true
+                                                                    cm.change.emit( )
+                                                                } else if ( this.item == 'contour' ) {
+                                                                    contour.visible = true
+                                                                    bitmask.visible = false
+                                                                }
+                                                                this.origin.label = this.item''' ) )
 
         return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
 
@@ -1407,20 +1418,23 @@ class CubeMask:
         ###
         if self._bitmask_color_selector:
             self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
+                                                                                     contour=self._bitmask_contour,
+                                                                                     bitrep=self._bitmask_transparency_button,
                                                                                      annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
                                                                  '''annotations[0].line_color = cb_obj.color;''' ) +
                                                                  '''let cm = bitmask.glyph.color_mapper
-                                                                 //*************************************************
-                                                                 //*** here we assume that the transparent color ***
-                                                                 //*** is specified as 'rgba(0, 0, 0, 0)'        ***
-                                                                 //*************************************************
-                                                                 if ( cm.palette[1].startsWith('#') ) {
-                                                                     cm.palette[1] =  cb_obj.color
-                                                                 } else {
-                                                                     cm.palette[0] =  cb_obj.color
-                                                                 }
-                                                                 cm.change.emit( )''' ) )
+                                                                    if ( bitmask._transparent == null ) {
+                                                                        bitmask._transparent = cm.palette[0]
+                                                                    }
+                                                                    if ( bitrep.label == 'masked' ) {
+                                                                        cm.palette[1] = cb_obj.color
+                                                                    } else if ( bitrep.label == 'unmasked' ) {
+                                                                        cm.palette[0] = cb_obj.color
+                                                                    }
+                                                                    cm.change.emit( )
+                                                                    contour.glyph.line_color = cb_obj.color''' ) )
+
         self._image.js_on_event( SelectionGeometry,
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
