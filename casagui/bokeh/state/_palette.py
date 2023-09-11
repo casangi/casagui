@@ -26,41 +26,33 @@
 #
 ########################################################################
 '''Functions for palette access.'''
+import re
 from bokeh import palettes as __palettes
 from ...utils import static_vars
 
-__palette_list = [ p for p in dir(__palettes) if isinstance(getattr(__palettes,p), tuple) ]
+__palette_list = [ p for p in dir(__palettes) if isinstance(getattr(__palettes,p), tuple) if len(getattr( __palettes, p )) == 256 ]
+__palette_names = [ re.sub(r'\d+$', '', p) for p in __palette_list ]
+
+__palette_map = dict( zip( __palette_names, __palette_list ) )
 
 def available_palettes ( ):
-    return __palette_list
+    '''returns list of palette pretty names'''
+    return __palette_names
 
 def find_palette( name ):
-    if name not in __palette_list:
+    '''fetches palette by the pretty name'''
+    if name not in __palette_map:
         return None
-    return getattr( __palettes, name )
+    return getattr( __palettes, __palette_map[name] )
 
-@static_vars(result=None)
-def default_palette( ):
-    if default_palette.result is None:
-        result = None         ### look for palette called 'Plasma...' with the most colors
-        fallback = None       ### if none is found fall back to the longest palette name
-        for p in __palette_list:
-            if fallback is None:
-                fallback = p
-            elif len(p) > len(fallback):
-                fallback = p
-            elif len(p) == len(fallback) and p > fallback:
-                fallback = p
-            if result is None:
-                if p.startswith('Plasma'):
-                    result = p
-            elif p.startswith('Plasma'):
-                if len(p) > len(result):
-                    result = p
-                elif len(p) == len(result) and p > result:
-                    result = p
-            if result is not None:
-                default_palette.result = result
-            else:
-                default_palette.result = fallback
-    return default_palette.result
+@static_vars( raw=None, pretty=None )
+def default_palette( raw=False ):
+    '''returns the full name (raw or pretty version)'''
+    if default_palette.pretty is None:
+        if 'Plasma' in __palette_map:
+            default_palette.pretty = 'Plasma'
+            default_palette.raw = __palette_map['Plasma']
+        else:
+            default_palette.pretty = __palette_names[0]
+            default_palette.raw = __palette_map[__palette_names[0]]
+    return default_palette.raw if raw else default_palette.pretty

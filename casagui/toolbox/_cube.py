@@ -983,7 +983,7 @@ class CubeMask:
             shape = self._pipe['image'].shape
             self._chan_image = self._image.image( image="img", x=0, y=0,
                                dw=shape[0], dh=shape[1],
-                               palette=default_palette( ), level="image",
+                               palette=default_palette( True ), level="image",
                                source=self._image_source )
             if self._mask_path is not None and path.isdir(self._mask_path):
                 ##
@@ -1137,28 +1137,29 @@ class CubeMask:
 
             async def fetch_palette( msg, self=self ):
                 if 'value' in msg:
-                    return dict( result=find_palette(msg['value']), update={ } )
+                    return dict( result=find_palette(msg['value']), value=msg['value'], update={ } )
                 else:
-                    return dict( result=None, update={ } )
+                    return dict( result=None, value=None, update={ } )
 
             self._pipe['control'].register( self._ids['palette'], fetch_palette )
 
-            self._palette = set_attributes( Select( options=available_palettes( ),
-                                                    width=120, value=default_palette( ) ), **kw )
+            self._palette = set_attributes( Dropdown( label=default_palette( ), button_type='light', margin=(-1, 0, 0, 0),
+                                                      sizing_mode='scale_height', menu=available_palettes( ) ), **kw )
+            self._palette.js_on_click( CustomJS( args=dict( image=self._chan_image,
+                                                            ids=self._ids,
+                                                            ctrl=self._pipe['control'] ),
+                                                 code='''function receive_palette( msg ) {
+                                                             if ( 'result' in msg && msg.result != null ) {
+                                                                 let cm = image.glyph.color_mapper
+                                                                 cm.palette = msg.result
+                                                                 cm.change.emit( )
+                                                                 cb_obj.origin.label = msg.value
+                                                             }
+                                                         }
+                                                         ctrl.send( ids['palette'],
+                                                                    { action: 'palette', value: this.item },
+                                                                    receive_palette )''' ) )
 
-            self._palette.js_on_change( 'value', CustomJS( args=dict( image=self._chan_image,
-                                                                      ids=self._ids,
-                                                                      ctrl=self._pipe['control'] ),
-                                                           code='''function receive_palette( msg ) {
-                                                                       if ( 'result' in msg && msg.result != null ) {
-                                                                           let cm = image.glyph.color_mapper
-                                                                           cm.palette = msg.result
-                                                                           cm.change.emit( )
-                                                                       }
-                                                                   }
-                                                                   ctrl.send( ids['palette'],
-                                                                              { action: 'palette', value: cb_obj.value },
-                                                                              receive_palette )'''))
         return self._palette
 
 
