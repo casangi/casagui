@@ -32,9 +32,9 @@ def polygon_indexes( xs, ys, shape ):
         if len(uniqx) == 2 and len(uniqy) == 2:
             ### we have a proper box, the Path.contains_point implementation seems to
             ### err slightly with very small regions...
-            return product(range(floor(uniqx[0]),ceil(uniqx[1])),range(floor(uniqy[0]),ceil(uniqy[1])))
+            return product(range(max(floor(uniqx[0]),0),min(ceil(uniqx[1]),shape[0]-1)),range(max(floor(uniqy[0]),0),min(ceil(uniqy[1]),shape[1]-1)))
 
     path = Path(list(zip(xs,ys)))
     xmin, xmax = max([0,min(xs)-1]), max(xs)+1
     ymin, ymax = max([0,min(ys)-1]), max(ys)+1
-    return filter( path.contains_point, product(range(floor(xmin),ceil(xmax)), range(floor(ymin),ceil(ymax))) )
+    return filter( path.contains_point, product(range(max(floor(xmin),0),min(ceil(xmax),shape[0]-1)), range(max(floor(ymin),0),min(ceil(ymax),shape[1]-1))) )

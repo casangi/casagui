@@ -146,12 +146,8 @@ class CubeMask:
         self._js_mode_code = {
                    'bitmask-hotkey-setup':    '''
                                               function state_translate_selection( dx, dy ) {
-                                                  /* register_mask_change('T') */
                                                   const shape = source.image_source.shape
-                                                  if ( dx > 0 && (Math.ceil(Math.max( ...annotations[0].xs )) + dx) >= shape[0] ) return;
-                                                  if ( dy > 0 && (Math.ceil(Math.max( ...annotations[0].ys )) + dy) >= shape[1] ) return;
-                                                  if ( dx < 0 && (Math.floor(Math.min( ...annotations[0].xs )) + dx) <= 0 ) return;
-                                                  if ( dy < 0 && (Math.floor(Math.min( ...annotations[0].ys )) + dy) <= 0 ) return;
+                                                  // regions can move out of image, later outlier images may be included
                                                   if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
                                                   if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
                                               }
