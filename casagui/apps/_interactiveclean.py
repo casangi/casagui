@@ -35,11 +35,15 @@ import websockets
 from uuid import uuid4
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
+from bokeh.events import ModelEvent, MouseEnter
 from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer, layout
 from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
+from bokeh.models.dom import HTML
 
+from bokeh.models.ui.tooltips import Tooltip
+from ..bokeh.models import TipButton
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
@@ -753,14 +757,15 @@ class InteractiveClean:
         ### help page for cube interactions
         ###
         help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ],
-                                       button_type='light' )
+                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
 
         ###
         ### button to display the tclean log
         ###
-        self.__log_button = Button( label="", max_width=help_button.width, max_height=help_button.height, name='log',
-                                    icon=svg_icon(icon_name="iclean-log", size=25), button_type='light' )
+        self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
+                                       icon=svg_icon(icon_name="iclean-log", size=25),
+                                       tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="right" ),
+                                       button_type='light' )
         self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
                                                  code='''function format_log( elem ) {
                                                              return `<html>
@@ -843,12 +848,15 @@ class InteractiveClean:
         cwidth = 80
         cheight = 50
         self._control['clean'] = { }
-        self._control['clean']['continue'] = Button( label="", max_width=cwidth, max_height=cheight, name='continue',
-                                                     icon=svg_icon(icon_name="iclean-continue", size=25) )
-        self._control['clean']['finish'] = Button( label="", max_width=cwidth, max_height=cheight, name='finish',
-                                                   icon=svg_icon(icon_name="iclean-finish", size=25) )
-        self._control['clean']['stop'] = Button( label="", button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
-                                                 icon=svg_icon(icon_name="iclean-stop", size=25) )
+        self._control['clean']['continue'] = TipButton( max_width=cwidth, max_height=cheight, name='continue',
+                                                        icon=svg_icon(icon_name="iclean-continue", size=25),
+                                                        tooltip=Tooltip( content=HTML( '''Stop after <b>one major cycle</b> or when any stopping criteria is met.''' ), position='bottom') )
+        self._control['clean']['finish'] = TipButton( max_width=cwidth, max_height=cheight, name='finish',
+                                                      icon=svg_icon(icon_name="iclean-finish", size=25),
+                                                      tooltip=Tooltip( content=HTML( '''<b>Continue</b> until some stopping criteria is met.''' ), position='bottom') )
+        self._control['clean']['stop'] = TipButton( button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
+                                                    icon=svg_icon(icon_name="iclean-stop", size=25),
+                                                    tooltip=Tooltip( content=HTML( '''Clicking a <font color="red">red</font> stop button will cause this tab to close and control will return to Python.<p>Clicking an <font color="orange">orange</font> stop button will cause <tt>tclean</tt> to stop after the current major cycle.''' ), position='bottom' ) )
         self._control['nmajor'] = TextInput( title='nmajor', value="%s" % self._params['nmajor'], width=90 )
         self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
@@ -1022,20 +1030,23 @@ class InteractiveClean:
                                               self._cube.pixel_tracking_text( ),
                                               height_policy='max', width_policy='max',
                                       ),
-                                      column(
-                                          row( self._control['clean']['stop'],
-                                               self._control['clean']['continue'],
-                                               self._control['clean']['finish'] ),
-                                          row( self._control['nmajor'],
-                                               self._control['niter'],
-                                               self._control['threshold'] ),
-                                          row( self._control['goto'] if self._fig['slider'] else Div( ),
-                                               row( self._control['cycleniter'],
-                                                    self._control['cycle_factor'], background="lightgray" ) ),
-                                          self._fig['slider'] if self._fig['slider'] else Div( ),
-                                          row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ),
-                                          self._cube.statistics( width=280 ),
-                                          height_policy='max',
+                                      column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],
+                                                                                       self._control['clean']['continue'],
+                                                                                       self._control['clean']['finish'] ),
+                                                                                  row( self._control['nmajor'],
+                                                                                       self._control['niter'],
+                                                                                       self._control['threshold'] ),
+                                                                                  row( self._control['goto'] if self._fig['slider'] else Div( ),
+                                                                                       row( self._control['cycleniter'],
+                                                                                            self._control['cycle_factor'], background="lightgray" ) ),
+                                                                                  row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
+                                                                    title='Iteration'),
+                                                           TabPanel( child=self._cube.colormap_adjust( ),
+                                                                     title='Colormap') ],
+                                                    sizing_mode='stretch_width' ),
+                                              self._fig['slider'] if self._fig['slider'] else Div( ),
+                                              self._cube.statistics( width=280 ),
+                                              height_policy='max',
                                       ),
                                       width_policy='max', height_policy='max' ),
                                   row(

@@ -974,9 +974,8 @@ class CubeMask:
 
             self._image = set_attributes( figure( height=self._pipe['image'].shape[1], width=self._pipe['image'].shape[0],
                                                   output_backend="webgl", match_aspect=True,
-                                                  tools=[ 'lasso_select', 'box_select',
-                                                          'pan', 'wheel_zoom', 'save',
-                                                          'reset', 'poly_select' ],
+                                                  tools=[ "lasso_select","box_select","pan",
+                                                          "wheel_zoom","save","reset" ],
                                                   tooltips=None ), **kw )
             ###
             ### set tools that are active by default
@@ -1196,6 +1195,7 @@ class CubeMask:
         self._cm_adjust['left input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
         self._cm_adjust['right input'] = TextInput( value=repr(edges[-1]), prefix="max", max_width=140 )
         self._cm_adjust['right input tt'] = Tooltip(content=HTML("<b>HTML</b> tooltip"), position="right",target=self._cm_adjust['right input'], visible=True)
+        
 
         self._cm_adjust['hover'] = HoverTool( )
         self._cm_adjust['drag'] = DragTool( )

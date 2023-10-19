@@ -1,12 +1,14 @@
 import { DataPipe } from "./data_pipe"
 import * as p from "@bokehjs/core/properties"
 
-declare global {
-    // loaded into "window" by casalib
-    interface Window { coordtxl: any }
+declare global { // CASALIB DECL
+    var casalib: {
+        object_id: ( obj: { [key: string]: any } ) => string
+        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
+        coordtxl: any,
+        d3: any
+    }
 }
-
-declare var object_id: ( obj: { [key: string]: any } ) => string
 
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
@@ -45,7 +47,7 @@ export class ImagePipe extends DataPipe {
     initialize(): void {
         super.initialize();
         if ( this.fits_header_json ) {
-            this._wcs = new window.coordtxl.WCSTransform( new window.coordtxl.MapKeywordProvider(JSON.parse(this.fits_header_json)) )
+            this._wcs = new casalib.coordtxl.WCSTransform( new casalib.coordtxl.MapKeywordProvider(JSON.parse(this.fits_header_json)) )
         }
     }
 
@@ -62,6 +64,12 @@ export class ImagePipe extends DataPipe {
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
     spectra( index: [number, number, number], cb: (msg:{[key: string]: any}) => any, id: string, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ) {
         let message = { action: 'spectra', index, id }
+        super.send( this.dataid, message, cb, squash_queue )
+    }
+
+    adjust_colormap( bounds: [ number, number ] | string, transfer: {[key: string]: any},
+                     cb: (msg:{[key: string]: any}) => any, id: string, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false  ) {
+        const message = { action: 'adjust-colormap', bounds, transfer, id }
         super.send( this.dataid, message, cb, squash_queue )
     }
 

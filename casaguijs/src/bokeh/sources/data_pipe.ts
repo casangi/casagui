@@ -4,8 +4,14 @@ import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 import { serialize, deserialize } from "../util/conversions"
 
 // global object_id function supplied by casalib
-declare var object_id: ( obj: { [key: string]: any } ) => string
-declare var ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
+declare global { // CASALIB DECL
+    var casalib: {
+        object_id: ( obj: { [key: string]: any } ) => string
+        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
+        coordtxl: any,
+        d3: any
+    }
+}
 
 declare global {
     // extend document with our properties
@@ -101,7 +107,7 @@ export class DataPipe extends DataSource {
                         } else {
                             if ( id in this.incoming_callbacks ) {
                                 let result = this.incoming_callbacks[id](message)
-                                this.websocket.send( serialize({ id, direction, message: result, session: object_id(this) }))
+                                this.websocket.send( serialize({ id, direction, message: result, session: casalib.object_id(this) }))
                             }
                         }
                     } else {
@@ -115,11 +121,11 @@ export class DataPipe extends DataSource {
 
             this.websocket.onopen = ( ) => {
                 if ( ! reconnections ) {
-                    this.websocket.send(serialize({ id: 'initialize', direction: 'j2p', session: object_id(this) }))
+                    this.websocket.send(serialize({ id: 'initialize', direction: 'j2p', session: casalib.object_id(this) }))
                 } else if ( reconnections.connected == false ) {
                     console.log( `connection reestablished at ${new Date( )}` )
                 }
-                reconnections = new (ReconnectState as any)( )
+                reconnections = new (casalib.ReconnectState as any)( )
 
                 // if there were send events before the websocket was connected, resend them
                 while ( this.connection_queue.length > 0 ) {
@@ -168,7 +174,7 @@ export class DataPipe extends DataSource {
     }
 
     send( id: string, message: {[key: string]: any}, cb: (msg:{[key: string]: any}) => any, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ): void {
-        let msg = { id, message, direction: 'j2p', session: object_id(this) }
+        let msg = { id, message, direction: 'j2p', session: casalib.object_id(this) }
         // queue message if:
         //    (1) websocket is not yet initialized
         //    (2) a result indicated by id is pending
@@ -211,11 +217,40 @@ export class DataPipe extends DataSource {
                     // src/bokeh/sources/data_pipe.ts:100:45 - error TS2448: Block-scoped variable 'cb' used before its declaration.
                     let { cb, msg } = this.send_queue[id].shift( )
                     this.pending[id] = { cb }
-                    this.websocket.send(serialize(msg))
+                    if ( this.websocket.readyState === WebSocket.OPEN )
+                        this.websocket.send(serialize(msg))
+                    else {
+                        let countdown = 20
+                        let pipe = this
+                        function resend( ) {
+                            if ( pipe.websocket.readyState === WebSocket.OPEN )
+                                pipe.websocket.send(serialize(msg))
+                            else {
+                                countdown = countdown - 1
+                                if ( countdown > 0 ) setTimeout( resend, 3000 )
+                            }
+                        }
+                        setTimeout( resend, 3000 )
+                    }
                 }
             } else {
-                this.pending[id] = { cb }
-                this.websocket.send(serialize(msg))
+                if ( this.websocket.readyState === WebSocket.OPEN ) {
+                    this.pending[id] = { cb }
+                    this.websocket.send(serialize(msg))
+                } else {
+                    let countdown = 20
+                    let pipe = this
+                    function resend( ) {
+                        if ( pipe.websocket.readyState === WebSocket.OPEN ) {
+                            pipe.pending[id] = { cb }
+                            pipe.websocket.send(serialize(msg))
+                        } else {
+                            countdown = countdown - 1
+                            if ( countdown > 0 ) setTimeout( resend, 3000 )
+                        }
+                    }
+                    setTimeout( resend, 3000 )
+                }
             }
         }
     }

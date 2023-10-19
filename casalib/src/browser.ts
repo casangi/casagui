@@ -4,18 +4,41 @@
  */
 import { object_id } from './object_id'
 import { ReconnectState } from "./reconnect_state"
+import { zip, unzip } from "./zip"
 
 import * as coordtxl from 'coordtxl'
 import hotkeys from 'hotkeys-js'
 import { contours } from 'd3-contour'
+// see https://d3js.org/d3-polygon
+import { polygonContains } from 'd3-polygon'
 
-export { coordtxl, hotkeys, contours }
+declare global {
+    var Bokeh: any
+}
+
+var casalib = {
+    zip,
+    unzip,
+    object_id,
+    coordtxl,
+    hotkeys,
+    ReconnectState,
+    d3: { contours, polygonContains },
+    // TypeScript is poor
+    // ------------------
+    // Without this bit of stupidity, 'casalib' is flagged with a compile time error:
+    //    'casalib' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+    // Ignoring this error, results in the runtime error:
+    //    Uncaught TypeError: {(intermediate value)(intermediate value)(intermediate value)(intermediate value)(intermediate value)} is not a function
+    // Is TypeScript an undergrad CS project gone awry?
+    _dummy: undefined
+}
+
+if ( typeof Bokeh !== "undefined" ) {
+    if ( typeof Bokeh._dummy != "undefined" ) {
+        casalib._dummy = Bokeh._dummy
+    }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).object_id = object_id;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).ReconnectState = ReconnectState;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).coordtxl = coordtxl;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).contours = contours;
+(window as any).casalib = casalib;

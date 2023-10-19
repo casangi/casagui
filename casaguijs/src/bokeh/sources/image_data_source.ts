@@ -4,9 +4,13 @@ import {uuid4} from "@bokehjs/core/util/string"
 import { CallbackLike0 } from "@bokehjs/models/callbacks/callback"
 import { ImagePipe } from "./image_pipe"
 
-declare global {
-    // loaded into "window" by casalib
-    interface Window { contours: any  }
+declare global { // CASALIB DECL
+    var casalib: {
+        object_id: ( obj: { [key: string]: any } ) => string
+        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
+        coordtxl: any,
+        d3: any
+    }
 }
 
 // Data source where the data is defined column-wise, i.e. each key in the
@@ -52,8 +56,8 @@ export class ImageDataSource extends ColumnDataSource {
             // @ts-ignore: Parameter 'acc' implicitly has an 'any' type.
             return pairs.reduce( (acc, pair) => { acc[0].push(pair[0]); acc[1].push(pair[1]); return acc }, [[],[]] )
         }
-
-        const d3contours = window.contours( ).size(this.image_source.shape.slice(0,2)).thresholds([1])(mask[0])[0]
+        // @ts-ignore:
+        const d3contours = casalib.d3.contours( ).size(this.image_source.shape.slice(0,2)).thresholds([1])(mask[0])[0]
         //             Parameter 'x' implicitly has an 'any' type.
         // @ts-ignore: Parameter 'y' implicitly has an 'any' type.
         const split_tuples = d3contours.coordinates.map( x => x.map( y => split(y) ) )
@@ -77,6 +81,12 @@ export class ImageDataSource extends ColumnDataSource {
                                        if ( cb ) { cb(data) }
                                        this.data = data.chan
                                    }, this.imid )
+    }
+
+    adjust_colormap( bounds: [ number, number ] | string,
+                     transfer: {[key: string]: any},
+                     cb: (msg:{[key: string]: any}) => any ) {
+        this.image_source.adjust_colormap( bounds, transfer, cb, this.imid, true )
     }
 
     signal_change( ): void {

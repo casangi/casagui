@@ -2,9 +2,13 @@ import { TickFormatter } from "@bokehjs/models/formatters/tick_formatter"
 import * as p from "@bokehjs/core/properties"
 import { ImageDataSource } from "../sources/image_data_source"
 
-declare global {
-    // loaded into "window" by casalib
-    interface Window { coordtxl: any }
+declare global {  // CASALIB DECL
+    var casalib: {
+        object_id: ( obj: { [key: string]: any } ) => string
+        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
+        coordtxl: any,
+        d3: any
+    }
 }
 
 // Data source where the data is defined column-wise, i.e. each key in the
@@ -49,16 +53,16 @@ export class WcsTicks extends TickFormatter {
         if ( this._axis && this.image_source.wcs( ) && this._coord == "world" ) {
             for (let i = 0, len = ticks.length; i < len; i++) {
                 if ( this._axis == "x" ) {
-                    const pt = new window.coordtxl.Point2D(Number(ticks[i]),0.0)
+                    const pt = new casalib.coordtxl.Point2D(Number(ticks[i]),0.0)
                     // @ts-ignore: Object is possibly 'null'... check is above
                     this.image_source.wcs( ).imageToWorldCoords(pt,false)
                     // unicode degrees symbol is "\u00B0"
-                    formatted.push( new window.coordtxl.WorldCoords(pt.getX(),pt.getY()).format(2000)[0] )
+                    formatted.push( new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).format(2000)[0] )
                 } else {
-                    const pt = new window.coordtxl.Point2D(0.0,Number(ticks[i]))
+                    const pt = new casalib.coordtxl.Point2D(0.0,Number(ticks[i]))
                     // @ts-ignore: Object is possibly 'null'... check is above
                     this.image_source.wcs( ).imageToWorldCoords(pt,false)
-                    formatted.push( new window.coordtxl.WorldCoords(pt.getX(),pt.getY()).format(2000)[1] )
+                    formatted.push( new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).format(2000)[1] )
                 }
             }
         } else {

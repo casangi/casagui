@@ -40,8 +40,10 @@
   "private": false,
   "dependencies": {
     "@types/d3-contour": "^3.0.3",
+    "@types/d3-polygon": "^3.0.0",
     "coordtxl": "^0.1.4",
     "d3-contour": "^4.0.2",
+    "d3-polygon": "^3.0.1",
     "hotkeys-js": "^3.10.1"
   }
 }

@@ -29,6 +29,7 @@
 implementation for CASA images which allows for interacitve display
 of image cube channels in response to user input.'''
 
+import sys
 import json
 import asyncio
 from uuid import uuid4
@@ -38,6 +39,7 @@ from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
 from ..state import casalib_url, casaguijs_url
+from math import isnan
 
 import numpy as np
 try:
@@ -146,6 +148,7 @@ class ImagePipe(DataPipe):
             ###
             ### ensure that the channel index is within cube shape
             ###
+            index = list(index)     # index is potentially a python tuple
             index[0] = min( index[0], self.__chan_shape[0] - 1 )
             index[1] = min( index[1], self.__chan_shape[1] - 1 )
             index[0] = max( index[0], 0 )
@@ -160,8 +163,7 @@ class ImagePipe(DataPipe):
     ### seems like 256 is the greatest number of colors in the colormaps currrently used
     ### for pseudo color within interactive clean...
     ### ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
-    #def channel( self, index, element_type=np.float64 ):
-    def channel( self, index, element_type=np.uint8 ):
+    def channel( self, index, pixel_type ):
         """Retrieve one channel from the image cube. The `index` should be a
         two element list of integers. The first integer is the ''stokes'' axis
         in the image cube. The second integer is the ''channel'' axis in the
@@ -171,22 +173,71 @@ class ImagePipe(DataPipe):
         ----------
         index: [ int, int ]
             list containing first the ''stokes'' index and second the ''channel'' index
+        pixel_type: numpy type
+            the numpy type for the pixel elements of the returned channel
         """
         def quantize( nptype, image_plane ):
+            lower_bin = np.array([],bool)
+            upper_bin = np.array([],bool)
+            mask = np.array([],bool)
             bits = nptype(0).nbytes * 8
-            min = image_plane.min( )
-            max = image_plane.max( )
+
+            if self.__quant_adjustments['transfer']['scaling'] != 'linear':
+                if self.__quant_adjustments['transfer']['scaling'] not in self.__quant_scaling:
+                    print( f'''error: ${self.__quant_adjustments['transfer']['scaling']} is not a known scaling...''', file=sys.stderr )
+                    scaled_plane = image_plane
+                else:
+                    scaled_plane = self.__quant_scaling[self.__quant_adjustments['transfer']['scaling']](image_plane,**self.__quant_adjustments['transfer']['args'])
+            else:
+                scaled_plane = image_plane
+
+            #####################################################################################
+            ### The assumption is that np.uint8 implies a pseudo color mapping. When this     ###
+            ### type is used the quantization tweaks provided via 'adjust-colormap' are used. ###
+            #####################################################################################
+            if nptype == np.uint8 and \
+               ( not isnan(self.__quant_adjustments['bounds'][0]) or \
+                 not isnan(self.__quant_adjustments['bounds'][1]) ):
+                ################################################################################
+                ### NaN means that the user has not modified that boundary                   ###
+                ################################################################################
+                lower_bin = np.array([],bool) if isnan(self.__quant_adjustments['bounds'][0]) else image_plane <= self.__quant_adjustments['bounds'][0]
+                upper_bin = np.array([],bool) if isnan(self.__quant_adjustments['bounds'][1]) else image_plane >= self.__quant_adjustments['bounds'][1]
+
+                if lower_bin.any( ) and upper_bin.any( ):
+                    mask = ~( lower_bin | upper_bin )
+                elif lower_bin.any( ):
+                    mask = ~lower_bin
+                elif upper_bin.any( ):
+                    mask = ~upper_bin
+
+                if mask.any( ):
+                    min = scaled_plane[mask].min( )
+                    max = scaled_plane[mask].max( )
+                    max -= min
+                    result = np.ma.zeros(scaled_plane.shape,scaled_plane.dtype)
+                    if upper_bin.any( ):
+                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-3) + 1
+                        result[upper_bin] = 255
+                    else:
+                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-1)
+                    result = result.filled(0).astype(np.uint8)
+                    return result
+
+            min = scaled_plane.min( )
+            max = scaled_plane.max( )
             max -= min
-            img = ((image_plane - min)/max) * (2**bits-1)
-            return img.astype(nptype)
+            img = ((scaled_plane - min)/max) * (2**bits-1)
+            result = img.astype(nptype)
+            return result
 
         if self.__img is None:
             raise RuntimeError('no image is available')
-        if np.issubdtype( element_type, np.integer ):
-            return quantize( element_type,
+        if np.issubdtype( pixel_type, np.integer ):
+            return quantize( pixel_type,
                              np.squeeze( self.__get_chan(index) ) ).transpose( )
         else:
-            return np.squeeze( self.__get_chan(index) ).astype(element_type).transpose( )
+            return np.squeeze( self.__get_chan(index) ).astype(pixel_type).transpose( )
 
     def have_mask0( self ):
         """Check to see if the synthesis imaging 'mask0' mask exists
@@ -315,7 +366,7 @@ class ImagePipe(DataPipe):
 
     async def _image_message_handler( self, cmd ):
         if cmd['action'] == 'channel':
-            chan = self.channel(cmd['index'])
+            chan = self.channel(cmd['index'],np.uint8)
             mask = { } if self.__msk is None else { 'msk': [ pack_arrays( self.mask(cmd['index']) ) ] }
             _mask0 = self.mask0(cmd['index'])
             mask0 = { } if _mask0 is None else { 'msk0': [ pack_arrays(_mask0) ] }
@@ -335,6 +386,16 @@ class ImagePipe(DataPipe):
 
         elif cmd['action'] == 'spectra':
             return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
+        elif cmd['action'] == 'adjust-colormap':
+            if cmd['bounds'] == "reset":
+                self.__quant_adjustments = { 'bounds': [ float('nan'), float('nan') ],
+                                             'transfer': {'scaling': 'linear'} }
+            else:
+                ### later a function should be provided for setting the quantization transfer function
+                self.__quant_adjustments = { 'bounds': cmd['bounds'], 'transfer': cmd['transfer'] }
+                ### ensure that the cached channel is not used...
+                self.__cached_chan = None
+            return { 'result': 'OK', 'id': cmd['id'] }
 
     def __init__( self, image, *args, mask=None, stats=False, **kwargs ):
         super( ).__init__( *args, **kwargs, )
@@ -365,6 +426,17 @@ class ImagePipe(DataPipe):
         ###
         self.__cached_chan = None
         self.__cached_chan_index = None
+
+        ###
+        ### quantization controls to affect how pseudo colors are displayed
+        ###
+        self.__quant_adjustments = { 'bounds': [ float('nan'), float('nan') ],
+                                     'transfer': {'scaling': 'linear'} }
+        self.__quant_scaling = { 'log':    lambda chan,alpha: np.ma.log(alpha * chan + 1.0) / np.ma.log(alpha + 1.0),
+                                 'sqrt':   lambda chan:       np.ma.sqrt(chan),
+                                 'square': lambda chan:       np.square(chan),
+                                 'gamma':  lambda chan,gamma: np.ma.power(chan,gamma),
+                                 'power':  lambda chan,alpha: (np.ma.power(alpha,chan) - 1.0) / alpha }
 
         super( ).register( self.dataid, self._image_message_handler )
 

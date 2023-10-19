@@ -84,7 +84,10 @@ def pack_arrays( val ):
             result[k] = pack_arrays(v)
         return result
     if isinstance( val, np.ndarray ):
-        return transform_array(val)
+        if isinstance(val, np.ma.MaskedArray):
+            return transform_array(val.filled(0))
+        else:
+            return transform_array(val)
     if isinstance( val, range ):
         return list(val)
     return val

@@ -33,6 +33,7 @@ with CASA images but ``DataPipe`` can have generic messages.'''
 import inspect
 import threading
 import asyncio
+import traceback
 
 from bokeh.models.sources import DataSource
 from bokeh.util.compiler import TypeScript
@@ -224,8 +225,11 @@ class DataPipe(DataSource):
                                                                           'message': return_message,
                                                                           'direction': msg['direction'] } ) )
                             except Exception as e:
+                                trace_back = traceback.format_exc().replace('\n','\n                       ')
                                 print('************************************************************************************************************************')
                                 print( f'''EXCEPTION ENCOUNTERED: {repr(e)}''' )
+                                print( f'''              MESSAGE: {repr(msg)}''' )
+                                print( f'''          STACK TRACE: {trace_back}''' )
                                 print('************************************************************************************************************************')
                                 await self.__websocket.send( serialize( { 'id': msg['id'],
                                                                           'message': { 'error': "exception encountered",
@@ -238,8 +242,11 @@ class DataPipe(DataSource):
                                                                           'message': result,
                                                                           'direction': msg['direction'] } ) )
                             except Exception as e:
+                                trace_back = traceback.format_exc().replace('\n','\n                       ')
                                 print('************************************************************************************************************************')
                                 print( f'''EXCEPTION ENCOUNTERED: {repr(e)}''' )
+                                print( f'''              MESSAGE: {repr(msg)}''' )
+                                print( f'''          STACK TRACE: {trace_back}''' )
                                 print('************************************************************************************************************************')
                                 await self.__websocket.send( serialize( { 'id': msg['id'],
                                                                           'message': { 'error': "exception encountered",

@@ -27,6 +27,7 @@
 ########################################################################
 '''Specialization of the Bokeh ``DataSource`` for image cube data.'''
 
+import numpy as np
 from bokeh.plotting import ColumnDataSource
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Instance, Tuple, Int, Nullable
@@ -62,7 +63,7 @@ class ImageDataSource(ColumnDataSource):
     def __init__( self, *args, **kwargs ):
         super( ).__init__( *args, **kwargs )
         mask0 = self.image_source.mask0( [0,0] )
-        self.data = { 'img': [ self.image_source.channel( [0,0] ) ],
+        self.data = { 'img': [ self.image_source.channel( [0,0], np.uint8 ) ],
                       'msk0': [ mask0 if mask0 is not None else None ] }
         if self.image_source.have_mask( ):
             self.data['msk'] = [ self.image_source.mask( [0,0] ) ]
