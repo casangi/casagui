@@ -1040,13 +1040,14 @@ class InteractiveClean:
                                                                                        row( self._control['cycleniter'],
                                                                                             self._control['cycle_factor'], background="lightgray" ) ),
                                                                                   row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
-                                                                    title='Iteration'),
+                                                                    title='Iteration' ),
                                                            TabPanel( child=self._cube.colormap_adjust( ),
-                                                                     title='Colormap') ],
+                                                                     title='Colormap' ),
+                                                           TabPanel( child=self._cube.statistics( width=280 ),
+                                                                     title='Statistics' ) ],
                                                     sizing_mode='stretch_width' ),
                                               self._fig['slider'] if self._fig['slider'] else Div( ),
-                                              self._cube.statistics( width=280 ),
-                                              height_policy='max',
+                                              height_policy='max', max_width=320
                                       ),
                                       width_policy='max', height_policy='max' ),
                                   row(
