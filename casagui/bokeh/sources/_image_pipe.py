@@ -29,6 +29,7 @@
 implementation for CASA images which allows for interacitve display
 of image cube channels in response to user input.'''
 
+import os
 import sys
 import json
 import asyncio
@@ -140,9 +141,16 @@ class ImagePipe(DataPipe):
         return self.__stokes_labels
 
     def __get_chan( self, index ):
-        if self.__cached_chan is None or \
+        def newest_ctime( path ):
+            files = os.listdir(path)
+            paths = [os.path.join(path, basename) for basename in files]
+            return max( map( os.path.getctime, paths ) )
+
+        image_ctime = newest_ctime( self.__image_path )
+        if image_ctime > self.__cached_chan_ctime or \
            self.__cached_chan_index[0] != index[0] or \
-           self.__cached_chan_index[1] != index[1]:
+           self.__cached_chan_index[1] != index[1] or \
+           self.__cached_chan is None :
             if self.__img is None:
                 raise RuntimeError('no image is available')
             ###
@@ -154,6 +162,7 @@ class ImagePipe(DataPipe):
             index[0] = max( index[0], 0 )
             index[1] = max( index[1], 0 )
             self.__cached_chan_index = index
+            self.__cached_chan_ctime = image_ctime
             self.__cached_chan = self.__img.getchunk( blc=[0,0] + index,
                                                       trc=self.__chan_shape + index )
         return self.__cached_chan
@@ -426,6 +435,7 @@ class ImagePipe(DataPipe):
         ###
         self.__cached_chan = None
         self.__cached_chan_index = None
+        self.__cached_chan_ctime = 0
 
         ###
         ### quantization controls to affect how pseudo colors are displayed
