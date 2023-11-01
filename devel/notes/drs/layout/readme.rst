@@ -58,7 +58,7 @@ or a row of my *row-based* :code:`Tip` widgets caused the layout to change:
   :alt: row of rows
 
 To resolve this problem, I had to create a :code:`Tip` widget *based upon* but **not derived** from
-`LayoutDOM <https://docs.bokeh.org/en/latest/docs/reference/models/layouts.html#bokeh.models.LayoutDOM>`_. This new :code:`Tip`
+`LayoutDOM <https://docs.bokeh.org/en/latest/docs/reference/models/layouts.html#:~:text=be%20None)-,class%20LayoutDOM,-(*args>`_. This new :code:`Tip`
 widget does not have all of the layout properties that :code:`LayoutDOM` provides, and it only accepts one :code:`child` parameter::
 
   row( Tip( self._cm_adjust['left input'],
