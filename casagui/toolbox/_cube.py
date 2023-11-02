@@ -54,10 +54,10 @@ from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manag
 
 from ..bokeh.tools import DragTool, CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
-from bokeh.layouts import row, column
+from bokeh.layouts import row, column, FlexBox
 from bokeh.models.dom import HTML
 from bokeh.models import Tooltip
-from ..bokeh.models import TipButton
+from ..bokeh.models import TipButton, Tip
 
 import numpy as np
 
@@ -1181,7 +1181,7 @@ class CubeMask:
                                                                     { action: 'palette', value: this.item },
                                                                     receive_palette )''' ) )
 
-        return self._palette
+        return Tip( self._palette, tooltip=Tooltip( content=HTML("Select the colormap used to render the image cube"), position="right" ) )
 
 
     def colormap_adjust( self, **kw ):
@@ -1493,9 +1493,22 @@ class CubeMask:
                                                                    ctrl.send( id, { action: 'fetch' }, adjust_update )''' ) )
 
         return column( self._cm_adjust['fig'],
-                       row( self._cm_adjust['left input'], self._cm_adjust['right input'] ),
-                       row( self._cm_adjust['scaling'], self._cm_adjust['equation'] ),
-                       row( self._cm_adjust['alpha-value'], self._cm_adjust['gamma-value'] ) )
+                       row( Tip( self._cm_adjust['left input'],
+                                  tooltip=Tooltip( content=HTML("set minimum clip here or drag the left red line above"),
+                                                   position="top" ) ),
+                            Tip( self._cm_adjust['right input'],
+                                  tooltip=Tooltip( content=HTML("set maximum clip here or drag the right red line above"),
+                                                   position="top_left" ) ) ),
+                       row( Tip( self._cm_adjust['scaling'],
+                                  tooltip=Tooltip( content=HTML('scaling function applied to image intensities'),
+                                                   position="top" ) ),
+                            self._cm_adjust['equation'] ),
+                       row( Tip( self._cm_adjust['alpha-value'],
+                                  tooltip=Tooltip( content=HTML('set alpha value as indicated in the equation'),
+                                                   position="top" ) ),
+                            Tip( self._cm_adjust['gamma-value'],
+                                  tooltip=Tooltip( content=HTML('set gamma value as indicated in the equation'),
+                                                   position="top" ) ) ) )
 
     def bitmask_controls( self, **kw ):
 
@@ -1508,9 +1521,9 @@ class CubeMask:
         ###    NOTE: the self._bitmask_color_selector change function is setup
         ###          in the "connect" member function
         ###
-        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00' )
+        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00', margin=(-1, 0, 0, 0) )
 
-        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6 )
+        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0) )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
                                                          code='''let gl = bitmask.glyph
                                                                  gl.global_alpha.value = cb_obj.value
@@ -1544,7 +1557,14 @@ class CubeMask:
                                                                 }
                                                                 this.origin.label = this.item''' ) )
 
-        return ( self._bitmask_color_selector, mask_alpha_pick, self._bitmask_transparency_button )
+        return ( Tip( self._bitmask_color_selector,
+                      tooltip=Tooltip( content=HTML("Set the color used for drawing the mask"), position="right" ) ),
+                 Tip( mask_alpha_pick,
+                      tooltip=Tooltip( content=HTML("<b>If</b> the mask is indicated with shading, this sets the opaqueness of the shading"),
+                                       position="bottom" ) ),
+                 Tip( self._bitmask_transparency_button,
+                      tooltip=Tooltip( content=HTML("The mask can be displayed as a <b>contour</b> or the <b>masked/unmasked</b> portion can be shaded"),
+                                       position='right' ) ) )
 
 
     def channel_ctrl( self ):
@@ -1555,7 +1575,10 @@ class CubeMask:
             raise RuntimeError('cube image not in use')
         self._channel_ctrl = PreText( text='Channel 0', min_width=100 )
         self._channel_ctrl_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
-        self._channel_ctrl_group = row( self._channel_ctrl, self._channel_ctrl_stokes_dropdown )
+        self._channel_ctrl_group = row( self._channel_ctrl,
+                                        Tip( self._channel_ctrl_stokes_dropdown,
+                                             tooltip=Tooltip( content=HTML('Select which of the <b>image</b> or <b>stokes</b> planes to display'),
+                                                              position='right' ) ) )
         return self._channel_ctrl_group
 
     def coord_ctrl( self ):
@@ -1565,7 +1588,7 @@ class CubeMask:
         if self._image is None:
             raise RuntimeError('cube image not in use')
         self._coord_ctrl_dropdown = Dropdown( label='world', button_type='light', margin=(-1, 0, 0, 0),
-                                                             sizing_mode='scale_height', menu=['pixel','world'] )
+                                              sizing_mode='scale_height', menu=['pixel','world'] )
         self._coord_ctrl_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
                                                                     xaxis=self._image.xaxis.formatter,
                                                                     yaxis=self._image.yaxis.formatter ),
@@ -1574,7 +1597,10 @@ class CubeMask:
                                                                             source.signal_change( )
                                                                             this.origin.label = this.item''' ) )
 
-        self._coord_ctrl_group = row( self._coord_ctrl_dropdown )
+        self._coord_ctrl_group = Tip( self._coord_ctrl_dropdown,
+                                      tooltip=Tooltip( content=HTML("Axes can be labeled in <b>pixel</b> or <b>world</b> coordinates"),
+                                                       position="right" ) )
+
         return self._coord_ctrl_group
 
     def pixel_tracking_text( self ):
@@ -1882,10 +1908,10 @@ class CubeMask:
         '''
         if self._help_button is None:
             self._help_button = set_attributes( TipButton( label="", max_width=35, max_height=35, name='help',
-                                                           button_type='light', hover_wait=0,
+                                                           button_type='light', hover_wait=0, margin=(-1, 0, 0, 0),
                                                            tooltip=Tooltip( content=HTML( '''<b>Click</b> here for image command key help.
                                                                                              <b>Hover</b> over some widgets for 1.5 seconds for other help''' ),
-                                                                            position="right" ) ), **kw )
+                                                                            position="bottom" ) ), **kw )
             self._help_button.js_on_click( CustomJS( args=dict( text=self.__help_string( ) ),
                                                      code='''if ( window._iclean_help && ! window._iclean_help.closed ) {
                                                                  window._iclean_help.focus( )

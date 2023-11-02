@@ -43,7 +43,7 @@ from bokeh.io import reset_output as reset_bokeh_output, output_file, output_not
 from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
-from ..bokeh.models import TipButton
+from ..bokeh.models import TipButton, Tip
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 try:
@@ -764,8 +764,8 @@ class InteractiveClean:
         ###
         self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
                                        icon=svg_icon(icon_name="iclean-log", size=25),
-                                       tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="right" ),
-                                       button_type='light' )
+                                       tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="bottom" ),
+                                       margin=(-1, 0, -10, 0), button_type='light' )
         self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
                                                  code='''function format_log( elem ) {
                                                              return `<html>
@@ -1033,12 +1033,24 @@ class InteractiveClean:
                                       column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],
                                                                                        self._control['clean']['continue'],
                                                                                        self._control['clean']['finish'] ),
-                                                                                  row( self._control['nmajor'],
-                                                                                       self._control['niter'],
-                                                                                       self._control['threshold'] ),
-                                                                                  row( self._control['goto'] if self._fig['slider'] else Div( ),
-                                                                                       row( self._control['cycleniter'],
-                                                                                            self._control['cycle_factor'], background="lightgray" ) ),
+                                                                                  row( Tip( self._control['nmajor'],
+                                                                                            tooltip=Tooltip( content=HTML( 'maximum number of major cycles to run before stopping'),
+                                                                                                             position='bottom' ) ),
+                                                                                       Tip( self._control['niter'],
+                                                                                            tooltip=Tooltip( content=HTML( 'number of clean iterations to run' ),
+                                                                                                             position='bottom' ) ),
+                                                                                       Tip( self._control['threshold'],
+                                                                                            tooltip=Tooltip( content=HTML( 'stopping threshold' ),
+                                                                                                             position='bottom' ) ) ),
+                                                                                  row( Tip( self._control['goto'],
+                                                                                            tooltip=Tooltip( content=HTML( 'to go to a specific channel, <b>enter</b> the channel number and press <b>return</b>' ),
+                                                                                                             position='bottom' ) ) if self._fig['slider'] else Div( ),
+                                                                                       row( Tip( self._control['cycleniter'],
+                                                                                                 tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
+                                                                                                                  position='bottom' ) ),
+                                                                                            Tip( self._control['cycle_factor'],
+                                                                                                 tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
+                                                                                                                  position='bottom_left' ) ), background="lightgray" ) ),
                                                                                   row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
                                                                     title='Iteration' ),
                                                            TabPanel( child=self._cube.colormap_adjust( ),
@@ -1046,7 +1058,9 @@ class InteractiveClean:
                                                            TabPanel( child=self._cube.statistics( width=280 ),
                                                                      title='Statistics' ) ],
                                                     sizing_mode='stretch_width' ),
-                                              self._fig['slider'] if self._fig['slider'] else Div( ),
+                                              Tip( self._fig['slider'],
+                                                   tooltip=Tooltip( content=HTML("slide control to the desired channel"),
+                                                                    position="top" ) ) if self._fig['slider'] else Div( ),
                                               height_policy='max', max_width=320
                                       ),
                                       width_policy='max', height_policy='max' ),

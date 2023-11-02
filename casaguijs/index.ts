@@ -7,9 +7,10 @@ import {DragTool} from "./src/bokeh/tools/drag_tool"
 import {CBResetTool} from "./src/bokeh/tools/cbreset_tool"
 import {serialize, deserialize} from "./src/bokeh/util/conversions"
 import {TipButton} from "./src/bokeh/models/tip_button"
+import {Tip} from "./src/bokeh/models/tip"
 import *  as find from "./src/bokeh/util/find"
 import {register_models} from "@bokehjs/base"
 
-export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, TipButton, serialize, deserialize }
+export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, serialize, deserialize }
 
-register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, TipButton })
+register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton })
