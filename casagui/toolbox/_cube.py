@@ -54,7 +54,7 @@ from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manag
 
 from ..bokeh.tools import DragTool, CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
-from bokeh.layouts import row, column, FlexBox
+from bokeh.layouts import row, column
 from bokeh.models.dom import HTML
 from bokeh.models import Tooltip
 from ..bokeh.models import TipButton, Tip
