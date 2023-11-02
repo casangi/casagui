@@ -2,7 +2,7 @@
 Introduction
 ============
 
-Bokeh layout options are not great. The `GridBox <https://docs.bokeh.org/en/latest/docs/reference/models/layouts.html#bokeh.models.GridBox>`_
+Bokeh layout options are not great (**at least with Bokeh 3.2.1**). The `GridBox <https://docs.bokeh.org/en/latest/docs/reference/models/layouts.html#bokeh.models.GridBox>`_
 provides the most control, but it is complicated to lay out. The `row <https://docs.bokeh.org/en/latest/docs/reference/layouts.html#row>`_ and
 `column <https://docs.bokeh.org/en/latest/docs/reference/layouts.html#column>`_ layouts are the simplest to use, but they are based on
 the `FlexBox <https://docs.bokeh.org/en/latest/docs/reference/models/layouts.html#bokeh.models.FlexBox>`_ class which uses hueristics to
