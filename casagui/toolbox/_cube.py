@@ -37,10 +37,11 @@ from os import path
 import asyncio
 from uuid import uuid4
 from sys import platform
+from os.path import dirname, join
 import websockets
 from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
-from bokeh.models import CustomJS, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
+from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
                          LinearColorMapper, TextInput, Spacer
 from bokeh.models import WheelZoomTool, LassoSelectTool
@@ -50,7 +51,7 @@ from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe,
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.state import initialize_bokeh
 from casagui.bokeh.components import svg_icon
-from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
+from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
 
 from ..bokeh.tools import DragTool, CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
@@ -124,6 +125,20 @@ class CubeMask:
                       'pixel-value': str(uuid4( )),
                       'colormap-adjust': str(uuid4( )) } # ids used for control messages
 
+        ###########################################################################################################################
+        ### JavaScript init script to be run early in the startup. Piggybacked off of the ImagePipe initialization              ###
+        ### CustomAction callbacks are set in connect( ) function.                                                              ###
+        ###########################################################################################################################
+        _add_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-chan.png' ) ),
+                      cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
+        _sub_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
+                      cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
+        self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
+                                                    description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
+                               'sub': CustomAction( icon=_sub_['chan'],
+                                                    description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
+                               'img': dict( add=_add_, sub=_sub_ ) }
+
         self._fig = { }
         self._hover = { 'spectra': None, 'image': None }   # HoverTools which are used to synchronize image/spectra
                                                            # movement/taps and and corresponding display
@@ -154,6 +169,48 @@ class CubeMask:
         ###    copy buffer:       global                                                                                        ###
         ###########################################################################################################################
         self._js_mode_code = {
+                   'bitmask-hotkey-setup-add-sub':    '''
+                                              function mask_mod_result( msg ) {
+                                                  if ( msg.result == 'success' ) {
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                                  }
+                                              }
+                                              function mask_add_chan( ) {
+                                                  ctrl.send( ids['mask-mod'],
+                                                             { scope: 'chan',
+                                                               action: 'set',
+                                                               value: { chan: source.cur_chan,
+                                                                        xs: annotations[0].xs,
+                                                                        ys: annotations[0].ys } },
+                                                             mask_mod_result )
+                                              }
+                                              function mask_sub_chan( ) {
+                                                  ctrl.send( ids['mask-mod'],
+                                                             { scope: 'chan',
+                                                               action: 'clear',
+                                                               value: { chan: source.cur_chan,
+                                                                        xs: annotations[0].xs,
+                                                                        ys: annotations[0].ys } },
+                                                             mask_mod_result )
+                                              }
+                                              function mask_add_cube( ) {
+                                                  ctrl.send( ids['mask-mod'],
+                                                             { scope: 'cube',
+                                                               action: 'set',
+                                                               value: { chan: source.cur_chan,
+                                                                        xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                             mask_mod_result )
+                                              }
+                                              function mask_sub_cube( ) {
+                                                  ctrl.send( ids['mask-mod'],
+                                                             { scope: 'cube',
+                                                               action: 'clear',
+                                                               value: { chan: source.cur_chan,
+                                                                        xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                             mask_mod_result )
+                                              }''',
                    'bitmask-hotkey-setup':    '''
                                               function state_translate_selection( dx, dy ) {
                                                   const shape = source.image_source.shape
@@ -161,49 +218,20 @@ class CubeMask:
                                                   if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
                                                   if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
                                               }
-                                              function mask_mod_result( msg ) {
-                                                  if ( msg.result == 'success' ) {
-                                                      source.refresh( msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
-                                                  }
-                                              }
                                               casalib.hotkeys( 'escape', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         annotations[0].xs = [ ]
                                                                         annotations[0].ys = [ ] } )
                                               casalib.hotkeys( 'a', { scope: 'channel' },
-                                                               (e) => { ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'chan',
-                                                                                     action: 'set',
-                                                                                     value: { chan: source.cur_chan,
-                                                                                              xs: annotations[0].xs,
-                                                                                              ys: annotations[0].ys } },
-                                                                                   mask_mod_result ) } )
+                                                               (e) => mask_add_chan( ) )
                                               casalib.hotkeys( 's', { scope: 'channel' },
-                                                               (e) => { ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'chan',
-                                                                                     action: 'clear',
-                                                                                     value: { chan: source.cur_chan,
-                                                                                              xs: annotations[0].xs,
-                                                                                              ys: annotations[0].ys } },
-                                                                                   mask_mod_result ) } )
-                                              casalib.hotkeys( 'ctrl+a', { scope: 'channel' },
+                                                               (e) => mask_sub_chan( ) )
+                                              casalib.hotkeys( 'shift+a', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
-                                                                        ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'cube',
-                                                                                     action: 'set',
-                                                                                     value: { chan: source.cur_chan,
-                                                                                              xs: annotations[0].xs,
-                                                                                              ys: annotations[0].ys } },
-                                                                                   mask_mod_result ) } )
-                                              casalib.hotkeys( 'ctrl+s', { scope: 'channel' },
+                                                                        mask_add_cube( ) } )
+                                              casalib.hotkeys( 'shift+s', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
-                                                                        ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'cube',
-                                                                                     action: 'clear',
-                                                                                     value: { chan: source.cur_chan,
-                                                                                              xs: annotations[0].xs,
-                                                                                              ys: annotations[0].ys } },
-                                                                                   mask_mod_result ) } )
+                                                                        mask_sub_cube( ) } )
                                               casalib.hotkeys( 'shift+`', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         ctrl.send( ids['mask-mod'],
@@ -840,7 +868,7 @@ class CubeMask:
                                                %s
 
                                            }''' % (  self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else
-                                                     self._js_mode_code['bitmask-hotkey-setup'] )
+                                                     self._js_mode_code['bitmask-hotkey-setup-add-sub'] + self._js_mode_code['bitmask-hotkey-setup'] )
                         }
 
     def __stop( self ):
@@ -853,8 +881,45 @@ class CubeMask:
         '''set up websockets
         '''
         if self._pipe['image'] is None:
+            #######################################################################################################################
+            ### init_script code sets up Ctrl key handling for switching the add/subtract plot tool actions from single channel ###
+            ### operation to all channel operation                                                                              ###
+            #######################################################################################################################
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
-                                             stats=True, abort=self.__abort, address=find_ws_address( ) )
+                                             stats=True, abort=self.__abort, address=find_ws_address( ),
+                                             init_script=CustomJS( args=self._mask_add_sub,
+                                                                   code='''add._mode = 'chan'
+                                                                           sub._mode = 'chan'
+                                                                           function cube_on( ) {
+                                                                               add._mode = 'cube'
+                                                                               add.icon = img['add']['cube']
+                                                                               sub._mode = 'cube'
+                                                                               sub.icon = img['sub']['cube']
+                                                                           }
+                                                                           function cube_off( ) {
+                                                                               add._mode = 'chan'
+                                                                               add.icon = img['add']['chan']
+                                                                               sub._mode = 'chan'
+                                                                               sub.icon = img['sub']['chan']
+                                                                           }
+                                                                           casalib.hotkeys( '*',
+                                                                                            { keyup: true, scope: 'all' },
+                                                                                            (e) => {
+                                                                                                if ( e.key == "Shift" ) {
+                                                                                                    if ( e.type == 'keyup' )
+                                                                                                        cube_off( )
+                                                                                                    else
+                                                                                                        cube_on( )
+                                                                                                } } )
+                                                                           casalib.hotkeys( '*',
+                                                                                            { keyup: true, scope: 'channel' },
+                                                                                            (e) => {
+                                                                                                if ( e.key == "Shift" ) {
+                                                                                                    if ( e.type == 'keyup' )
+                                                                                                        cube_off( )
+                                                                                                    else
+                                                                                                        cube_on( )
+                                                                                                } } )''' ) )
         if self._pipe['control'] is None:
             self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
 
@@ -976,7 +1041,9 @@ class CubeMask:
                                                   output_backend="webgl", match_aspect=True,
                                                   tools=[ 'lasso_select', 'box_select',
                                                           'pan', 'wheel_zoom', 'save',
-                                                          'reset', 'poly_select' ],
+                                                          'reset', 'poly_select',
+                                                          self._mask_add_sub['add'],
+                                                          self._mask_add_sub['sub'] ],
                                                   tooltips=None ), **kw )
             ###
             ### set tools that are active by default
@@ -1621,6 +1688,24 @@ class CubeMask:
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
         '''
+
+        self._mask_add_sub['add'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                  source=self._image_source,
+                                                                  ctrl=self._pipe['control'],
+                                                                  ids=self._ids,
+                                                                  stats_source=self._statistics_source ),
+                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                            '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
+                                                               else mask_add_chan( )''' )
+        self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                  source=self._image_source,
+                                                                  ctrl=self._pipe['control'],
+                                                                  ids=self._ids,
+                                                                  stats_source=self._statistics_source ),
+                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                            '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
+                                                               else mask_sub_chan( )''' )
+
         if self._slider:
             ###
             ### this code is here instead of in `def slider(...)` because we do not know if
@@ -1955,8 +2040,8 @@ class CubeMask:
                              <tr><td><b>a</b></td><td>add region to the mask for the current channel</td></tr>
                              <tr><td><b>s</b></td><td>subtract region from the mask for the current channel</td></tr>
                              <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
-                             <tr><td><b>ctrl</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
-                             <tr><td><b>ctrl</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
+                             <tr><td><b>shift</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
+                             <tr><td><b>shift</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
                              <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
                              <tr><td><b>escape</b></td><td>remove displayed region</td></tr>
                              <tr><td><b>down</b></td><td>move selected region down one pixel</td></tr>
