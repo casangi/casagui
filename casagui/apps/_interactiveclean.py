@@ -71,11 +71,6 @@ from casagui.bokeh.components import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
 
-class MaskMode(DocEnum):
-    '''Different masking modes available in addition to a user supplied mask'''
-    PB = 1, 'primary beam mask'
-    AUTOMT = 2, 'multi-threshold auto masking'
-
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
 
@@ -128,8 +123,8 @@ class InteractiveClean:
             be specified, e.g. "ngc5921.ms", or a list of paths may be specified, e.g.
             ``['ngc5921a.ms','ngc5921b.ms']``.
         imagename (str): Name of the output images (without a suffix).
-        mask (str or MaskMode): user specified CASA imaging mask cube (path) or MaskMode enum indicating
-            mask to generate
+        usemask (str): indicates the type of masking to be used, supported values are 'user', 'auto-multithresh' and 'pb'
+        mask (str): user specified CASA imaging mask cube (path) to use when :code:`usemask` mode is 'user'
         imsize (int, :obj:`list` of int): Number of pixels in a image plane, for example ``[350,250]``.
             ``500`` implies ``[500,500]``. The number of pixels must be even and factorizable by 2,3,5,7 only
             due to FFT limitations.
@@ -223,7 +218,7 @@ class InteractiveClean:
         cmd += ' ' + str(hostname)
         return cmd
 
-    def __init__( self, vis, imagename, mask='', initial_mask_pixel=False, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
+    def __init__( self, vis, imagename, usemask='user', mask='', initial_mask_pixel=False, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='',
                   datacolumn='corrected', nterms=int(2), imsize=[100], cell=[ ], phasecenter='', stokes='I', startmodel='', specmode='cube', reffreq='',
                   nchan=-1, start='', width='', veltype='radio', restfreq='', outframe='LSRK', interpolation='linear', perchanweightdensity=True, gridder='standard',
                   wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, usepointing=False, conjbeams=False, pointingoffsetsigdev=[  ], pblimit=0.2,
@@ -282,16 +277,23 @@ class InteractiveClean:
         else:
             self._reset_mask_pixels = False
             self._reset_mask_pixels_value = None
-        if isinstance( mask, MaskMode ):
-            if mask == MaskMode.AUTOMT:
-                self._usemask = 'auto-multithresh'
-            elif mask == MaskMode.PB:
-                self._usemask = 'pb'
-            else:
-                raise RuntimeError( 'internal consistence error for MaskMode' )
-        elif isinstance( mask, str ) and os.path.isdir( mask ):
-            ### user has supplied a mask on disk
-            self._reset_mask_pixels = False
+
+        ###
+        ### set up masking mode based on 'usemask' and 'mask'
+        ###
+        if usemask == 'auto-multithresh':
+            self._usemask = 'auto-multithresh'
+        elif usemask == 'pb':
+            self._usemask = 'pb'
+        elif usemask == 'user':
+            if mask != '':
+                if isinstance( mask, str ) and os.path.isdir( mask ):
+                    ### user has supplied a mask on disk
+                    self._reset_mask_pixels = False
+                else:
+                    raise RuntimeError( f'''user supplied mask does not exist or is not a directory: {mask}''' )
+        else:
+            raise RuntimeError( f'''unrecognized mask type: {usemask}''' )
 
         ###
         ### clean generator

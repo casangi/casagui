@@ -30,6 +30,11 @@
 from ._plotants import plotants
 from ._plotbandpass import plotbandpass
 from ._makemask import MakeMask
-from ._interactiveclean import InteractiveClean, MaskMode
+from ._interactiveclean import InteractiveClean
 from ..bokeh.state import initialize_session
 initialize_session()
+
+def run_iclean( *args, **kwargs ):
+    '''convenience function for running interactive clean'''
+    ic = InteractiveClean( *args, **kwargs )
+    return ic( )
