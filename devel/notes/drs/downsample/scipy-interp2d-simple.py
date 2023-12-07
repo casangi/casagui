@@ -1,5 +1,21 @@
+'''
+   DeprecationWarning:         `interp2d` is deprecated!
+   `interp2d` is deprecated in SciPy 1.10 and will be removed in SciPy 1.13.0.
+
+   For legacy code, nearly bug-for-bug compatible replacements are
+   `RectBivariateSpline` on regular grids, and `bisplrep`/`bisplev` for
+   scattered 2D data.
+
+   In new code, for regular grids use `RegularGridInterpolator` instead.
+   For scattered data, prefer `LinearNDInterpolator` or
+   `CloughTocher2DInterpolator`.
+
+   For more details see
+   `https://scipy.github.io/devdocs/notebooks/interp_transition_guide.html`
+'''
+import warnings
 import numpy as np
-from scipy import interpolate
+from scipy.interpolate import interp2d
 from scipy import misc
 from bokeh.plotting import figure, show, ColumnDataSource
 from bokeh.layouts import row, column
@@ -17,7 +33,7 @@ print( f'original: {arr.shape}' )
 
 x = np.linspace(0, 1, arr.shape[0])
 y = np.linspace(0, 1, arr.shape[1])
-f = interpolate.interp2d(y, x, arr, kind='cubic')
+f = interp2d(y, x, arr, kind='cubic')
 
 x2 = np.linspace(0, 1, 1000)
 y2 = np.linspace(0, 1, 1600)
