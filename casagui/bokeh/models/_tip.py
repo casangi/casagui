@@ -31,7 +31,7 @@ class Tip(UIElement):
     amount of time (in seconds) to wait before displaying
     ''' )
 
-    def _sphinx_height_hint(self) -> int|None:
+    def _sphinx_height_hint(self):
         if child._sphinx_height_hint() is None:
             return None
         return child._sphinx_height_hint()
