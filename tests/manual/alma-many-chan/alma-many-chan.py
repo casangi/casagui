@@ -17,7 +17,7 @@ import asyncio
 import urllib
 import tarfile
 
-from casagui.apps import InteractiveClean, MaskMode
+from casagui.apps import InteractiveClean
 
 ##
 ## demo measurement set to use
@@ -101,7 +101,7 @@ ic = InteractiveClean( vis=ms_path, imagename=img,
                        niter=99999,
                        threshold='0.292Jy',
                        nsigma=0.0,
-                       mask=MaskMode.AUTOMT,
+                       usemask='auto-multithresh',
                        sidelobethreshold=1.25,
                        noisethreshold=5.0,
                        lownoisethreshold=2.0,

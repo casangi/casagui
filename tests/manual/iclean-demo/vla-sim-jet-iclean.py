@@ -16,7 +16,7 @@ import asyncio
 import urllib
 import tarfile
 
-from casagui.apps import InteractiveClean, MaskMode
+from casagui.apps import InteractiveClean
 
 ##
 ## demo measurement set to use
@@ -80,7 +80,7 @@ ic = InteractiveClean( vis=ms_path, imagename=img,
                        deconvolver='hogbom',
                        niter=10000,
                        gain=0.2,
-                       mask=MaskMode.AUTOMT )
+                       usemask='auto-multithresh' )
 
 if True:
     print( "Result: %s" % ic( ) )
