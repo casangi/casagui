@@ -41,7 +41,7 @@ class TMSTiles(object):
     ### than 3% of the original file (42 lines out of 1697). While this is not considered
     ### a substantial portion, it was invaluable for understanding the TMS tile layout.
     ###
-    def __init__( self, dimension ):
+    def __init__( self, dimension, title='' ):
         '''
         Construct a tiling object which will provide the coordinates of tiles, the size to
         be read, the size of the scaled tile and the write offset within the :code:`tile_size`
@@ -92,10 +92,12 @@ class TMSTiles(object):
                     if wysize != self.__tile_size:
                         wy = self.__tile_size - wysize
 
-                    result[index] = dict( src=dict( idx=(rx, ry),dim=(rxsize, rysize) ),
+                    result[index] = dict( src=dict( idx=(rx, ry), dim=(rxsize, rysize),
+                                                    t=(( 0, 0 if rysize == tsize else tsize - rysize ), tsize ) ),
                                           dst=dict( idx=(wx, wy), dim=(wxsize, wysize) ) )
             return result
 
+        self.__title = title
         self.__tile_size = 256
         self.__dimension = dimension
         self.__zoom = (0, max( 0, int( max( ceil(log(dimension[0] / float(self.__tile_size), 2 )),
@@ -124,23 +126,30 @@ class TMSTiles(object):
     def profile( self ):
         return "raster"
 
+    def dim( self ):
+        return self.__dimension
+
     def tile_size( self ):
         return self.__tile_size
 
-    def tile( self, z, x, y ):
+    def tile( self, z, x=None, y=None ):
         try:
-            return self.__tile_details[ (int(z),int(x),int(y)) ]
+            if (type(z) == tuple or type(z) == list) and len(z) == 3 and x is None and y is None:
+                return self.__tile_details[ (int(z[0]),int(z[1]),int(z[2])) ]
+            elif type(x) is not None and type(y) is not None:
+                return self.__tile_details[ (int(z),int(x),int(y)) ]
+            else:
+                raise RuntimeError( 'tile requires 3 integer parameters or 1 tuple[3] parameter' )
         except KeyError:
             return None
 
-    def zoom_levels( self ):
-        return list(self.__units_per_pixel.keys( ))
+    def zoom_levels( self, reverse=False ):
+        return sorted( list(self.__units_per_pixel.keys( )), reverse=reverse )
 
     def units_per_pixel( self, zoom_level ):
         if zoom_level not in self.__units_per_pixel:
             raise RuntimeError(f'''{zoom_level} is not an existing zoom level''')
         return self.__units_per_pixel[zoom_level]
-
 
     def __str__( self ):
         return f'''<?xml version="1.0" encoding="utf-8"?>
