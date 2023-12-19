@@ -44,7 +44,7 @@ from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip
-from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import resource_manager, reset_resource_manager, is_notebook, is_intstr
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -225,7 +225,7 @@ class InteractiveClean:
                   deconvolver='hogbom', niter=0, threshold='0.1Jy', nsigma=0.0, cycleniter=-1, cyclefactor=1.0, scales=[], restoringbeam='',
                   smallscalebias=0.0, pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
-                  fastnoise=True, savemodel='none', parallel=False, nmajor=1, remote=False):
+                  fastnoise=True, savemodel='none', parallel=False, nmajor=-1, remote=False):
 
         if deconvolver == 'mtmfs':
             raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
@@ -312,7 +312,7 @@ class InteractiveClean:
                                weighting=weighting, robust=robust, npixels=npixels, gain=gain, sidelobethreshold=sidelobethreshold,
                                noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold,
                                minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
-                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=1,
+                               minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
                                usemask=self._usemask, mask=mask
                       )
         ###
@@ -432,8 +432,11 @@ class InteractiveClean:
                                                  niter.value = '' + (remaining < 0 ? 0 : remaining)
                                                }
                                                if ( clean_msg !== undefined && 'majordone' in clean_msg ) {
-                                                 const remaining = parseInt(nmajor.value) - parseInt(clean_msg['majordone'])
-                                                 nmajor.value = '' + (remaining < 0 ? 0 : remaining)
+                                                 const nm = parseInt(nmajor.value)
+                                                 if ( nm != -1 ) {
+                                                     const remaining = nm - parseInt(clean_msg['majordone'])
+                                                     nmajor.value = '' + (remaining < 0 ? 0 : remaining)
+                                                 } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
                                                }
                                                img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
 
@@ -665,8 +668,10 @@ class InteractiveClean:
             if msg['action'] == 'next' or msg['action'] == 'finish':
 
                 if 'nmajor' in msg['value']:
-                    if msg['value']['nmajor'].isdigit( ):
-                        if int(msg['value']['nmajor']) <= 0:
+                    if is_intstr(msg['value']['nmajor']):
+                        nm = int(msg['value']['nmajor'])
+                        if nm == 0 or nm < -1:
+                            ### nm == -1 means do not consider nmajor as part of the stopping decision
                             return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, status="major cycle limit is zero" )
                     else:
                         return dict( result='error', stopcode=1, iterdone=0, majordone=0, error="major cycle limit is not an integer" )

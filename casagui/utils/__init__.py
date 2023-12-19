@@ -59,6 +59,7 @@ from ._conversion import strip_arrays
 from ._conversion import serialize, deserialize
 from ._static import static_vars, static_dir
 from ._image import image_as_mime
+from ._tiles import TMSTiles
 
 @static_vars(mgr=None)
 def resource_manager( ):
@@ -606,3 +607,19 @@ def is_notebook() -> bool:
               return False  # Other type (?)
     except NameError:
         return False
+
+def is_intstr( s ):
+    '''Check to see if a string contains an integer. The standard python checks do not
+    handle things like "-1" or "+45":
+
+    Parameters
+    ----------
+    s: str
+        string to be checked
+    '''
+    try:
+        int(s)
+    except ValueError:
+        return False
+    else:
+        return True
