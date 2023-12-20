@@ -172,7 +172,7 @@ class CubeMask:
                    'bitmask-hotkey-setup-add-sub':    '''
                                               function mask_mod_result( msg ) {
                                                   if ( msg.result == 'success' ) {
-                                                      source.refresh( msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
@@ -485,7 +485,7 @@ class CubeMask:
                      ###
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } )
+                                                               msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
                                            }''',
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0] )
@@ -1736,7 +1736,7 @@ class CubeMask:
                                                                                 { action: 'use mask', value: masking_on },
                                                                                 (msg) => { cb_obj.origin.label = cb_obj.item
                                                                                            source.channel( source.cur_chan[1], source.cur_chan[0],
-                                                                                                           msg => { if ( 'stats' in msg ) { stats_source.data = msg.stats } } ) } ) }
+                                                                                                           msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } ) } ) }
                                                          ''' ) )
 
         self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source,
@@ -1871,7 +1871,7 @@ class CubeMask:
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              stats_source=self._statistics_source, chan_slider=self._slider ),
+                                                              stats_source=self._statistics_source, chan_slider=self._slider, statprec=7 ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
@@ -1901,7 +1901,15 @@ class CubeMask:
                                                                       source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : null
                                                                       source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
                                                                       source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
-                                                                      source.update_statistics = ( data ) => stats_source.data = data
+                                                                      source.update_statistics = ( data ) => {
+                                                                          data.values.forEach( (item, index) => {
+                                                                              /** round floats **/
+                                                                              if ( typeof item == 'number' && ! Number.isInteger(item) ) {
+                                                                                  data.values[index] = Math.round((item + Number.EPSILON) * 10**statprec) / 10**statprec
+                                                                              } } )
+                                                                          stats_source.data = data
+                                                                      }
+                                                                      source.update_statistics( stats_source.data ) /*** round floats ***/
                                                                    """ )
 
         ###
