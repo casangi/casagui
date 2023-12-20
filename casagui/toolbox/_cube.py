@@ -98,6 +98,7 @@ class CubeMask:
         self._channel_ctrl_group = None                    # row for channel control group
         self._coord_ctrl_dropdown = None                   # select pixel or world
         self._coord_ctrl_group = None                      # row for coordinate control group
+        self._status_div = None                            # status line (used to report problems)
         self._pixel_tracking_text = None                   # cursor tracking pixel value
         self._chan_image = None                            # channel image
         self._bitmask = None                               # bitmask image
@@ -176,40 +177,48 @@ class CubeMask:
                                                   }
                                               }
                                               function mask_add_chan( ) {
-                                                  ctrl.send( ids['mask-mod'],
-                                                             { scope: 'chan',
-                                                               action: 'set',
-                                                               value: { chan: source.cur_chan,
-                                                                        xs: annotations[0].xs,
-                                                                        ys: annotations[0].ys } },
-                                                             mask_mod_result )
+                                                  if ( annotations[0].xs.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'set',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_sub_chan( ) {
-                                                  ctrl.send( ids['mask-mod'],
-                                                             { scope: 'chan',
-                                                               action: 'clear',
-                                                               value: { chan: source.cur_chan,
-                                                                        xs: annotations[0].xs,
-                                                                        ys: annotations[0].ys } },
-                                                             mask_mod_result )
+                                                  if ( annotations[0].xs.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'clear',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_add_cube( ) {
-                                                  ctrl.send( ids['mask-mod'],
-                                                             { scope: 'cube',
-                                                               action: 'set',
-                                                               value: { chan: source.cur_chan,
-                                                                        xs: annotations[0].xs,
+                                                  if ( annotations[0].xs.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'set',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
-                                                             mask_mod_result )
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_sub_cube( ) {
-                                                  ctrl.send( ids['mask-mod'],
-                                                             { scope: 'cube',
-                                                               action: 'clear',
-                                                               value: { chan: source.cur_chan,
-                                                                        xs: annotations[0].xs,
+                                                  if ( annotations[0].xs.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'clear',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
-                                                             mask_mod_result )
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<div>no region found</div>'
                                               }''',
                    'bitmask-hotkey-setup':    '''
                                               function state_translate_selection( dx, dy ) {
@@ -1670,6 +1679,10 @@ class CubeMask:
 
         return self._coord_ctrl_group
 
+    def status_text( self, text='' ):
+        self._status_div =  Div( text=text )
+        return self._status_div
+
     def pixel_tracking_text( self ):
 
         self._pixel_tracking_text = PreText( text='', min_width=300 )
@@ -1693,7 +1706,8 @@ class CubeMask:
                                                                   source=self._image_source,
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
-                                                                  stats_source=self._statistics_source ),
+                                                                  stats_source=self._statistics_source,
+                                                                  status=self._status_div ),
                                                        code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
                                                                else mask_add_chan( )''' )
@@ -1701,7 +1715,8 @@ class CubeMask:
                                                                   source=self._image_source,
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
-                                                                  stats_source=self._statistics_source ),
+                                                                  stats_source=self._statistics_source,
+                                                                  status=self._status_div ),
                                                        code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
                                                                else mask_sub_chan( )''' )
@@ -1871,7 +1886,8 @@ class CubeMask:
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              stats_source=self._statistics_source, chan_slider=self._slider, statprec=7 ),
+                                                              stats_source=self._statistics_source, chan_slider=self._slider,
+                                                              status=self._status_div, statprec=7 ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']

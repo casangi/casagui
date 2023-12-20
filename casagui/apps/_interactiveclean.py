@@ -666,7 +666,7 @@ class InteractiveClean:
         self._init_pipes( )
 
         self._status['log'] = self._clean.cmds( )
-        self._status['stopcode'] = Div( text="<div>initial residual image</div>" ) if image_channels > 1 else Div( text="<div>initial <b>single-channel</b> residual image</div>" )
+        self._status['stopcode']= self._cube.status_text( "<div>initial residual image</div>" if image_channels > 1 else "<div>initial <b>single-channel</b> residual image</div>" )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
