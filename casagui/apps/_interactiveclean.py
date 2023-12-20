@@ -317,7 +317,8 @@ class InteractiveClean:
         ###                                 used by ColumnDataSource
         ###
         self._status = { }
-        err, stopcode, majordone, self._convergence_data = next(self._clean)
+        err, stopcode, majordone, nmajorleft, niterleft, self._convergence_data = next(self._clean)
+        nmajorleft = nmajor            ### FIX
         if stopcode is None and err:
             raise RuntimeError(err)
         if len(self._convergence_data['chan'].keys()) == 0:
@@ -329,8 +330,8 @@ class InteractiveClean:
         ### Initial Conditions
         ###
         self._params = { }
-        self._params['nmajor'] = nmajor
-        self._params['niter'] = niter
+        self._params['nmajor'] = nmajorleft
+        self._params['niter'] = niterleft
         self._params['cycleniter'] = cycleniter
         self._params['threshold'] = threshold
         self._params['cyclefactor'] = cyclefactor
@@ -424,17 +425,25 @@ class InteractiveClean:
                                                //                              stat_src.data = msg.stats
                                                //                          }
                                                //                        } )
-                                               if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
-                                                 const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
-                                                 niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                               if ( clean_msg !== undefined ) {
+                                                   if ( 'iterleft' in clean_msg ) {
+                                                       niter.value = '' + clean_msg['iterleft']
+                                                   } else if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
+                                                       const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
+                                                       niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                                   }
+
+                                                   if ( 'majorleft' in clean_msg ) {
+                                                       nmajor.value = '' + clean_msg['majorleft']
+                                                   } else if ( 'majordone' in clean_msg ) {
+                                                       const nm = parseInt(nmajor.value)
+                                                       if ( nm != -1 ) {
+                                                           const remaining = nm - parseInt(clean_msg['majordone'])
+                                                           nmajor.value = '' + (remaining < 0 ? 0 : remaining)
+                                                       } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
+                                                   }
                                                }
-                                               if ( clean_msg !== undefined && 'majordone' in clean_msg ) {
-                                                 const nm = parseInt(nmajor.value)
-                                                 if ( nm != -1 ) {
-                                                     const remaining = nm - parseInt(clean_msg['majordone'])
-                                                     nmajor.value = '' + (remaining < 0 ? 0 : remaining)
-                                                 } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
-                                               }
+
                                                img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
 
                                                if ( clean_msg !== undefined && 'convergence' in clean_msg ) {
@@ -694,26 +703,30 @@ class InteractiveClean:
                     pass
 
                 self._clean.update( { **msg['value'] } )
-                err, stopcode, majordone, self._convergence_data = await self._clean.__anext__( )
+                err, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or err:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, majordone=majordone, error=err )
+                                 convergence=None, majordone=majordone,
+                                 majorleft=majorleft, iterleft=iterleft, error=err )
                 if len(self._convergence_data['chan']) == 0:
                     return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, iterdone=0, majordone=majordone, error=err )
+                                 convergence=None, iterdone=0, iterleft=iterleft,
+                                 majordone=majordone, majorleft=majorleft, error=err )
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
-                                 majordone=majordone, error=err )
+                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
+                                 iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                                 majordone=majordone, majorleft=majorleft, error=err )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
-                                 majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
+                                 convergence=self._convergence_data['chan'],
+                                 iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                                 majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
 
                 return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                             convergence=self._convergence_data['chan'], iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]),
-                             majordone=majordone, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
+                             convergence=self._convergence_data['chan'],
+                             iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                             majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
