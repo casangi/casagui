@@ -227,9 +227,6 @@ class InteractiveClean:
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
                   fastnoise=True, savemodel='none', parallel=False, nmajor=-1, remote=False):
 
-        if deconvolver == 'mtmfs':
-            raise RuntimeError("deconvolver task does not support 'mtmf' deconvolver")
-
         ###
         ### Whether or not the Interactive Clean session is running remotely
         ###
@@ -586,9 +583,10 @@ class InteractiveClean:
                                                            disable( false )
                                                        }
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
-                                                       if ( ! state.stopped && niter.value > 0 && nmajor.value > 0 ) {
+                                                       if ( ! state.stopped && niter.value > 0 && (nmajor.value > 0 || nmajor.value == -1) ) {
                                                            // *******************************************************************************************
                                                            // ******** 'niter.value > 0 so continue with one more iteration                      ********
+                                                           // ******** 'nmajor.value' == -1 implies do not consider nmajor in stop consideration ********
                                                            // *******************************************************************************************
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                            { action: 'finish',
