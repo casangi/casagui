@@ -979,7 +979,7 @@ class InteractiveClean:
                                               }
                                               if ( ! state.stopped && state.mode === 'interactive' &&
                                                    cb_obj.origin.name === 'continue' ) {
-                                                  update_status( 'Running one iteration' )
+                                                  update_status( 'Running one set of deconvolution iterations' )
                                                   disable( true )
                                                   // only send message for button that was pressed
                                                   // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
