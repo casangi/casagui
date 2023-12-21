@@ -316,7 +316,7 @@ class InteractiveClean:
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
         ###                                 used by ColumnDataSource
         ###
-        self._status = { }
+        self._status = { 'mask_id': '' }
         stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = next(self._clean)
         if len(self._convergence_data['chan'].keys()) == 0:
             raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
@@ -691,8 +691,10 @@ class InteractiveClean:
                                           cycleniter=msg['value']['cycleniter'],
                                           nmajor=msg['value']['nmajor'],
                                           threshold=msg['value']['threshold'],
-                                          cyclefactor=msg['value']['cyclefactor'] ) )
+                                          cyclefactor=msg['value']['cyclefactor'],
+                                          mask_changed=self._status['mask_id'] != self._cube.mask_id( ) ) )
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
+                self._status['mask_id'] = self._cube.mask_id( )
 
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),

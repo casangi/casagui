@@ -92,6 +92,7 @@ class CubeMask:
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
+        self._mask_id = None                               # id for each unique mask
         self._image = None                                 # figure displaying cube & mask planes
         self._channel_ctrl = None                          # display channel and stokes
         self._channel_ctrl_stokes_dropdown = None          # drop down for changing stokes when _channel_ctrl is used
@@ -960,6 +961,11 @@ class CubeMask:
     def mask( self ):
         return self._mask_path
 
+    def mask_id( self ):
+        if self._mask_id is None:
+            self._mask_id = str(uuid4( ))
+        return self._mask_id
+
     def set_mask_name( self, new_mask_path ):
         self._mask_path = new_mask_path
         self._pipe['image'].set_mask_name( new_mask_path )
@@ -1008,6 +1014,7 @@ class CubeMask:
                             mask = self._pipe['image'].mask( msg['value']['chan'], True )
                             mask[indices] = 0 if msg['action'] == 'clear' else 1
                             self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                            self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
                         elif msg['scope'] == 'cube':
                             ### modifying all channels
@@ -1016,6 +1023,7 @@ class CubeMask:
                                 mask = self._pipe['image'].mask( [stokes,c], True )
                                 mask[indices] = 0 if msg['action'] == 'clear' else 1
                                 self._pipe['image'].put_mask( [stokes,c], mask )
+                            self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
                     elif msg['action'] == 'not':
                         notf = np.vectorize(lambda x: 0.0 if x != 0 else 1.0)
@@ -1026,6 +1034,7 @@ class CubeMask:
                             ###            mask_mod_result )
                             mask = self._pipe['image'].mask( msg['value']['chan'], True )
                             self._pipe['image'].put_mask( msg['value']['chan'], notf(mask) )
+                            self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
                         elif msg['scope'] == 'cube':
                             ### invert all channels
@@ -1036,6 +1045,7 @@ class CubeMask:
                             for c in range(shape[3]):
                                 mask = self._pipe['image'].mask( [stokes,c], True )
                                 self._pipe['image'].put_mask( [stokes,c], notf(mask) )
+                            self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
                     return dict( result='failure', update={ } )
 
