@@ -317,9 +317,7 @@ class InteractiveClean:
         ###                                 used by ColumnDataSource
         ###
         self._status = { }
-        err, stopcode, majordone, nmajorleft, niterleft, self._convergence_data = next(self._clean)
-        if stopcode is None and err:
-            raise RuntimeError(err)
+        stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = next(self._clean)
         if len(self._convergence_data['chan'].keys()) == 0:
             raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
         self._convergence_id = str(uuid4( ))
@@ -329,8 +327,8 @@ class InteractiveClean:
         ### Initial Conditions
         ###
         self._params = { }
-        self._params['nmajor'] = nmajorleft
-        self._params['niter'] = niterleft
+        self._params['nmajor'] = majorleft
+        self._params['niter'] = iterleft
         self._params['cycleniter'] = cycleniter
         self._params['threshold'] = threshold
         self._params['cyclefactor'] = cyclefactor
@@ -519,17 +517,17 @@ class InteractiveClean:
                                            }''',
 
                        'clean-status-update': '''function update_status( status ) {
-                                               const stopstr = [ 'zero stop code',
-                                                                 'iteration limit hit',
-                                                                 'force stop',
-                                                                 'no change in peak residual across two major cycles',
-                                                                 'peak residual increased by 3x from last major cycle',
-                                                                 'peak residual increased by 3x from the minimum',
-                                                                 'zero mask found',
-                                                                 'no mask found',
-                                                                 'n-sigma or other valid exit criterion',
-                                                                 'major cycle limit hit',
-                                                                 'unrecognized stop code' ]
+                                               const stopstr = [ 'Zero stop code',
+                                                                 'Iteration limit hit',
+                                                                 'Force stop',
+                                                                 'No change in peak residual across two major cycles',
+                                                                 'Peak residual increased by 3x from last major cycle',
+                                                                 'Peak residual increased by 3x from the minimum',
+                                                                 'Zero mask found',
+                                                                 'No mask found',
+                                                                 'N-sigma or other valid exit criterion',
+                                                                 'Major cycle limit hit',
+                                                                 'Unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
                                                    stopstatus.text = '<div>' +
                                                                      stopstr[ status < 0 || status >= stopstr.length ?
@@ -552,20 +550,8 @@ class InteractiveClean:
                                                }
                                            }
                                            function update_gui( msg ) {
-                                               if ( msg.error ) {
-                                                   // *******************************************************************************************
-                                                   // ******** error occurs and is signaled by _gclean, e.g. continuing when niter is 0  ********
-                                                   // *******************************************************************************************
-                                                   state.mode = 'interactive'
-                                                   btns['stop'].button_type = "danger"
-                                                   enable(false)
-                                                   state.stopped = false
-                                                   update_status( msg.error )
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                               } else if ( msg.result === 'no-action' ) {
-                                                   update_status( 'status' in msg ? msg.status : 'nothing done' )
+                                               if ( msg.result === 'no-action' ) {
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'nothing done' )
                                                    enable( false )
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
@@ -584,7 +570,7 @@ class InteractiveClean:
                                                    state.stopped = false
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        btns['stop'].button_type = "danger"
-                                                       update_status( 'stopcode' in msg ? msg.stopcode : -1 )
+                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
                                                        if ( ! state.stopped ) {
                                                            enable( false )
                                                        } else {
@@ -611,13 +597,13 @@ class InteractiveClean:
                                                            btns['stop'].button_type = "danger"
                                                            enable(false)
                                                            state.stopped = false
-                                                           update_status( 'stopping criteria reached' )
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
                                                        } else {
                                                            state.mode = 'interactive'
                                                            btns['stop'].button_type = "danger"
                                                            enable(false)
                                                            state.stopped = false
-                                                           update_status( 'stopcode' in msg ? msg.stopcode : -1 )
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
                                                        }
                                                    }
                                                } else if ( msg.result === 'error' ) {
@@ -706,30 +692,33 @@ class InteractiveClean:
                                           nmajor=msg['value']['nmajor'],
                                           threshold=msg['value']['threshold'],
                                           cyclefactor=msg['value']['cyclefactor'] ) )
-                err, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
-                if len(self._convergence_data['chan']) == 0 and stopcode == 7 or err:
+                stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
+
+                if iterleft < 0: iterleft = 0   #### THIS SHOULD NOT BE NECESSARY - DELETE LATER
+
+                if len(self._convergence_data['chan']) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
-                                 majorleft=majorleft, iterleft=iterleft, error=err )
+                                 majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
                 if len(self._convergence_data['chan']) == 0:
                     return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, iterdone=0, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, error=err )
+                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
                                  iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, error=err )
+                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=self._convergence_data['chan'],
                                  iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
+                                 majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
 
                 return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                              convergence=self._convergence_data['chan'],
                              iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
-                             majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], error=err )
+                             majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
@@ -977,7 +966,7 @@ class InteractiveClean:
                                            self._js['clean-gui-update'] + self._js['clean-wait'] +
                                            '''if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
                                                   state.mode = 'continuous'
-                                                  update_status( 'running multiple iterations' )
+                                                  update_status( 'Running multiple iterations' )
                                                   disable( false )
                                                   btns['stop'].button_type = "warning"
                                                   ctrl_pipe.send( ids[cb_obj.origin.name],
@@ -990,7 +979,7 @@ class InteractiveClean:
                                               }
                                               if ( ! state.stopped && state.mode === 'interactive' &&
                                                    cb_obj.origin.name === 'continue' ) {
-                                                  update_status( 'running one iteration' )
+                                                  update_status( 'Running one iteration' )
                                                   disable( true )
                                                   // only send message for button that was pressed
                                                   // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
