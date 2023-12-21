@@ -318,7 +318,6 @@ class InteractiveClean:
         ###
         self._status = { }
         err, stopcode, majordone, nmajorleft, niterleft, self._convergence_data = next(self._clean)
-        nmajorleft = nmajor            ### FIX
         if stopcode is None and err:
             raise RuntimeError(err)
         if len(self._convergence_data['chan'].keys()) == 0:
@@ -702,7 +701,11 @@ class InteractiveClean:
                     #msg['value']['mask'] = self._mask_path
                     pass
 
-                self._clean.update( { **msg['value'] } )
+                self._clean.update( dict( niter=msg['value']['niter'],
+                                          cycleniter=msg['value']['cycleniter'],
+                                          nmajor=msg['value']['nmajor'],
+                                          threshold=msg['value']['threshold'],
+                                          cyclefactor=msg['value']['cyclefactor'] ) )
                 err, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or err:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
