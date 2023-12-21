@@ -526,7 +526,7 @@ class InteractiveClean:
                                                                  'Zero mask found',
                                                                  'No mask found',
                                                                  'N-sigma or other valid exit criterion',
-                                                                 'Major cycle limit hit',
+                                                                 'Stopping criteria encountered',
                                                                  'Unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
                                                    stopstatus.text = '<div>' +
@@ -550,7 +550,19 @@ class InteractiveClean:
                                                }
                                            }
                                            function update_gui( msg ) {
-                                               if ( msg.result === 'no-action' ) {
+                                               if ( msg.result === 'error' ) {
+                                                   // ************************************************************************************
+                                                   // ******** error occurs and is signaled by _gclean, e.g. exception in gclean  ********
+                                                   // ************************************************************************************
+                                                   state.mode = 'interactive'
+                                                   btns['stop'].button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'An internal error has occurred' )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                               } else if ( msg.result === 'no-action' ) {
                                                    update_status( msg.stopdesc ? msg.stopdesc : 'nothing done' )
                                                    enable( false )
                                                    if ( 'cmd' in msg ) {
@@ -696,7 +708,8 @@ class InteractiveClean:
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
                 self._status['mask_id'] = self._cube.mask_id( )
 
-                if len(self._convergence_data['chan']) == 0 and stopcode == 7:
+                if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
+                    ### stopcode == -1 indicates an error condition within gclean
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
