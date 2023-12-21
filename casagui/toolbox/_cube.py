@@ -1599,7 +1599,7 @@ class CubeMask:
         ###
         self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00', margin=(-1, 0, 0, 0) )
 
-        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0) )
+        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
                                                          code='''let gl = bitmask.glyph
                                                                  gl.global_alpha.value = cb_obj.value
@@ -1610,7 +1610,8 @@ class CubeMask:
                                                                       sizing_mode='scale_height', menu=['contour','masked','unmasked'] ), **kw )
         self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask, contour=self._bitmask_contour,
                                                                             contour_ds=self._bitmask_contour_ds,
-                                                                            selector=self._bitmask_color_selector ),
+                                                                            selector=self._bitmask_color_selector,
+                                                                            alpha=mask_alpha_pick ),
                                                         code='''let cm = bitmask.glyph.color_mapper
                                                                 if ( bitmask._transparent == null ) {
                                                                     bitmask._transparent = cm.palette[0]
@@ -1620,16 +1621,19 @@ class CubeMask:
                                                                     cm.palette[1] = selector.color
                                                                     contour.visible = false
                                                                     bitmask.visible = true
+                                                                    alpha.visible = true
                                                                     cm.change.emit( )
                                                                 } else if ( this.item == 'unmasked' ) {
                                                                     cm.palette[0] = selector.color
                                                                     cm.palette[1] = bitmask._transparent
                                                                     contour.visible = false
                                                                     bitmask.visible = true
+                                                                    alpha.visible = true
                                                                     cm.change.emit( )
                                                                 } else if ( this.item == 'contour' ) {
                                                                     contour.visible = true
                                                                     bitmask.visible = false
+                                                                    alpha.visible = false
                                                                 }
                                                                 this.origin.label = this.item''' ) )
 
