@@ -694,8 +694,6 @@ class InteractiveClean:
                                           cyclefactor=msg['value']['cyclefactor'] ) )
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
-                if iterleft < 0: iterleft = 0   #### THIS SHOULD NOT BE NECESSARY - DELETE LATER
-
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
