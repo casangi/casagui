@@ -316,7 +316,7 @@ class InteractiveClean:
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
         ###                                 used by ColumnDataSource
         ###
-        self._status = { 'mask_id': '' }
+        self._status = { }
         stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = next(self._clean)
         if len(self._convergence_data['chan'].keys()) == 0:
             raise RuntimeError("No convergence data for iclean. Did tclean exit without any minor cycles?")
@@ -699,14 +699,13 @@ class InteractiveClean:
                     #msg['value']['mask'] = self._mask_path
                     pass
 
+                iteration_limit = int(msg['value']['niter'])
                 self._clean.update( dict( niter=msg['value']['niter'],
                                           cycleniter=msg['value']['cycleniter'],
                                           nmajor=msg['value']['nmajor'],
                                           threshold=msg['value']['threshold'],
-                                          cyclefactor=msg['value']['cyclefactor'],
-                                          mask_changed=self._status['mask_id'] != self._cube.mask_id( ) ) )
+                                          cyclefactor=msg['value']['cyclefactor'] ) )
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
-                self._status['mask_id'] = self._cube.mask_id( )
 
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
                     ### stopcode == -1 indicates an error condition within gclean
@@ -720,17 +719,17 @@ class InteractiveClean:
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
-                                 iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
                                  majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
                 else:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=self._convergence_data['chan'],
-                                 iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
                                  majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
 
                 return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
                              convergence=self._convergence_data['chan'],
-                             iterdone=sum([ x['iterations'][1]  for y in self._convergence_data['chan'].values() for x in y.values( ) ]), iterleft=iterleft,
+                             iterdone=iteration_limit - iterleft, iterleft=iterleft,
                              majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
             elif msg['action'] == 'stop':
                 self.__stop( )
