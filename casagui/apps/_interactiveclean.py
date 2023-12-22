@@ -977,33 +977,48 @@ class InteractiveClean:
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
                                            self._js['clean-enable'] + self._js['clean-status-update'] +
                                            self._js['clean-gui-update'] + self._js['clean-wait'] +
-                                           '''if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
-                                                  state.mode = 'continuous'
-                                                  update_status( 'Running multiple iterations' )
-                                                  disable( false )
-                                                  btns['stop'].button_type = "warning"
-                                                  ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                  { action: 'finish',
-                                                                    value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                                             threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                             mask: img_src.masks( ),
-                                                                             breadcrumbs: img_src.breadcrumbs( ) } },
-                                                                  update_gui )
+                                           '''function invalid_niter( s ) {
+                                                  let v = parseInt( s )
+                                                  if ( v > 0 ) return ''
+                                                  if ( v == 0 ) return 'niter is zero'
+                                                  if ( v < 0 ) return 'niter cannot be negative'
+                                                  if ( isNaN(v) ) return 'niter must be an integer'
+                                              }
+                                              if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
+                                                  let invalid = invalid_niter(niter.value)
+                                                  if ( invalid ) update_status( invalid )
+                                                  else {
+                                                      state.mode = 'continuous'
+                                                      update_status( 'Running multiple iterations' )
+                                                      disable( false )
+                                                      btns['stop'].button_type = "warning"
+                                                      ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                      { action: 'finish',
+                                                                        value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
+                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                                 mask: img_src.masks( ),
+                                                                                 breadcrumbs: img_src.breadcrumbs( ) } },
+                                                                      update_gui )
+                                                  }
                                               }
                                               if ( ! state.stopped && state.mode === 'interactive' &&
                                                    cb_obj.origin.name === 'continue' ) {
-                                                  update_status( 'Running one set of deconvolution iterations' )
-                                                  disable( true )
-                                                  // only send message for button that was pressed
-                                                  // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
-                                                  // (or even if 'XXX.origin.' is public)...
-                                                  ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                  { action: 'next',
-                                                                    value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                                             threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                             mask: img_src.masks( ),
-                                                                             breadcrumbs: img_src.breadcrumbs( ) } },
-                                                                  update_gui )
+                                                  let invalid = invalid_niter(niter.value)
+                                                  if ( invalid ) update_status( invalid )
+                                                  else {
+                                                      update_status( 'Running one set of deconvolution iterations' )
+                                                      disable( true )
+                                                      // only send message for button that was pressed
+                                                      // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
+                                                      // (or even if 'XXX.origin.' is public)...
+                                                      ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                      { action: 'next',
+                                                                        value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
+                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                                 mask: img_src.masks( ),
+                                                                                 breadcrumbs: img_src.breadcrumbs( ) } },
+                                                                      update_gui )
+                                                  }
                                               }
                                               if ( state.mode === 'interactive' && cb_obj.origin.name === 'stop' ) {
                                                   disable( true )
