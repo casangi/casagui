@@ -1703,6 +1703,7 @@ class CubeMask:
                 chan = msg['value']['chan']
                 index = msg['value']['index']
                 return dict( result='success', update=dict(pixel=self._image_source.pixel_value( chan, index ),
+                                                           mask=self._pipe['image'].mask_value( chan, index ),
                                                            index=index, chan=chan) )
 
         self._pipe['control'].register( self._ids['pixel-value'], pixel_value )
@@ -1858,13 +1859,15 @@ class CubeMask:
                                                         const digits = 5
                                                         if ( pix_wrld && pix_wrld.label == 'pixel' ) {
                                                             pixlabel.text = '' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
-                                                                            " \u2192 " + msg.update.pixel.toExponential(digits)
+                                                                            " \u2192 " + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
                                                         } else {
                                                             const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
                                                                                                     Number(msg.update.index[1]) )
                                                             imageds.wcs( ).imageToWorldCoords(pt,false)
                                                             let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                            pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits)
+                                                            pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
                                                         }
                                                     }
                                                 }

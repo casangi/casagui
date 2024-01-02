@@ -318,6 +318,16 @@ class ImagePipe(DataPipe):
                  np.squeeze( self.__msk.getchunk( blc=[0,0] + index,
                                                 trc=self.__chan_shape + index) ) )
 
+    def mask_value( self, chan, index ):
+        if self.__msk is None:
+            raise RuntimeError(f'cannot retrieve mask at {repr(index)} because no mask cube exists')
+        try:
+            pv = self.__msk.pixelvalue( index + chan )
+            return int(pv['value']['value'])
+        except:
+            pass
+        return -1
+
     def set_mask_name( self, new_mask_path ):
         self.__close_mask( )
         self.__open_mask( new_mask_path )
