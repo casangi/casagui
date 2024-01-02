@@ -45,6 +45,7 @@ from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip
 from ..utils import resource_manager, reset_resource_manager, is_notebook, is_intstr
+from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 
 try:
     ## gclean version number needed for proper interactive clean behavior
@@ -416,8 +417,9 @@ class InteractiveClean:
                                                const threshold = convdata.cycleThresh
                                                const modelFlux = convdata.modelFlux
                                                const stopCode = convdata.stopCode
-                                               residual_src.data = { iterations, threshold, stopCode, values: peakRes, type: Array(iterations.length).fill('residual') }
-                                               flux_src.data = { iterations, threshold, stopCode, values: modelFlux, type: Array(iterations.length).fill('flux') }
+                                               const stopDesc = convdata.stopCode.map( code => stopdescmap.has(code) ? stopdescmap.get(code): "" )
+                                               residual_src.data = { iterations, threshold, stopDesc, values: peakRes, type: Array(iterations.length).fill('residual') }
+                                               flux_src.data = { iterations, threshold, stopDesc, values: modelFlux, type: Array(iterations.length).fill('flux') }
                                                threshold_src.data = { iterations, values: threshold }
                                            }''',
 
@@ -774,10 +776,12 @@ class InteractiveClean:
         ###
         convergence = self._convergence_data['chan'][0][self._stokes]
         self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'],
+                                                           threshold=convergence['cycleThresh'],
+                                                           stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
                                                            type=['flux'] * len(convergence['iterations']) ) )
         self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'], stopCode=convergence['stopCode'],
+                                                           threshold=convergence['cycleThresh'],
+                                                           stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
                                                            type=['residual'] * len(convergence['iterations'])) )
         self._cyclethreshold_data = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
 
@@ -847,8 +851,8 @@ class InteractiveClean:
                             <span>@threshold</span>
                         </div>
                         <div>
-                            <span style="font-weight: bold; font-size: 10px">stop code</span>
-                            <span>@stopCode</span>
+                            <span style="font-weight: bold; font-size: 10px">stop</span>
+                            <span>@stopDesc</span>
                         </div>
                     </div>'''
 
@@ -908,8 +912,8 @@ class InteractiveClean:
                                                                    threshold_src=self._cyclethreshold_data,
                                                                    convergence_fig=self._fig['convergence'],
                                                                    conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                                   img_src=self._fig['image-source']
-                                                                  ),
+                                                                   img_src=self._fig['image-source'],
+                                                                   stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
                                                         code='''const pos = img_src.cur_chan;''' +
                                                                 self._js['update-converge'] + self._js['slider-update'] ) )
 
@@ -978,8 +982,8 @@ class InteractiveClean:
                                                  spectra_fig=self._fig['spectra'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
-                                                 go_to = self._control['goto']
-                                                ),
+                                                 go_to = self._control['goto'],
+                                                 stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
                                            self._js['clean-enable'] + self._js['clean-status-update'] +
                                            self._js['clean-gui-update'] + self._js['clean-wait'] +
