@@ -1,6 +1,6 @@
 ###
-### This workflows will upload a python package using twine when the casagui
-### main branch is tagged with 'v*' and pushed up
+### This workflows will upload a python package using pypi trusted publisher
+### when the casagui main branch is tagged with 'v*' and pushed up
 ###
 
 name: Actions for each push or pull
@@ -16,6 +16,9 @@ jobs:
 
     runs-on: ubuntu-latest           # The type of runner that the job will run on
 
+    permissions:
+          id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+
     steps:                           # Steps represent a sequence of tasks that will be executed as part of the job
 
       - uses: actions/checkout@v2    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -23,9 +26,6 @@ jobs:
         uses: actions/setup-python@v1
         with:
           python-version: '3.8'
-
-      - name: Install twine
-        run: pip install twine       # Twine is needed to upload to pypi
 
       - name: Setup pdm
         uses: pdm-project/setup-pdm@main
@@ -43,7 +43,4 @@ jobs:
         run: pdm build -v            # build distribution
 
       - name: Publish package
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
