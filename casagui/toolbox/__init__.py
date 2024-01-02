@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022
+# Copyright (C) 2022,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -28,3 +28,4 @@
 '''Common tools used in creating applications.'''
 
 from ._cube import CubeMask
+from ._app_context import AppContext

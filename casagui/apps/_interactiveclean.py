@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022,2023
+# Copyright (C) 2022,2023,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ from bokeh.events import ModelEvent, MouseEnter
 from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
 from bokeh.layouts import column, row, Spacer, layout
-from bokeh.io import reset_output as reset_bokeh_output, output_file, output_notebook
+from bokeh.io import reset_output as reset_bokeh_output, output_notebook
 from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
@@ -66,7 +66,7 @@ except:
         warn_import('casatasks')
 
 from casagui.utils import find_ws_address, convert_masks
-from casagui.toolbox import CubeMask
+from casagui.toolbox import CubeMask, AppContext
 from casagui.bokeh.components import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
@@ -226,6 +226,12 @@ class InteractiveClean:
                   smallscalebias=0.0, pbcor=False, weighting='natural', robust=float(0.5), npixels=0, gain=float(0.1), sidelobethreshold=3.0, noisethreshold=5.0,
                   lownoisethreshold=1.5, negativethreshold=0.0, minbeamfrac=0.3, growiterations=75, dogrowprune=True, minpercentchange=-1.0,
                   fastnoise=True, savemodel='none', parallel=False, nmajor=-1, remote=False):
+
+        ###
+        ### Create application context (which includes a temporary directory).
+        ### This sets the title of the plot.
+        ###
+        self._app_state = AppContext( 'Interactive Clean' )
 
         ###
         ### Whether or not the Interactive Clean session is running remotely
@@ -705,6 +711,7 @@ class InteractiveClean:
                                           nmajor=msg['value']['nmajor'],
                                           threshold=msg['value']['threshold'],
                                           cyclefactor=msg['value']['cyclefactor'] ) )
+
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
@@ -1119,6 +1126,7 @@ class InteractiveClean:
             ### (MAX)
 ###         output_file(self._imagename+'_webpage/index.html')
             pass
+
         show(self._fig['layout'])
 
     def __call__( self ):

@@ -1,6 +1,6 @@
 #######################################################################
 #
-# Copyright (C) 2022,2023
+# Copyright (C) 2022,2023,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -49,7 +49,6 @@ from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
-from casagui.bokeh.state import initialize_bokeh
 from casagui.bokeh.components import svg_icon
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
 
@@ -86,8 +85,6 @@ class CubeMask:
         abort: function
             If provided, the ``abort`` function will be called in the case of an error.
         '''
-        initialize_bokeh( )
-
         self._is_notebook = is_notebook()
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
