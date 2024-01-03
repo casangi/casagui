@@ -1253,7 +1253,7 @@ class InteractiveClean:
             raise self._error_result
         elif self._error_result is not None:
             return self._error_result
-        return self._cube.result( )
+        return self._convergence_data
 
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
