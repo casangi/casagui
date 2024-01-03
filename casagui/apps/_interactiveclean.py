@@ -684,7 +684,7 @@ class InteractiveClean:
                         nm = int(msg['value']['nmajor'])
                         if nm == 0 or nm < -1:
                             ### nm == -1 means do not consider nmajor as part of the stopping decision
-                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, status="major cycle limit is zero" )
+                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, status="major cycle limit must be >= -1" )
                     else:
                         return dict( result='error', stopcode=1, iterdone=0, majordone=0, error="major cycle limit is not an integer" )
 
