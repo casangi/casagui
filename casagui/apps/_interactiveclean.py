@@ -684,9 +684,9 @@ class InteractiveClean:
                         nm = int(msg['value']['nmajor'])
                         if nm == 0 or nm < -1:
                             ### nm == -1 means do not consider nmajor as part of the stopping decision
-                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, status="major cycle limit must be >= -1" )
+                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit must be >= -1" )
                     else:
-                        return dict( result='error', stopcode=1, iterdone=0, majordone=0, error="major cycle limit is not an integer" )
+                        return dict( result='error', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit is not an integer" )
 
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] is not None and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
