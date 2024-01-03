@@ -61,13 +61,13 @@ class AppContext:
         if prefix is None:
             ## create a prefix from the title
             prefix = self._slugify(title)[:10]
-        self.__tempdir = TemporaryDirectory(prefix=prefix)
-        self.__htmlpath = join( self.__tempdir.name, f'''{self._slugify(title)}.html''' )
+        self.__workdir = TemporaryDirectory(prefix=prefix)
+        self.__htmlpath = join( self.__workdir.name, f'''{self._slugify(title)}.html''' )
         output_file( self.__htmlpath, title=title )
 
     def __del__( self ):
         ### remove work directory and its contents
-        self.__tempdir.cleanup( )
+        self.__workdir.cleanup( )
 
-    def tempdir( self ):
-        return self.__tempdir.name
+    def workdir( self ):
+        return self.__workdir.name
