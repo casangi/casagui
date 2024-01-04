@@ -33,6 +33,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
+from html import escape as html_escape
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
 from bokeh.events import ModelEvent, MouseEnter
@@ -44,7 +45,7 @@ from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip
-from ..utils import resource_manager, reset_resource_manager, is_notebook, is_intstr
+from ..utils import resource_manager, reset_resource_manager, is_notebook
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 
 try:
@@ -679,15 +680,6 @@ class InteractiveClean:
         async def clean_handler( msg, self=self ):
             if msg['action'] == 'next' or msg['action'] == 'finish':
 
-                if 'nmajor' in msg['value']:
-                    if is_intstr(msg['value']['nmajor']):
-                        nm = int(msg['value']['nmajor'])
-                        if nm == 0 or nm < -1:
-                            ### nm == -1 means do not consider nmajor as part of the stopping decision
-                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit must be >= -1" )
-                    else:
-                        return dict( result='error', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit is not an integer" )
-
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] is not None and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
@@ -708,11 +700,13 @@ class InteractiveClean:
                     pass
 
                 iteration_limit = int(msg['value']['niter'])
-                self._clean.update( dict( niter=msg['value']['niter'],
-                                          cycleniter=msg['value']['cycleniter'],
-                                          nmajor=msg['value']['nmajor'],
-                                          threshold=msg['value']['threshold'],
-                                          cyclefactor=msg['value']['cyclefactor'] ) )
+                err,errmsg = self._clean.update( dict( niter=msg['value']['niter'],
+                                                       cycleniter=msg['value']['cycleniter'],
+                                                       nmajor=msg['value']['nmajor'],
+                                                       threshold=msg['value']['threshold'],
+                                                       cyclefactor=msg['value']['cyclefactor'] ) )
+
+                if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
 
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 

@@ -607,19 +607,3 @@ def is_notebook() -> bool:
               return False  # Other type (?)
     except NameError:
         return False
-
-def is_intstr( s ):
-    '''Check to see if a string contains an integer. The standard python checks do not
-    handle things like "-1" or "+45":
-
-    Parameters
-    ----------
-    s: str
-        string to be checked
-    '''
-    try:
-        int(s)
-    except ValueError:
-        return False
-    else:
-        return True
