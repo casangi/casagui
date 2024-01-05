@@ -355,7 +355,10 @@ class InteractiveClean:
 #       if not os.path.isdir(webpage_dirname):
 #          os.makedirs(webpage_dirname)
         self._webpage_path = os.path.abspath(webpage_dirname)
-        self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        if deconvolver == 'mtmfs':
+            self._residual_path = ("%s.residual.tt0" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        else:
+            self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
