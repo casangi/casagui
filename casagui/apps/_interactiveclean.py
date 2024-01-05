@@ -699,7 +699,6 @@ class InteractiveClean:
                     #msg['value']['mask'] = self._mask_path
                     pass
 
-                iteration_limit = int(msg['value']['niter'])
                 err,errmsg = self._clean.update( dict( niter=msg['value']['niter'],
                                                        cycleniter=msg['value']['cycleniter'],
                                                        nmajor=msg['value']['nmajor'],
@@ -708,6 +707,7 @@ class InteractiveClean:
 
                 if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
 
+                iteration_limit = int(msg['value']['niter'])
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
                 if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
