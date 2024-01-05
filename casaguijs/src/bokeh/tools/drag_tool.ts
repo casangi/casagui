@@ -16,12 +16,23 @@ export class DragToolView extends GestureToolView {
     const y = dy_from_py(this.plot_view,sy)
     const {start} = this.model
     if ( start ) {
+      // In Bokeh 3.2.* the events has:
+      //     modifiers.shift
+      //     modifiers.ctrl
+      //     modifiers.alt
+      // but in Bokeh 3.1* the events have:
+      //     shift_key
+      //     ctrl_key
+      //     alt_key
+      // including BOTH could only (probably) be supported by making the
+      // TypeScript compile non-strict... so modifier keys are dropped
+      // for Bokeh < 3.2
       start.execute( this.model, { sx, sy, x, y,
                                    delta_x: ev.dx,
                                    delta_y: -ev.dy,
-                                   shift: ev.modifiers.shift,
-                                   ctrl: ev.modifiers.ctrl,
-                                   alt: ev.modifiers.alt } )
+                                   shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                   ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                   alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new DragStart( sx,sy,x,y,ev.dx,-ev.dy,
                                                ev.modifiers ) )
@@ -39,9 +50,9 @@ export class DragToolView extends GestureToolView {
       move.execute( this.model, { sx, sy, x, y,
                                   delta_x: ev.dx,
                                   delta_y: -ev.dy,
-                                  shift: ev.modifiers.shift,
-                                  ctrl: ev.modifiers.ctrl,
-                                  alt: ev.modifiers.alt } )
+                                  shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                  ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                  alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new Drag( sx,sy,x,y,ev.dx,-ev.dy,
                                           ev.modifiers ) )
@@ -58,9 +69,9 @@ export class DragToolView extends GestureToolView {
       end.execute( this.model, { sx, sy, x, y,
                                  delta_x: ev.dx,
                                  delta_y: -ev.dy,
-                                 shift: ev.modifiers.shift,
-                                 ctrl: ev.modifiers.ctrl,
-                                 alt: ev.modifiers.alt } )
+                                 shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                 ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                 alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new DragEnd( sx,sy,x,y,ev.dx,-ev.dy,
                                              ev.modifiers ) )
