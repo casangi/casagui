@@ -1662,10 +1662,10 @@ class CubeMask:
             raise RuntimeError('cube image not in use')
         self._channel_ctrl = PreText( text='Channel 0', min_width=100 )
         self._channel_ctrl_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
-        self._channel_ctrl_group = row( self._channel_ctrl,
-                                        Tip( self._channel_ctrl_stokes_dropdown,
-                                             tooltip=Tooltip( content=HTML('Select which of the <b>image</b> or <b>stokes</b> planes to display'),
-                                                              position='right' ) ) )
+        self._channel_ctrl_group = ( self._channel_ctrl,
+                                     Tip( self._channel_ctrl_stokes_dropdown,
+                                          tooltip=Tooltip( content=HTML('Select which of the <b>image</b> or <b>stokes</b> planes to display'),
+                                                           position='right' ) ) )
         return self._channel_ctrl_group
 
     def coord_ctrl( self ):
@@ -1798,9 +1798,11 @@ class CubeMask:
             ###
             self._channel_ctrl_stokes_dropdown.menu = stokes_labels
             self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
+                                                                       ### 'label' is updated after the channel has changed to allow for subsequent
+                                                                       ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
+                                                                       ###  convergence data is available...
                                                                        code='''if ( cb_obj.item != cb_obj.origin.label ) {
-                                                                                   cb_obj.origin.label = cb_obj.item
-                                                                                   source.channel( source.cur_chan[1], %s )
+                                                                                   source.channel( source.cur_chan[1], %s, msg => { cb_obj.origin.label = cb_obj.item } )
                                                                                }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
                                                                                                          zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
 

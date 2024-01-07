@@ -522,6 +522,7 @@ class InteractiveClean:
                                                update_convergence( )
                                            } else {
                                                // update convergence plot with a request to python
+                                               const pos = img_src.cur_chan
                                                conv_pipe.send( convergence_id,
                                                                { action: 'update', value: [ pos[0], cb_obj.value ] },
                                                                  //      stokes-------------^^^^^^  ^^^^^^^^^^^^^^--------chan
@@ -911,8 +912,7 @@ class InteractiveClean:
                                                                    conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
                                                                    img_src=self._fig['image-source'],
                                                                    stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                        code='''const pos = img_src.cur_chan;''' +
-                                                                self._js['update-converge'] + self._js['slider-update'] ) )
+                                                        code=self._js['update-converge'] + self._js['slider-update'] ) )
 
             self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
                                                                               slider=self._fig['slider'],
@@ -1061,9 +1061,16 @@ class InteractiveClean:
                                                 TabPanel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
 
+        self._channel_ctrl = self._cube.channel_ctrl( )
+
+        ### Stokes 'label' should be updated AFTER the channel update has happened
+        self._channel_ctrl[1].child.js_on_change( 'label',
+                                                  CustomJS( args=dict( img_src=self._fig['image-source'],
+                                                                       flux_src=self._flux_data),
+                                                            code=self._js['update-converge'] ) )
         self._fig['layout'] = column(
                                   row(
-                                      column( row( self._cube.channel_ctrl( ), self._cube.coord_ctrl( ),
+                                      column( row( *self._channel_ctrl, self._cube.coord_ctrl( ),
                                                    Spacer(height=help_button.height, sizing_mode="scale_width"),
                                                    self._cube.palette( ),
                                                    mask_clean_notclean_pick,
