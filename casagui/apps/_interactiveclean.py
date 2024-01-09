@@ -1069,8 +1069,11 @@ class InteractiveClean:
         ### Stokes 'label' should be updated AFTER the channel update has happened
         self._channel_ctrl[1].child.js_on_change( 'label',
                                                   CustomJS( args=dict( img_src=self._fig['image-source'],
-                                                                       flux_src=self._flux_data),
-                                                            code=self._js['update-converge'] ) )
+                                                                       flux_src=self._flux_data,
+                                                                       residual_src=self._residual_data,
+                                                                       threshold_src=self._cyclethreshold_data,
+                                                                       stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                            code=self._js['update-converge'] + '''update_convergence( )''' ) )
         self._fig['layout'] = column(
                                   row(
                                       column( row( *self._channel_ctrl, self._cube.coord_ctrl( ),
