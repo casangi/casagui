@@ -106,6 +106,7 @@ class CubeMask:
         self._bitmask_transparency_button = None           # select whether the 1s or 0s is transparent
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
         self._slider = None                                # slider to move from plane to plane
+        self._slider_callback = None                       # called after the channel update for slider movement is complete
         self._spectra = None                               # figure displaying spectra along the frequency axis
         self._statistics = None                            # statistics data table
         self._statistics_mask = None                       # button to switch from channel statistics to mask statistics
@@ -492,10 +493,12 @@ class CubeMask:
                      ###
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
+                                                               msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                                        if ( cb ) cb.execute( this ) } )
                                            }''',
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0] )
+                                               source.channel( slider.value, source.cur_chan[0],
+                                                               msg => { if ( cb ) cb.execute( this ) } )
                                            }''',
                      ### initialize mask state
                      ###
@@ -1111,7 +1114,7 @@ class CubeMask:
 
         return self._image
 
-    def slider( self, **kw ):
+    def slider( self, callback=None, **kw ):
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
 
@@ -1126,6 +1129,7 @@ class CubeMask:
             slider_end = shape[-1]-1
             self._slider = set_attributes( Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
                                                    title="Channel" ), **kw )
+            self._slider_callback = callback
             if slider_end == 0:
                 # for a cube with one channel, a slider is of no use
                 self._slider.disabled = True
@@ -1743,8 +1747,9 @@ class CubeMask:
             ### ... ALSO statistics would be based upon the SELECTION SET...
             ###
             self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
-                                                      stats_source=self._statistics_source ),
-                                           code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
+                                                      stats_source=self._statistics_source,
+                                                      cb=self._slider_callback ),
+                                           code=(self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         if self._statistics_mask:

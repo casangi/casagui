@@ -908,18 +908,16 @@ class InteractiveClean:
 
         if image_channels > 1:
             self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
-            self._fig['slider'] = self._cube.slider( )
             self._fig['spectra'] = self._cube.spectra( width=450 )
+            self._fig['slider'] = self._cube.slider( CustomJS( args=dict( flux_src=self._flux_data,
+                                                                          residual_src=self._residual_data,
+                                                                          threshold_src=self._cyclethreshold_data,
+                                                                          convergence_fig=self._fig['convergence'],
+                                                                          conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
+                                                                          img_src=self._fig['image-source'],
+                                                                          stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                               code=self._js['update-converge'] + self._js['slider-update'] ) )
 
-            self._fig['slider'].js_on_change( 'value',
-                                              CustomJS( args=dict( flux_src=self._flux_data,
-                                                                   residual_src=self._residual_data,
-                                                                   threshold_src=self._cyclethreshold_data,
-                                                                   convergence_fig=self._fig['convergence'],
-                                                                   conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                                   img_src=self._fig['image-source'],
-                                                                   stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                        code=self._js['update-converge'] + self._js['slider-update'] ) )
 
             self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
                                                                               slider=self._fig['slider'],
