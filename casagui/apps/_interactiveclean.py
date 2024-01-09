@@ -489,6 +489,7 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = true
                                                if ( go_to ) go_to.disabled = true
                                                image_fig.disabled = true
+                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = true }
                                                if ( spectra_fig ) spectra_fig.disabled = true
                                                if ( with_stop ) {
                                                    btns['stop'].disabled = true
@@ -508,6 +509,7 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = false
                                                if ( go_to ) go_to.disabled = false
                                                image_fig.disabled = false
+                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = false }
                                                if ( spectra_fig ) spectra_fig.disabled = false
                                                if ( ! only_stop ) {
                                                    btns['continue'].disabled = false
@@ -958,7 +960,7 @@ class InteractiveClean:
             self._fig['slider'] = None
             self._fig['spectra'] = None
 
-
+        self._fig['cursor_pixel_text'] = self._cube.pixel_tracking_text( )
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
                                                  ctrl_pipe=self._pipe['control'], conv_pipe=self._pipe['converge'],
@@ -977,6 +979,7 @@ class InteractiveClean:
                                                  slider=self._fig['slider'],
                                                  image_fig=self._fig['image'],
                                                  spectra_fig=self._fig['spectra'],
+                                                 cursor_tracking_text = self._fig['cursor_pixel_text'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
                                                  go_to = self._control['goto'],
@@ -1080,7 +1083,7 @@ class InteractiveClean:
                                                    help_button,
                                                   ),
                                               self._fig['image'],
-                                              self._cube.pixel_tracking_text( ),
+                                              self._fig['cursor_pixel_text'],
                                               height_policy='max', width_policy='max',
                                       ),
                                       column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],

@@ -1061,6 +1061,7 @@ class CubeMask:
                                                           self._mask_add_sub['add'],
                                                           self._mask_add_sub['sub'] ],
                                                   tooltips=None ), **kw )
+
             ###
             ### set tools that are active by default
             ###
@@ -1877,7 +1878,8 @@ class CubeMask:
                                                     var geometry = cb_data['geometry'];
                                                     var x_pos = Math.floor(geometry.x);
                                                     var y_pos = Math.floor(geometry.y);
-                                                    if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                    if ( ! pixlabel.disabled && isFinite(x_pos) && isFinite(y_pos) ) {
+                                                        /* SEGV: cannot fetch pixels while tclean may be modifying the image */
                                                         ctrl.send( ids['pixel-value'],
                                                                    { action: 'pixel',
                                                                      value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
