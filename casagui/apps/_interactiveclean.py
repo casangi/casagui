@@ -716,7 +716,7 @@ class InteractiveClean:
                 iteration_limit = int(msg['value']['niter'])
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
-                if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
+                if len(self._convergence_data['chan']) == 0 or stopcode == 7 or stopcode == -1:
                     ### stopcode == -1 indicates an error condition within gclean
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
