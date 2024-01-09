@@ -406,12 +406,17 @@ class InteractiveClean:
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'update-converge': '''function update_convergence( msg ) {
                                                let convdata
-                                               if ( typeof msg === 'undefined' && '_convergence_data' in flux_src ) {
-                                                   // use complete convergence cache attached to flux_src...
-                                                   // get the convergence data for channel and stokes
-                                                   const pos = img_src.cur_chan
-                                                   convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
-                                                   //          chan-------------------------------^^^^^^      ^^^^^^----stokes
+                                               if ( typeof msg === 'undefined' ) {
+                                                   if ( '_convergence_data' in flux_src ) {
+                                                       // use complete convergence cache attached to flux_src...
+                                                       // get the convergence data for channel and stokes
+                                                       const pos = img_src.cur_chan
+                                                       convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
+                                                       //          chan-------------------------------^^^^^^      ^^^^^^----stokes
+                                                   } else {
+                                                       console.log( 'Insert code here to get convergence data when no cache and no update (msg) is available...' )
+                                                       return
+                                                   }
                                                } else if ( 'result' in msg ) {
                                                    // update based on msg received from convergence update message
                                                    convdata = msg.result.converge

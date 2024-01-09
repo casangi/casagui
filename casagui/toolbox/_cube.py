@@ -1856,8 +1856,8 @@ class CubeMask:
             movement_code_pixel_update = '''if ( cb_obj.event_type === 'move' ) {
                                                 function update_pixel( msg ) {
                                                     if ( msg.update &&
-                                                         msg.update.pixel &&
-                                                         msg.update.index &&
+                                                         'pixel' in msg.update &&
+                                                         'index' in msg.update &&
                                                          msg.update.index.length == 2 ) {
                                                         const digits = 5
                                                         if ( pix_wrld && pix_wrld.label == 'pixel' ) {
