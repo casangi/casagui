@@ -1840,7 +1840,7 @@ class CubeMask:
                                                        var geometry = cb_data['geometry'];
                                                        var x_pos = Math.floor(geometry.x);
                                                        var y_pos = Math.floor(geometry.y);
-                                                       specds.spectra( x_pos, y_pos, 0, true )
+                                                       specds.spectra( x_pos, y_pos, imageds.cur_chan[0], true )
                                                        if ( isFinite(x_pos) && isFinite(y_pos) ) {
                                                            specfig.title.text = `Spectrum (${x_pos},${y_pos})`
                                                        } else {
