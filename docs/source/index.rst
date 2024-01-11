@@ -21,6 +21,7 @@ primarily support Python users and developers using a terminal to interact with 
    :caption: Contents:
 
    design/intro
+   design/boundary
    applications/intro
    python/casagui
 
