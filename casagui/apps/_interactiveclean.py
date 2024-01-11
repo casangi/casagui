@@ -494,6 +494,7 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = true
                                                if ( go_to ) go_to.disabled = true
                                                image_fig.disabled = true
+                                               stokes_dropdown.disabled = true
                                                if ( cursor_tracking_text) { cursor_tracking_text.disabled = true }
                                                if ( spectra_fig ) spectra_fig.disabled = true
                                                if ( with_stop ) {
@@ -514,6 +515,7 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = false
                                                if ( go_to ) go_to.disabled = false
                                                image_fig.disabled = false
+                                               stokes_dropdown.disabled = false
                                                if ( cursor_tracking_text) { cursor_tracking_text.disabled = false }
                                                if ( spectra_fig ) spectra_fig.disabled = false
                                                if ( ! only_stop ) {
@@ -963,6 +965,16 @@ class InteractiveClean:
             self._fig['slider'] = None
             self._fig['spectra'] = None
 
+        self._channel_ctrl = self._cube.channel_ctrl( )
+
+        ### Stokes 'label' should be updated AFTER the channel update has happened
+        self._channel_ctrl[1].child.js_on_change( 'label',
+                                                  CustomJS( args=dict( img_src=self._fig['image-source'],
+                                                                       flux_src=self._flux_data,
+                                                                       residual_src=self._residual_data,
+                                                                       threshold_src=self._cyclethreshold_data,
+                                                                       stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                            code=self._js['update-converge'] + '''update_convergence( )''' ) )
         self._fig['cursor_pixel_text'] = self._cube.pixel_tracking_text( )
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
@@ -982,6 +994,7 @@ class InteractiveClean:
                                                  slider=self._fig['slider'],
                                                  image_fig=self._fig['image'],
                                                  spectra_fig=self._fig['spectra'],
+                                                 stokes_dropdown = self._channel_ctrl[1].child,
                                                  cursor_tracking_text = self._fig['cursor_pixel_text'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
@@ -1067,16 +1080,6 @@ class InteractiveClean:
                                                 TabPanel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
 
-        self._channel_ctrl = self._cube.channel_ctrl( )
-
-        ### Stokes 'label' should be updated AFTER the channel update has happened
-        self._channel_ctrl[1].child.js_on_change( 'label',
-                                                  CustomJS( args=dict( img_src=self._fig['image-source'],
-                                                                       flux_src=self._flux_data,
-                                                                       residual_src=self._residual_data,
-                                                                       threshold_src=self._cyclethreshold_data,
-                                                                       stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                            code=self._js['update-converge'] + '''update_convergence( )''' ) )
         self._fig['layout'] = column(
                                   row(
                                       column( row( *self._channel_ctrl, self._cube.coord_ctrl( ),
