@@ -38,5 +38,13 @@ Remote Execution
 -------------------
 
 Remote execution allows the user to start the GUI locally but perform the desired processing
-tasks on a remote system which the user can access with SSH.
+tasks on a remote system which the user can access with SSH. To start a remote processing
+execution, the user would first start a local Python session and then start the GUI element
+specifying the remote host that should be used. The GUI will start and run locally, but
+instead of the local Python session being used to perform the processing it will start
+a remote :xref:`jupyterkernel` on the specified remote system. Messages sent to the local
+Python session from the GUI via :xref:`websocket` will be converted to :xref:`jupyterprotocol`
+messages sent to the remote kernel. These messages will then run the process using the same
+interfaces provided by CASA and other packages as was used for local execution.
+
 
