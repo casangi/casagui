@@ -27,7 +27,7 @@ Local Execution
 
 .. image:: _static/local_execution.svg
            :align: left
-           :width: 60px
+           :width: 220px
 
 With local execution, there is a local Python process which executes all of the image and data
 processing code. Communication between this Python process and the GUI code in the browser is
