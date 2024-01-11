@@ -25,6 +25,10 @@ processes could also be on the user's device, but they could also be running on 
 Local Execution
 -------------------
 
+.. image:: _static/local_execution.svg
+           :align: left
+           :width: 60px
+
 With local execution, there is a local Python process which executes all of the image and data
 processing code. Communication between this Python process and the GUI code in the browser is
 accomplished with :xref:`websocket`. The user interacts with the elements of the GUI within
