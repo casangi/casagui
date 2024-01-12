@@ -117,5 +117,6 @@ the interactive clean GUI.
 
 Internally, :xref:`gclean` uses the :xref:`tclean` and :xref:`deconvolve` tasks to perform
 model image based reconstruction of interferometer data. The steps that are performed are
-:red:`construct gclean object`
+
+    :red:`construct gclean object`
 
