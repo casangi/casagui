@@ -118,11 +118,11 @@ the interactive clean GUI.
 Internally, :xref:`gclean` uses the :xref:`tclean` and :xref:`deconvolve` tasks to perform
 model image based reconstruction of interferometer data. The steps that are performed are
 
-    :red:`construct gclean object` -- :code:`cl = gclean(...)` the :xref:`gclean` object is
+    :green:`construct gclean object` -- :code:`cl = gclean(...)` the :xref:`gclean` object is
     constructed with a subset of :xref:`tclean` parameters. Internal state is initialized,
     but no processing is done.
 
-    :red:`retrieving next convergence dictionary` -- :code:`next(cl)` the imaging iterations
+    :green:`retrieving next convergence dictionary` -- :code:`next(cl)` the imaging iterations
     are controlled by the stopping criteria :code:`niter`, :code:`cycleniter` and
     :code:`threshold`. The next dictionary will be returned after the stopping criteria
     are met, after one major cycle is complete or after an error is encountered. The
@@ -130,11 +130,24 @@ model image based reconstruction of interferometer data. The steps that are perf
     imaging algorithm should be applied. If no :code:`mask` is supplied, no processing
     is performed.
 
-    :red:`modifying stopping criteria` -- :code:`cl.update( {...} )` the purpose of
+    :green:`modifying stopping criteria` -- :code:`cl.update( {...} )` the purpose of
     interactive clean is to allow for adjustments to the :code:`mask` and control
     parameters as processing progresses. This adjustment can be done before each
     successive convergence dictionary is returned. This update is optional and
     retrieving all dictionaries generated is expected to create the same final
-    image as running :xref:`tclean` with no pauses in processing.
+    image as running :xref:`tclean` with no pauses in processing. The entries which
+    can be supplied in the dictionary parameter are :code:`niter`, :code:`cycleniter`,
+    :code:`niter`, :code:`nmajor`, :code:`threshold`, and :code:`cyclefactor`.
+    :code:`update` returns a tuple composed of an error code and a message.
+    The first element of the tuple (error code) is zero if the update was
+    successful and negative one if the update failed. If the update failed,
+    the message contains an error message.
+
+    :green:`creating restored image` -- :code:`cl.restore( )` called after the completion
+    of the :xref:`gclean` processing. This creates the final, restored image and
+    returns a dictionary which contains an :code:`image` field whose value is the
+    path to the restored image.
+
+
 
     
