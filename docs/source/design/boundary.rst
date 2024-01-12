@@ -118,5 +118,23 @@ the interactive clean GUI.
 Internally, :xref:`gclean` uses the :xref:`tclean` and :xref:`deconvolve` tasks to perform
 model image based reconstruction of interferometer data. The steps that are performed are
 
-    :red:`construct gclean object`
+    :red:`construct gclean object` -- :code:`cl = gclean(...)` the :xref:`gclean` object is
+    constructed with a subset of :xref:`tclean` parameters. Internal state is initialized,
+    but no processing is done.
 
+    :red:`retrieving next convergence dictionary` -- :code:`next(cl)` the imaging iterations
+    are controlled by the stopping criteria :code:`niter`, :code:`cycleniter` and
+    :code:`threshold`. The next dictionary will be returned after the stopping criteria
+    are met, after one major cycle is complete or after an error is encountered. The
+    :code:`mask` which is provided specifies the area of the image cube to which the
+    imaging algorithm should be applied. If no :code:`mask` is supplied, no processing
+    is performed.
+
+    :red:`modifying stopping criteria` -- :code:`cl.update( {...} )` the purpose of
+    interactive clean is to allow for adjustments to the :code:`mask` and control
+    parameters as processing progresses. This adjustment can be done before each
+    successive convergence dictionary is returned. This update is optional and
+    retrieving all dictionaries generated is expected to create the same final
+    image as running :xref:`tclean` with no pauses in processing.
+
+    
