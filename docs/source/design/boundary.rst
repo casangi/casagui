@@ -41,6 +41,10 @@ via websockets.
 Remote Execution
 -------------------
 
+.. image:: _static/local_execution.svg
+           :align: left
+           :width: 260px
+
 Remote execution allows the user to start the GUI locally but perform the desired processing
 tasks on a remote system which the user can access with SSH. To start a remote processing
 execution, the user would first start a local Python session and then start the GUI element
