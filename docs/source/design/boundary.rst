@@ -1,6 +1,4 @@
 .. _design-system-design:
-.. role:: red
-.. role:: blue
 
 CASA/Viz Boundary
 ====================
@@ -93,7 +91,7 @@ iteration blocks in the processing layer and retrieves processing results with w
 various elements of the display. The parameters and processing results are transferred from Python
 to a web browser for display. As a result, they are serializable.
 
-Events from the GUI connect to the processing layer via call-back methods encapsulated within :xref:`gclean.`,
+Events from the GUI connect to the processing layer via call-back methods encapsulated within :xref:`gclean`,
 a backend application that runs the building blocks of image reconstruction and maintains iteration control 
 state. This allows for independent testing of the process that supports the GUI. 
 For this first version of interactive clean, we will consider :xref:`gclean` to be part of the
