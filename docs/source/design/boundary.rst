@@ -178,14 +178,14 @@ checks whether the user wishes to stop and
 :code:`user_parameters` fetches updates to the control parameters from the user.
 :code:`retdict` is used to update convergence plots on the GUI. 
 
-The typical implementation of :code:'next(cl)' within :xref:`gclean` is as follows::
+The typical implementation of :code:`next(cl)` within :xref:`gclean` is as follows::
 
   if !has_converged(global_state):
       ret_mod = run_model_update()
       if ret_mod['iterdone']>0 : 
          ret_res = run_residual_update()
          ret_dict = merge(ret_mod,ret_res)         
-      global_state.append(ret_dict)
+         global_state.append(ret_dict)
   return read(global_state)
 
 The interactive clean application currently being developed uses :xref:`tclean` for
