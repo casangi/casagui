@@ -148,6 +148,14 @@ model image based reconstruction of interferometer data. The steps that are perf
     returns a dictionary which contains an :code:`image` field whose value is the
     path to the restored image.
 
+The typical interactive clean patern of :code:`gclean` usage is::
 
+  cl = gclean( )
+  retdict = next(cl)
+  while user_continues( ):
+      cl.update( user_parameters( ) )
+      retdict = next(cl)
+  cl.restore( )
 
-    
+where :code:`user_continues` is the handles checking if the user wishes to stop and
+:code:`user_parameters( )` fetches updates to the control parameters from the user.
