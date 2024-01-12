@@ -158,4 +158,4 @@ The typical interactive clean patern of :code:`gclean` usage is::
   cl.restore( )
 
 where :code:`user_continues` is the handles checking if the user wishes to stop and
-:code:`user_parameters( )` fetches updates to the control parameters from the user.
+:code:`user_parameters` fetches updates to the control parameters from the user.
