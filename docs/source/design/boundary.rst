@@ -1,4 +1,6 @@
 .. _design-system-design:
+.. role:: red
+.. role:: blue
 
 CASA/Viz Boundary
 ====================
@@ -112,3 +114,9 @@ as processing progresses. :xref:`gclean` deviates somewhat from the typical gene
 including an :code:`update` function which accepts a dictionary of parameters to change for
 the next generation step. These parameters are the modifications the user has indicated from
 the interactive clean GUI.
+
+Internally, :xref:`gclean` uses the :xref:`tclean` and :xref:`deconvolve` tasks to perform
+model image based reconstruction of interferometer data. The steps that are performed are::
+
+  :red:`construct gclean object`
+
