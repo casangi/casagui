@@ -41,7 +41,7 @@ via websockets.
 Remote Execution
 -------------------
 
-.. image:: _static/local_execution.svg
+.. image:: _static/remote_execution.svg
            :align: left
            :width: 260px
 
