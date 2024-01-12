@@ -142,8 +142,8 @@ model image based reconstruction of interferometer data. The steps that are perf
     The first element of the tuple (error code) is zero if the update was
     successful and negative one if the update failed. If the update failed,
     the message contains an error message. In addition to updating the loop
-    parameters with :code:`update`, the mask image on disk (*not the mask within an
-    image cube*) may be modified directly.
+    parameters with :code:`update`, the mask image on disk may be modified
+    directly.
 
     :green:`creating restored image` -- :code:`cl.restore( )` called after the completion
     of the :xref:`gclean` processing. This creates the final, restored image and
