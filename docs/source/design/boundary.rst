@@ -7,18 +7,17 @@ CASA/Viz Boundary
 
 .. currentmodule:: design
 
-This document describes the boundary between CASA (including CASA7 and future versions of
+This document describes the boundary between CASA-GUI and CASA (including CASA7 and future versions of
 CASA). It is necessarily a high-level view of the principles of this boundary. However,
 it is important to layout the system level view of this boundary to prevent choices being
 made in the system design of other parts of the CASA and NRAO ecosystem.
 
-For this discussion, only two execution modes will considered. While the introduction describes
-the "Usage Settings" where we envison casagui being used. The "Usage Settings" describe
+For this discussion, only two execution modes will be considered. The "Usage Settings" in the introduction describe
 the user context where CASA operates. The "Execution Modes" is the level below the "Usage Settings".
 This lower level is discussed here to motivate some constraints that are implied by the
 the implementaton which will support the "Usage Settings".
 
-In all of this current discussion, the assumption is that there is a GUI and that it is always
+The assumption is that there is a GUI and that it is always
 running on the user's device. In practice, this means that the GUI will be presented in the
 user's browser. The execution that we are talking about is the execution process that creates
 images, provides storage for images, modifies images, or collates and organizes data. These
@@ -57,7 +56,7 @@ Python session from the GUI via :xref:`websocket` will be converted to :xref:`ju
 messages sent to the remote kernel. These messages will then run the process using the same
 interfaces provided by CASA and other packages as was used for local execution.
 
-These two execution models will are sufficient as the basis for the usage settings described
+These two execution models are sufficient as the basis for the usage settings described
 in the casagui system document. A variant of these execution models may also be sufficent
 for a website implementation. The GUI elements created with :xref:`bokeh` are compatible
 with display within a website. The remote :xref:`jupyterkernel` execution is compatible
@@ -68,10 +67,10 @@ context.
 Implications
 ----------------
 
-The varied usage and execution environments make it difficult to provide sufficient testing
-for casagui. To ameliorate these difficulties, it is important to push as much functionality
-down into the processing level as possible. Doing this maximizes the testing of functionality
-as part of processing level testing. This testing is independent of GUI elements.
+The varied usage and execution environments emphasize a need to clearly separate the processing
+functionality from the GUI elements. Pushing as much 
+functionality down into the processing level as possible as possible, maximizes the ability to
+test functionality as part of processing level testing, independent of GUI elements.
 
 The second implication arises from supporting remote execution. Because processing results
 must be serialized and returned via :xref:`websocket` and displayed within a browser, the
@@ -80,20 +79,27 @@ converted to basic Python types. An example of the latter is :xref:`numpy` array
 interactive clean app uses :xref:`numpy` arrays to represent the images which are displayed
 within :xref:`bokeh`.
 
-Example
+Example - Interactive Clean
 ----------------
 
-This is drafted as the first version of interactive clean nears release. This initial release
+A first version of an interactive clean application is being designed as follows.  
+( This initial release
 will **not** include remote execution, but its design does attempt to conform to the constraints
-which remote execution requires.
+which remote execution requires.)
 
-The parameters and processing results are transferred from Python to a web browser for display.
-As a result, they are serializable.
+A locally running GUI in a browser contains tools for image viewing, mask editing, setting/editing
+iteration control parameters, display and navigation of convergence plots. It also contains controls to trigger
+iteration blocks in the processing layer and retrieves processing results with which to update
+various elements of the display. The parameters and processing results are transferred from Python
+to a web browser for display. As a result, they are serializable.
 
-Interactive clean uses a very limited portion of the public interface or perhaps this is better
-termed an interface treated as public. This caveat is included because the processing interaction
-is encapsulated within :xref:`gclean`. This allows for testing of the process that supports the
-GUI. The public process API from CASA that interactive clean depend upon is :xref:`gclean` and
+Events from the GUI connect to the processing layer via call-back methods encapsulated within :xref:`gclean.`,
+a backend application that runs the building blocks of image reconstruction and maintains iteration control 
+state. This allows for independent testing of the process that supports the GUI. 
+For this first version of interactive clean, we will consider :xref:`gclean` to be part of the
+public API from CASA.  
+
+The public process API from CASA that interactive clean depend upon is :xref:`gclean` and
 the :code:`shape`, :code:`maskhandler`, :code:`coordsys`, :code:`getregion`, :code:`fitsheader`,
 :code:`getchunk`, :code:`putchunk` and :code:`statistics` functions of the :xref:`imagetool`.
 
@@ -102,40 +108,48 @@ gclean
 
 :xref:`gclean` is a Python class which encapsulates the process layer of interactive clean. It
 allows for automated testing of all of the process interface of interactive clean as part of
-the standard (non-interactive) testing of the process layer. It implement the functionality
-of :xref:`tclean` in a way that is usable by interactive clean. Scientifically the behavior of
-:xref:`gclean` is equivalent to :xref:`tclean`, but modifying :xref:`tclean` is difficult because
-it is used extensiviely in a production environment.
+the standard (non-interactive) testing of the process layer. 
 
-A :xref:`gclean` object is constructed with the subset of :xref:`tclean` parameters which are
-relevant to interactive use. It implements a Python generator which returns a series of
-:xref:`returndict`. This dictionary is a regular python dictionary which accumulates information
-as processing progresses. :xref:`gclean` deviates somewhat from the typical generator by
+A :xref:`gclean` object is constructed with input parameters that are
+relevant to interactive use.
+:xref:`gclean` implements the functionality required for iterative image reconstruction using 
+calls to :xref:`tclean` for the residual update step, calls to :xref:`deconvolve` for the
+model update step, and methods to manage iteration control state and checks for global stopping
+criteria.  Iteration control state is maintained as a Python dictionary that grows with 
+each set of iteration blocks that are executed, and summarizes the entire convergence history
+of the imaging run. This :xref:`returndict` is returned to the GUI and used to update the 
+contents of the convergence plots and convergence state messages. 
+
+:xref:`gclean` deviates somewhat from the typical generator by also 
 including an :code:`update` function which accepts a dictionary of parameters to change for
 the next generation step. These parameters are the modifications the user has indicated from
 the interactive clean GUI.
 
-Internally, :xref:`gclean` uses the :xref:`tclean` and :xref:`deconvolve` tasks to perform
-model image based reconstruction of interferometer data. The steps that are performed are
+The callbacks implemented within :xref:`gclean` are : 
 
-    :green:`construct gclean object` -- :code:`cl = gclean(...)` the :xref:`gclean` object is
-    constructed with a subset of :xref:`tclean` parameters. Internal state is initialized,
+    :green:`construct gclean object` -- :code:`cl = gclean(...)` 
+    The :xref:`gclean` object is
+    constructed (with a subset of :xref:`tclean` parameters). Internal state is initialized,
     but no processing is done.
 
-    :green:`retrieving next convergence dictionary` -- :code:`next(cl)` the imaging iterations
-    are controlled by the stopping criteria :code:`niter`, :code:`cycleniter` and
-    :code:`threshold`. The next dictionary will be returned after the stopping criteria
-    are met, after one major cycle is complete or after an error is encountered. The
+    :green:`run one set of iterations and retrieve the next convergence dictionary` -- :code:`next(cl)` 
+    One model update step (deconvolution) is run, followed by one residual update step (major cycle). 
+    For the initial call,
+    only one residual update step is run.  Iteration control state is defined by user-supplied parameters
+    of code:`niter`, code:`nmajor`, :code:`cycleniter` and :code:`threshold` and a series of ordered 
+    stopping criteria. The code:`next(cl)` function exits, and a dictionary returned after one major cycle
+    is complete, after an error is encountered, or after global convergence criteria have been satisfied. The
     :code:`mask` which is provided specifies the area of the image cube to which the
     imaging algorithm should be applied. If no :code:`mask` is supplied, no processing
     is performed.
 
-    :green:`modifying stopping criteria` -- :code:`cl.update( {...} )` the purpose of
+    :green:`modifying iteration control setup` -- :code:`cl.update( {...} )` 
+    The purpose of
     interactive clean is to allow for adjustments to the :code:`mask` and control
     parameters as processing progresses. This adjustment can be done before each
-    successive convergence dictionary is returned. This update is optional and
+    call to code:`next(cl)`. This update is optional and
     retrieving all dictionaries generated is expected to create the same final
-    image as running :xref:`tclean` with no pauses in processing. The entries which
+    image as running :xref:`gclean` in a loop with no pauses in processing. The entries which
     can be supplied in the dictionary parameter are :code:`niter`, :code:`cycleniter`,
     :code:`niter`, :code:`nmajor`, :code:`threshold`, and :code:`cyclefactor`.
     :code:`update` returns a tuple composed of an error code and a message.
@@ -150,7 +164,7 @@ model image based reconstruction of interferometer data. The steps that are perf
     returns a dictionary which contains an :code:`image` field whose value is the
     path to the restored image.
 
-The typical interactive clean patern of :code:`gclean` usage is::
+The typical interactive clean pattern of :code:`gclean` usage is::
 
   cl = gclean( )
   retdict = next(cl)
@@ -159,5 +173,23 @@ The typical interactive clean patern of :code:`gclean` usage is::
       retdict = next(cl)
   cl.restore( )
 
-where :code:`user_continues` is the handles checking if the user wishes to stop and
+where :code:`user_continues` enables interactive mask editing and then 
+checks whether the user wishes to stop and
 :code:`user_parameters` fetches updates to the control parameters from the user.
+:code:`retdict` is used to update convergence plots on the GUI. 
+
+The typical implementation of :code:'next(cl)' within :xref:`gclean` is as follows::
+
+  if !has_converged(global_state):
+      ret_mod = run_model_update()
+      if ret_mod['iterdone']>0 : 
+         ret_res = run_residual_update()
+         ret_dict = merge(ret_mod,ret_res)         
+      global_state.append(ret_dict)
+  return read(global_state)
+
+The interactive clean application currently being developed uses :xref:`tclean` for
+run_residual_update() and :xref:`deconvolve` for run_model_update(), and implements
+iteration control state and convergence checks using custom code within :xref:`gclean`. 
+These building blocks could (in the future) be replaced to implement alternate options 
+for the processing layer, as long as all the return dictionaries retain their structure. 
