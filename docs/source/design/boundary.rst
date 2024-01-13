@@ -11,9 +11,9 @@ it is important to layout the system level view of this boundary to prevent choi
 made in the system design of other parts of the CASA and NRAO ecosystem.
 
 For this discussion, only two execution modes will be considered. The "Usage Settings" in the introduction describe
-the user context where CASA operates. The "Execution Modes" is the level below the "Usage Settings".
-This lower level is discussed here to motivate some constraints that are implied by the
-the implementaton which will support the "Usage Settings".
+the user context where casagui operates. The "Execution Modes" are less abstract than the "Usage Settings".
+This lower level is discussed here both to explain the concepts as well as identify constraints that are
+implied by the implementaton of these modes.
 
 The assumption is that there is a GUI and that it is always
 running on the user's device. In practice, this means that the GUI will be presented in the
@@ -29,12 +29,12 @@ Local Execution
            :width: 220px
 
 With local execution, there is a local Python process which executes all of the image and data
-processing code. Communication between this Python process and the GUI code in the browser is
-accomplished with :xref:`websocket`. The user interacts with the elements of the GUI within
-the browser. These interactions result in :xref:`websocket` messages sent to the local Python
-environment. Within the Python environment, the interfaces provided by CASA and other packages
-is used to accomplish the desired processing, and the results are then returned to the GUI
-via websockets.
+processing code. Currently, this is the user's Python session. Communication between this Python
+process and the GUI code in the browser is accomplished with :xref:`websocket`. The user interacts
+with the elements of the GUI within the browser. These interactions result in :xref:`websocket`
+messages sent to the local Python environment. Within the Python environment, the interfaces
+provided by CASA and other packages are used to accomplish the desired processing, and the results
+are then returned to the GUI via :xref:`websocket`.
 
 
 Remote Execution
@@ -123,7 +123,7 @@ including an :code:`update` function which accepts a dictionary of parameters to
 the next generation step. These parameters are the modifications the user has indicated from
 the interactive clean GUI.
 
-The callbacks implemented within :xref:`gclean` are : 
+The functions implemented within :xref:`gclean` are :
 
     :green:`construct gclean object` -- :code:`cl = gclean(...)` 
     The :xref:`gclean` object is
@@ -138,7 +138,7 @@ The callbacks implemented within :xref:`gclean` are :
     stopping criteria. The code:`next(cl)` function exits, and a dictionary returned after one major cycle
     is complete, after an error is encountered, or after global convergence criteria have been satisfied. The
     :code:`mask` which is provided specifies the area of the image cube to which the
-    imaging algorithm should be applied. If no :code:`mask` is supplied, no processing
+    imaging algorithm should be applied. If the :code:`mask` contains all false or 0 values, no processing
     is performed.
 
     :green:`modifying iteration control setup` -- :code:`cl.update( {...} )` 
@@ -157,7 +157,7 @@ The callbacks implemented within :xref:`gclean` are :
     parameters with :code:`update`, the mask image on disk may be modified
     directly.
 
-    :green:`creating restored image` -- :code:`cl.restore( )` called after the completion
+    :green:`creating the restored image` -- :code:`cl.restore( )` called after the completion
     of the :xref:`gclean` processing. This creates the final, restored image and
     returns a dictionary which contains an :code:`image` field whose value is the
     path to the restored image.
