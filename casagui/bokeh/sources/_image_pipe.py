@@ -350,7 +350,11 @@ class ImagePipe(DataPipe):
         """
         if self.__msk is None:
             raise RuntimeError(f'cannot replace mask at {repr(index)} because no mask cube exists')
-        self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
+        if mask.dtype == bool:
+            ### cannot put bools with putchunk
+            self.__msk.putchunk( blc=[0,0] + index, pixels=mask.astype(np.uint8) )
+        else:
+            self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
 
     def spectra( self, index ):
         """Retrieve one spectra from the image cube. The `index` should be a

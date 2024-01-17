@@ -49,7 +49,6 @@ from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
-from casagui.bokeh.components import svg_icon
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
 
 from ..bokeh.tools import DragTool, CBResetTool
@@ -104,6 +103,8 @@ class CubeMask:
         self._bitmask_contour_ds = None                    # bitmask MultiPolygon contour data source
         self._bitmask_color_selector = None                # bitmask color selector
         self._bitmask_transparency_button = None           # select whether the 1s or 0s is transparent
+        self._bitmask_contour_maskmod = None               # display mask contour as a region MultiPolygon (for copy/paste)
+        self._bitmask_contour_maskmod_ds = None            # display mask contour data source
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
         self._slider = None                                # slider to move from plane to plane
         self._slider_callback = None                       # called after the channel update for slider movement is complete
@@ -133,10 +134,14 @@ class CubeMask:
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
         _sub_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
+        self._mask_icons_ = dict( on=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'mask-selected.png' ) ),
+                                  off=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'mask.png' ) ) )
         self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
                                                     description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
                                'sub': CustomAction( icon=_sub_['chan'],
                                                     description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
+                               'mask': CustomAction( icon=self._mask_icons_['off'],
+                                                     description="select the mask for the current channel" ),
                                'img': dict( add=_add_, sub=_sub_ ) }
 
         self._fig = { }
@@ -172,50 +177,82 @@ class CubeMask:
                    'bitmask-hotkey-setup-add-sub':    '''
                                               function mask_mod_result( msg ) {
                                                   if ( msg.result == 'success' ) {
+                                                      if ( 'update' in msg && 'clear_region' in msg.update && msg.update.clear_region ) {
+                                                          /* if the src mask on disk has changed the maskmod region is no longer valid */
+                                                          maskmod_region_clear( )
+                                                      }
                                                       source.refresh( msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
-                                                                   action: 'set',
+                                                                   action: 'addition',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
                                                   } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_sub_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
-                                                                   action: 'clear',
+                                                                   action: 'subtract',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
                                                   } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_add_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
-                                                                   action: 'set',
+                                                                   action: 'addition',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
+                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
                                                   } else if ( status ) status.text = '<div>no region found</div>'
                                               }
                                               function mask_sub_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
-                                                                   action: 'clear',
+                                                                   action: 'subtract',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
                                                   } else if ( status ) status.text = '<div>no region found</div>'
                                               }''',
@@ -228,8 +265,7 @@ class CubeMask:
                                               }
                                               casalib.hotkeys( 'escape', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
-                                                                        annotations[0].xs = [ ]
-                                                                        annotations[0].ys = [ ] } )
+                                                                        maskmod_region_clear( ) } )
                                               casalib.hotkeys( 'a', { scope: 'channel' },
                                                                (e) => mask_add_chan( ) )
                                               casalib.hotkeys( 's', { scope: 'channel' },
@@ -491,6 +527,34 @@ class CubeMask:
                      ### the cursor is inside, hotkeys are active (and slider is updated). When outside
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
+                     'contour-maskmod': '''   function maskmod_region_clear( ) {
+                                                  annotations[0].xs = [ ]
+                                                  annotations[0].ys = [ ]
+                                                  mask_region_ds.data = { xs: [[]], ys: [[]] }
+                                                  mask_region_button.icon = mask_region_icons['off']
+                                              }
+                                              function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
+                                                  if ( xs.length > 0 && ys.length > 0 ) {
+                                                      annotations[0].xs = xs
+                                                      annotations[0].ys = ys
+                                                      mask_region_ds.data = { xs: [[]], ys: [[]] }
+                                                      mask_region_button.icon = mask_region_icons['off']
+                                                  } else if ( ! contour_ds.data.xs.every(l => l.length == 0) &&
+                                                              ! contour_ds.data.ys.every(l => l.length == 0) ) {
+                                                      annotations[0].xs = [ ]
+                                                      annotations[0].ys = [ ]
+                                                      mask_region_ds.data = contour_ds.data
+                                                      mask_region_ds._src_chan = source.cur_chan
+                                                      mask_region_button.icon = mask_region_icons['on']
+                                                  } else {
+                                                      if ( status ) status.text = '<div>no region found</div>'
+                                                      return
+                                                  }
+                                                  region.fill_color = 'rgba(0, 0, 0, 0)'
+                                                  region.line_width = 3
+                                                  region.line_dash = 'dashed'
+                                                  region.line_color = selector.color
+                                              }''',
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
                                                                msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
@@ -1006,25 +1070,77 @@ class CubeMask:
             else:
                 ### a bitmask cube is available and a single annotation is used to add or subtract from the bitmask cube
                 async def mod_mask( msg, self=self ):
+                    err = None
                     shape = self._pipe['image'].shape
-                    if msg['action'] == 'set' or msg['action'] == 'clear':
-                        indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
-                        if msg['scope'] == 'chan':
-                            ### modifying single channel
-                            mask = self._pipe['image'].mask( msg['value']['chan'], True )
-                            mask[indices] = 0 if msg['action'] == 'clear' else 1
-                            self._pipe['image'].put_mask( msg['value']['chan'], mask )
-                            self._mask_id = str(uuid4( ))                   ### new mask identifier
-                            return dict( result='success', update={ } )
-                        elif msg['scope'] == 'cube':
-                            ### modifying all channels
-                            stokes = msg['value']['chan'][0]
-                            for c in range(shape[3]):
-                                mask = self._pipe['image'].mask( [stokes,c], True )
-                                mask[indices] = 0 if msg['action'] == 'clear' else 1
-                                self._pipe['image'].put_mask( [stokes,c], mask )
-                            self._mask_id = str(uuid4( ))                   ### new mask identifier
-                            return dict( result='success', update={ } )
+                    if msg['action'] == 'addition' or msg['action'] == 'subtract':
+                        if 'xs' in msg['value'] and 'ys' in msg['value']:
+                            indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
+                            if msg['scope'] == 'chan':
+                                ### modifying single channel with mouse selected region
+                                mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                mask[indices] = 0 if msg['action'] == 'subtract' else 1
+                                self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                            elif msg['scope'] == 'cube':
+                                ### modifying all channels with mouse selected region
+                                stokes = msg['value']['chan'][0]
+                                for c in range(shape[3]):
+                                    mask = self._pipe['image'].mask( [stokes,c], True )
+                                    mask[indices] = 0 if msg['action'] == 'subtract' else 1
+                                    self._pipe['image'].put_mask( [stokes,c], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                        elif 'src' in msg['value']:
+                            if msg['scope'] == 'chan':
+                                ### modifying single channel with mask from another channel
+                                update={ }
+                                if msg['value']['chan'] == msg['value']['src']:
+                                    if msg['action'] == 'subtract':
+                                        mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                        mask[:,:] = False
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                        update['clear_region'] = True
+                                else:
+                                    modifier = self._pipe['image'].mask( msg['value']['src'], True )
+                                    mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                    if msg['action'] == 'addition':
+                                        mask = np.logical_or( mask, modifier )
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                    else:
+                                        mask = np.logical_and( mask, np.logical_not(modifier) )
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update=update )
+
+                            elif msg['scope'] == 'cube':
+                                ### modifying all channels with mask from another channel
+                                modifier_index = msg['value']['src']
+                                modifier = self._pipe['image'].mask( modifier_index, True )
+                                stokes = msg['value']['chan'][0]
+                                if msg['action'] == 'addition':
+                                    ### addition
+                                    for c in range(shape[3]):
+                                        ### do not add/subtract the modifier mask with itself
+                                        if stokes != modifier_index[0] or c != modifier_index[1]:
+                                            mask = self._pipe['image'].mask( [stokes,c], True )
+                                            mask = np.logical_or( mask, modifier )
+                                            self._pipe['image'].put_mask( [stokes,c], mask )
+                                else:
+                                    ### subtraction
+                                    for c in range(shape[3]):
+                                        ### do not add/subtract the modifier mask with itself
+                                        if stokes != modifier_index[0] or c != modifier_index[1]:
+                                            mask = self._pipe['image'].mask( [stokes,c], True )
+                                            mask = np.logical_and( mask, np.logical_not(modifier) )
+                                            self._pipe['image'].put_mask( [stokes,c], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                            else:
+                                err = "internal error: bad add/subtract scope"
+                        else:
+                            err = "internal error: bad add/subtract message"
                     elif msg['action'] == 'not':
                         notf = np.vectorize(lambda x: 0.0 if x != 0 else 1.0)
                         if msg['scope'] == 'chan':
@@ -1047,7 +1163,12 @@ class CubeMask:
                                 self._pipe['image'].put_mask( [stokes,c], notf(mask) )
                             self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
-                    return dict( result='failure', update={ } )
+                        else:
+                            err = "internal error: bad invert scope"
+                    else:
+                        err = "internal error: bad message action"
+
+                    return dict( result='failure', update={ }, error=err )
 
                 self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=1.0, line_color=None, fill_color='black', visible=True ) ]
                 self._pipe['control'].register( self._ids['mask-mod'], mod_mask )
@@ -1062,7 +1183,8 @@ class CubeMask:
                                                           'pan', 'wheel_zoom', 'save',
                                                           'reset', 'poly_select',
                                                           self._mask_add_sub['add'],
-                                                          self._mask_add_sub['sub'] ],
+                                                          self._mask_add_sub['sub'],
+                                                          self._mask_add_sub['mask'] ],
                                                   tooltips=None ), **kw )
 
             ###
@@ -1096,10 +1218,26 @@ class CubeMask:
                                                                                    palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
                                                    alpha=0.6, source=self._image_source )
                 self._bitmask.visible = False
+                ###
+                ### _bitmask_contour is the contour that is drawn to show the
+                ### mask/non-masked boundary of one channel
+                ###
                 self._bitmask_contour_ds = self._image_source.mask_contour_source( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
                 self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color='#FFFF00',
                                                                     source=self._bitmask_contour_ds )
                 self._bitmask_contour.visible = True
+
+                ###
+                ### _bitmask_contour_maskmod is the contour that is drawn to represent
+                ### the mask/non-masked boundary of one channel for the purpose of
+                ### adding or subtracting it from another channel or cube stokes plane
+                ###
+                self._bitmask_contour_maskmod_ds = ColumnDataSource( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
+                self._bitmask_contour_maskmod = self._image.multi_polygons( xs="xs", ys="ys", line_width = 3, fill_color=None, line_alpha=0.3,
+                                                                            line_color='#FFFF00', line_dash = 'dashed', fill_alpha=0.3,
+                                                                            source=self._bitmask_contour_maskmod_ds )
+                self._bitmask_contour_maskmod.visible = True
+
 
             if self._pipe['image'].have_mask0( ):
                 self._mask0 = self._image.image( image='msk0', x=0, y=0, dw=shape[0], dh=shape[1],
@@ -1724,8 +1862,11 @@ class CubeMask:
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
                                                                   stats_source=self._statistics_source,
+                                                                  mask_region_icons=self._mask_icons_,
+                                                                  mask_region_button=self._mask_add_sub['mask'],
+                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
                                                                else mask_add_chan( )''' )
         self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
@@ -1733,10 +1874,27 @@ class CubeMask:
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
                                                                   stats_source=self._statistics_source,
+                                                                  mask_region_icons=self._mask_icons_,
+                                                                  mask_region_button=self._mask_add_sub['mask'],
+                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
                                                                else mask_sub_chan( )''' )
+
+        self._mask_add_sub['mask'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                   contour_ds=self._bitmask_contour_ds,
+                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                   region=self._bitmask_contour_maskmod,
+                                                                   selector=self._bitmask_color_selector,
+                                                                   mask_region_button=self._mask_add_sub['mask'],
+                                                                   mask_region_icons=self._mask_icons_,
+                                                                   source=self._image_source,
+                                                                   status=self._status_div ),
+                                                        code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                             '''if ( mask_region_button.icon == mask_region_icons['on'] ) maskmod_region_clear( )
+                                                                else maskmod_region_set( region )''' )
+
 
         if self._slider:
             ###
@@ -1910,11 +2068,15 @@ class CubeMask:
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
                                                               stats_source=self._statistics_source, chan_slider=self._slider,
+                                                              mask_region_button=self._mask_add_sub['mask'],
+                                                              mask_region_icons=self._mask_icons_,
+                                                              mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                               status=self._status_div, statprec=7 ),
                                                               code='let source = cb_obj;' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
+                                                                     self._js['contour-maskmod'] +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
-                                                                     if self._mask_path is None else self._js['setup-key-mgmt'] ) +
+                                                                     if self._mask_path is None else self._js['contour-maskmod'] + self._js['setup-key-mgmt'] ) +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
                                                                       source.done = ( ) => {
@@ -1958,6 +2120,7 @@ class CubeMask:
         if self._bitmask_color_selector:
             self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
                                                                                      contour=self._bitmask_contour,
+                                                                                     region=self._bitmask_contour_maskmod,
                                                                                      bitrep=self._bitmask_transparency_button,
                                                                                      annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
@@ -1972,34 +2135,32 @@ class CubeMask:
                                                                         cm.palette[0] = cb_obj.color
                                                                     }
                                                                     cm.change.emit( )
-                                                                    contour.glyph.line_color = cb_obj.color''' ) )
+                                                                    contour.glyph.line_color = cb_obj.color
+                                                                    region.glyph.line_color = cb_obj.color''' ) )
 
         self._image.js_on_event( SelectionGeometry,
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
-                                                      selector=self._bitmask_color_selector ),
-                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
+                                                      selector=self._bitmask_color_selector,
+                                                      mask_region_button=self._mask_add_sub['mask'],
+                                                      mask_region_icons=self._mask_icons_,
+                                                      mask_region_ds=self._bitmask_contour_maskmod_ds ),
+                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
                                                    self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
-                                                   if self._mask_path is None else (
+                                                   if self._mask_path is None else  self._js['contour-maskmod'] + (
                                                    ### selector indicates if a on-disk mask is being used
                                                    '''if ( source._masking_enabled ) {
                                                           const geometry = cb_obj['geometry']
                                                           if ( geometry.type === 'rect' ) {
                                                               // rectangle drawing complete
-                                                              annotations[0].xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
-                                                              annotations[0].ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
-                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
-                                                              annotations[0].line_width = 3
-                                                              annotations[0].line_dash = 'dashed'
-                                                              annotations[0].line_color = selector.color
+                                                              maskmod_region_set( annotations[0],
+                                                                                  [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
+                                                                                  [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
                                                           } else if ( geometry.type === 'poly' && cb_obj.final ) {
                                                               // polygon drawing complete
-                                                              annotations[0].xs = [ ].slice.call(geometry.x)
-                                                              annotations[0].ys = [ ].slice.call(geometry.y)
-                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
-                                                              annotations[0].line_width = 3
-                                                              annotations[0].line_dash = 'dashed'
-                                                              annotations[0].line_color = selector.color
+                                                              maskmod_region_set( annotations[0],
+                                                                                  [ ].slice.call(geometry.x),
+                                                                                  [ ].slice.call(geometry.y) )
                                                           }
                                                       }''' ) ) )
 
