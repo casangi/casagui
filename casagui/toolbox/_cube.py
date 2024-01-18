@@ -1752,7 +1752,8 @@ class CubeMask:
         ###          in the "connect" member function
         ###
         self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
-                                                    stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc; }''' ) ] )
+                                                    stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                       padding: 0 var(--padding-vertical); }''' ) ] )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),

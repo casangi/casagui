@@ -35,7 +35,7 @@ import websockets
 from uuid import uuid4
 from html import escape as html_escape
 from contextlib import asynccontextmanager
-from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
+from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step, InlineStyleSheet
 from bokeh.events import ModelEvent, MouseEnter
 from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
@@ -805,7 +805,8 @@ class InteractiveClean:
         self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
                                        icon=svg_icon(icon_name="bp-application-sm", size=25),
                                        tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="bottom" ),
-                                       margin=(-1, 0, -10, 0), button_type='light' )
+                                       margin=(-1, 0, -10, 0), button_type='light',
+                                       stylesheets=[ InlineStyleSheet( css='''.bk-btn { border: 0px solid #ccc;  padding: 0 var(--padding-vertical) var(--padding-horizontal); margin-top: 3px; }''' ) ] )
         self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
                                                  code='''function format_log( elem ) {
                                                              return `<html>
