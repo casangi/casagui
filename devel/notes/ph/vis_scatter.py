@@ -26,20 +26,21 @@ def vis_to_ps(vis_path):
     input vis_path(str): path to input .ms or .zarr file
     returns (xarray Dataset): xradio processing set
     '''
-    ms_name = vis_path
     basename, ext = os.path.splitext(vis_path)
-    zarr_name = basename + ".vis.zarr"
-    if not os.path.exists(zarr_name):
-        print("Converting input MS", ms_name, "to", zarr_name)
-        start_convert = time.time()
-        convert_msv2_to_processing_set(
-            in_file=ms_name,
-            out_file=zarr_name,
-            partition_scheme="ddi_intent_field"
-        )
-        print("convert to zarr took", time.time() - start_convert)
-    if not os.path.exists(zarr_name):
-        raise RuntimeError("No .zarr file for visibilities")
+    if ext != ".zarr":
+        ms_name = vis_path
+        zarr_name = basename + ".vis.zarr"
+        if not os.path.exists(zarr_name):
+            print("Converting input MS", ms_name, "to", zarr_name)
+            start_convert = time.time()
+            convert_msv2_to_processing_set(
+                in_file=ms_name,
+                out_file=zarr_name,
+                partition_scheme="ddi_intent_field"
+            )
+            print("convert to zarr took", time.time() - start_convert)
+        if not os.path.exists(zarr_name):
+            raise RuntimeError("Conversion to .zarr failed")
     return read_processing_set(zarr_name)
 
 def xds_to_ddf(xds):
