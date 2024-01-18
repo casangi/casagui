@@ -43,7 +43,7 @@ from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
-                         LinearColorMapper, TextInput, Spacer
+                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet
 from bokeh.models import WheelZoomTool, LassoSelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
@@ -1751,7 +1751,8 @@ class CubeMask:
         ###    NOTE: the self._bitmask_color_selector change function is setup
         ###          in the "connect" member function
         ###
-        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0) )
+        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
+                                                    stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc; }''' ) ] )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
