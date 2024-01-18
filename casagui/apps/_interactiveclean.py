@@ -803,7 +803,7 @@ class InteractiveClean:
         ### button to display the tclean log
         ###
         self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
-                                       icon=svg_icon(icon_name="iclean-log", size=25),
+                                       icon=svg_icon(icon_name="bp-application-sm", size=25),
                                        tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="bottom" ),
                                        margin=(-1, 0, -10, 0), button_type='light' )
         self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),

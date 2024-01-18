@@ -85,6 +85,7 @@ class CubeMask:
             If provided, the ``abort`` function will be called in the case of an error.
         '''
         self._is_notebook = is_notebook()
+        self._color = '#00FF00'                            # default color for mask, selection, etc.
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
@@ -134,8 +135,8 @@ class CubeMask:
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
         _sub_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
-        self._mask_icons_ = dict( on=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'mask-selected.png' ) ),
-                                  off=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'mask.png' ) ) )
+        self._mask_icons_ = dict( on=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
+                                  off=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
         self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
                                                     description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
                                'sub': CustomAction( icon=_sub_['chan'],
@@ -530,17 +531,20 @@ class CubeMask:
                      'contour-maskmod': '''   function maskmod_region_clear( ) {
                                                   annotations[0].xs = [ ]
                                                   annotations[0].ys = [ ]
-                                                  mask_region_ds.data = { xs: [[]], ys: [[]] }
+                                                  mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
                                                   mask_region_button.icon = mask_region_icons['off']
+                                              }
+                                              function is_empty( array ) {
+                                                  return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
                                               }
                                               function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
                                                   if ( xs.length > 0 && ys.length > 0 ) {
                                                       annotations[0].xs = xs
                                                       annotations[0].ys = ys
-                                                      mask_region_ds.data = { xs: [[]], ys: [[]] }
+                                                      mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
                                                       mask_region_button.icon = mask_region_icons['off']
-                                                  } else if ( ! contour_ds.data.xs.every(l => l.length == 0) &&
-                                                              ! contour_ds.data.ys.every(l => l.length == 0) ) {
+                                                  } else if ( ! is_empty(contour_ds.data.xs) &&
+                                                              ! is_empty(contour_ds.data.ys) ) {
                                                       annotations[0].xs = [ ]
                                                       annotations[0].ys = [ ]
                                                       mask_region_ds.data = contour_ds.data
@@ -1210,12 +1214,12 @@ class CubeMask:
             if self._mask_path is not None and path.isdir(self._mask_path):
                 ##
                 ## LinearColorMapper must be used because otherwise a bitmask that is
-                ## all true or all false is colored with '#FFFF00' by default because
+                ## all true or all false is colored with self._color by default because
                 ## the "image" range drops to a single value, i.e. the maximum value
                 ##
                 self._bitmask = self._image.image( image='msk', x=0, y=0, dw=shape[0], dh=shape[1],
                                                    color_mapper=LinearColorMapper( low=0, high=1,
-                                                                                   palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
+                                                                                   palette=['rgba(0, 0, 0, 0)',self._color] ),
                                                    alpha=0.6, source=self._image_source )
                 self._bitmask.visible = False
                 ###
@@ -1223,7 +1227,7 @@ class CubeMask:
                 ### mask/non-masked boundary of one channel
                 ###
                 self._bitmask_contour_ds = self._image_source.mask_contour_source( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
-                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color='#FFFF00',
+                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color=self._color,
                                                                     source=self._bitmask_contour_ds )
                 self._bitmask_contour.visible = True
 
@@ -1234,7 +1238,7 @@ class CubeMask:
                 ###
                 self._bitmask_contour_maskmod_ds = ColumnDataSource( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
                 self._bitmask_contour_maskmod = self._image.multi_polygons( xs="xs", ys="ys", line_width = 3, fill_color=None, line_alpha=0.3,
-                                                                            line_color='#FFFF00', line_dash = 'dashed', fill_alpha=0.3,
+                                                                            line_color=self._color, line_dash = 'dashed', fill_alpha=0.3,
                                                                             source=self._bitmask_contour_maskmod_ds )
                 self._bitmask_contour_maskmod.visible = True
 
@@ -1747,7 +1751,7 @@ class CubeMask:
         ###    NOTE: the self._bitmask_color_selector change function is setup
         ###          in the "connect" member function
         ###
-        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00', margin=(-1, 0, 0, 0) )
+        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0) )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
