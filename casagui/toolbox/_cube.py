@@ -1079,6 +1079,12 @@ class CubeMask:
                     if msg['action'] == 'addition' or msg['action'] == 'subtract':
                         if 'xs' in msg['value'] and 'ys' in msg['value']:
                             indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
+                            if len(indices) == 0 and len(msg['value']['xs']) > 0 and len(msg['value']['xs']) == len(msg['value']['ys']):
+                                ### this can happen if the entire region is within a single pixel
+                                xs = set(map(int,msg['value']['xs']))
+                                ys = set(map(int,msg['value']['ys']))
+                                if len(xs) == len(ys) and len(xs) == 1:
+                                    indices = ( np.array([xs.pop()]), np.array([ys.pop( )]) )
                             if msg['scope'] == 'chan':
                                 ### modifying single channel with mouse selected region
                                 mask = self._pipe['image'].mask( msg['value']['chan'], True )
