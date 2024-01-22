@@ -12,7 +12,7 @@ web browsers for display. They are implemented in Python.
 There are two basic documentation sections the primary section describes the applications that are
 provided by :code:`casagui`. This section also describes the application programming interface (API)
 which can be used to launch and interact with the applications provided by :code:`casagui`. The
-second describes the motivation, the design and the long term goals of :xref:`casagui`.
+second describes the motivation, the design and the long term goals of :code:`casagui`.
 
 Applications and API
 --------------------
