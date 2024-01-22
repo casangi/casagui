@@ -264,9 +264,14 @@ class CubeMask:
                                                   if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
                                                   if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
                                               }
+                                              function freeze_cursor_update( ) {
+                                                  ctrl._freeze_cursor_update = true
+                                              }
                                               casalib.hotkeys( 'escape', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
                                                                         maskmod_region_clear( ) } )
+                                              casalib.hotkeys( 'f', { scope: 'channel' },
+                                                               (e) => freeze_cursor_update( ) )
                                               casalib.hotkeys( 'a', { scope: 'channel' },
                                                                (e) => mask_add_chan( ) )
                                               casalib.hotkeys( 's', { scope: 'channel' },
@@ -2006,7 +2011,7 @@ class CubeMask:
             ### code for spectrum update due to cursor movement
             ###
             movement_code_spectrum_update = """if ( ! specfig.disabled && ! imagefig.disabled ) {
-                                                   if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
+                                                   if ( cb_obj.event_type === 'move' && ctrl._freeze_cursor_update !== true ) {
                                                        var geometry = cb_data['geometry'];
                                                        var x_pos = Math.floor(geometry.x);
                                                        var y_pos = Math.floor(geometry.y);
@@ -2017,9 +2022,7 @@ class CubeMask:
                                                            specfig.title.text = 'Spectrum'
                                                        }
                                                    } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                       state.frozen = false
-                                                   } else if ( cb_obj.event_name === 'tap' ) {
-                                                       state.frozen = true
+                                                       ctrl._freeze_cursor_update = false
                                                    }
                                                }"""
 
@@ -2049,7 +2052,7 @@ class CubeMask:
                                                         }
                                                     }
                                                 }
-                                                if ( state.frozen == false ) {
+                                                if ( ctrl._freeze_cursor_update == false ) {
                                                     var geometry = cb_data['geometry'];
                                                     var x_pos = Math.floor(geometry.x);
                                                     var y_pos = Math.floor(geometry.y);
@@ -2066,14 +2069,12 @@ class CubeMask:
         if movement_code_spectrum_update or movement_code_pixel_update:
             self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
                                                      imageds=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
-                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
-                                                     state=dict(frozen=False) ),
+                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown ),
                                           code = movement_code_spectrum_update + movement_code_pixel_update )
 
             self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
 
             self._image.js_on_event('mouseenter',self._cb['impos'])
-            self._image.js_on_event('tap',self._cb['impos'])
             self._image.add_tools(self._hover['image'])
 
 
@@ -2265,6 +2266,7 @@ class CubeMask:
                              <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
                              <tr><td><b>escape</b></td><td>remove displayed region</td></tr>
                              <tr><td><b>down</b></td><td>move selected region down one pixel</td></tr>
+                             <tr><td><b>f</b></td><td>freeze cursor tracking updates until the mouse <b>re-enters</b> the channel plot</td></tr>
                              <tr><td><b>up</b></td><td>move selected region up one pixel</td></tr>
                              <tr><td><b>left</b></td><td>move selected region one pixel to the left</td></tr>
                              <tr><td><b>right</b></td><td>move selected region one pixel to the right</td></tr>
