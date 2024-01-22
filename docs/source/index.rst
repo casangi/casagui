@@ -46,8 +46,10 @@ new or different applications.
    python/casagui
 
 
-Indices and tables
-==================
+Index
+=======
+
+Automatically generated indexes.
 
 * :ref:`genindex`
 * :ref:`modindex`
