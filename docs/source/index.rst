@@ -37,6 +37,9 @@ is priarialy useful for those users who would like to understand the design of :
 develop new :code:`casagui` applications or use the tools found within :code:`casagui` to create
 new or different applications.
 
+:xref:`casaguirepo` is hosted on :xref:`github`. There you can find the :xref:`casaguiwiki` which
+is the project management site for ongoing development.
+
 .. toctree::
    :maxdepth: 3
    :caption: Contents:
