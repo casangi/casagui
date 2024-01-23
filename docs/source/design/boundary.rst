@@ -110,10 +110,11 @@ the standard (non-interactive) testing of the process layer.
 
 A :xref:`gclean` object is constructed with input parameters that are
 relevant to interactive use. Once constructed,
-:xref:`gclean` implements the `Python iterator protocol <https://docs.python.org/3/howto/functional.html#iterators>`_
+:xref:`gclean` implements the `Python iterator protocol <https://docs.python.org/3/howto/functional.html#iterators>`_.
 This means that it provides :code:`__next__` and :code:`__iter__` functions. The :code:`__next__` function
-provides the functionality required for a  :xref:iterative image reconstruction using
-calls to :xref:`tclean` for the residual update step, calls to :xref:`deconvolve` for the
+provides the functionality required for a
+`iterative image reconstruction <https://casadocs.readthedocs.io/en/stable/api/tt/casatasks.imaging.tclean.html#description>`_
+using calls to :xref:`tclean` for the residual update step, calls to :xref:`deconvolve` for the
 model update step, and methods to manage iteration control state and checks for global stopping
 criteria.  Each time a new :xref:`returndict` is returned as a result of a call to :code:`__next__`.
 The :code:`__next__` function is not invoked directly but whenever a new vaule is fetched from
