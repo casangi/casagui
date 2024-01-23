@@ -112,13 +112,19 @@ A :xref:`gclean` object is constructed with input parameters that are
 relevant to interactive use. Once constructed,
 :xref:`gclean` implements the `Python iterator protocol <https://docs.python.org/3/howto/functional.html#iterators>`_.
 This means that it provides :code:`__next__` and :code:`__iter__` functions. The :code:`__next__` function
-provides the functionality required for a
+provides the functionality required for
 `iterative image reconstruction <https://casadocs.readthedocs.io/en/stable/api/tt/casatasks.imaging.tclean.html#description>`_
 using calls to :xref:`tclean` for the residual update step, calls to :xref:`deconvolve` for the
 model update step, and methods to manage iteration control state and checks for global stopping
-criteria.  Each time a new :xref:`returndict` is returned as a result of a call to :code:`__next__`.
-The :code:`__next__` function is not invoked directly but whenever a new vaule is fetched from
-the iterator or with an explicit call via :code:`next(gclean_object)`. The :xref:`returndict`
+criteria.  Each time :code:`__next__` is (*indirectly*) called a new :xref:`returndict` is returned
+which contains new state from one model update and one residual update along with the state from
+previous :code`__next__` calls. The :code:`__next__` function is not invoked directly but indirectly
+as part of a loop::
+
+  for imgdict in gclean(...):
+      # loop body
+
+or with an explicit iterator call via :code:`next(gclean_object)`. The :xref:`returndict`
 which is returned by :code:`__next__` contains the convergence information from previous calls
 along with the results from the new call. Iteration control state is maintained as the
 :xref:`returndict` grows with each set of iteration blocks that are executed, and summarizes
