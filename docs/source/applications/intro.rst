@@ -15,6 +15,5 @@ that is included in CASA.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    interactive_clean
