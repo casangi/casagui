@@ -21,11 +21,10 @@ The first application provided by :code:`casagui` is interactive clean. It has a
 allows users to performe interactive image reconstruction using CASA.
 
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents:
+    .. toctree::
+       :maxdepth: 3
 
-   applications/intro
+       applications/intro
 
 
 Development and Design
@@ -40,13 +39,12 @@ new or different applications.
 :xref:`casaguirepo` is hosted on :xref:`github`. There you can find the :xref:`casaguiwiki` which
 is the project management site for ongoing development.
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents:
+    .. toctree::
+       :maxdepth: 3
 
-   design/intro
-   design/boundary
-   python/casagui
+       design/intro
+       design/boundary
+       python/casagui
 
 
 Index
