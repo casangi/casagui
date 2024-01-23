@@ -66,7 +66,7 @@ Implications
 ----------------
 
 The varied usage and execution environments emphasize a need to clearly separate the processing
-functionality from the GUI elements. Pushing as much 
+functionality from the GUI elements. Pushing as much
 functionality down into the processing level as possible as possible, maximizes the ability to
 test functionality as part of processing level testing, independent of GUI elements.
 
@@ -80,7 +80,7 @@ within :xref:`bokeh`.
 Example - Interactive Clean
 ----------------
 
-A first version of an interactive clean application is being designed as follows.  
+A first version of an interactive clean application is being designed as follows.
 ( This initial release
 will **not** include remote execution, but its design does attempt to conform to the constraints
 which remote execution requires.)
@@ -92,10 +92,10 @@ various elements of the display. The parameters and processing results are trans
 to a web browser for display. As a result, they are serializable.
 
 Events from the GUI connect to the processing layer via call-back methods encapsulated within :xref:`gclean`,
-a backend application that runs the building blocks of image reconstruction and maintains iteration control 
-state. This allows for independent testing of the process that supports the GUI. 
+a backend application that runs the building blocks of image reconstruction and maintains iteration control
+state. This allows for independent testing of the process that supports the GUI.
 For this first version of interactive clean, we will consider :xref:`gclean` to be part of the
-public API from CASA.  
+public API from CASA.
 
 The public process API from CASA that interactive clean depend upon is :xref:`gclean` and
 the :code:`shape`, :code:`maskhandler`, :code:`coordsys`, :code:`getregion`, :code:`fitsheader`,
@@ -106,19 +106,25 @@ gclean
 
 :xref:`gclean` is a Python class which encapsulates the process layer of interactive clean. It
 allows for automated testing of all of the process interface of interactive clean as part of
-the standard (non-interactive) testing of the process layer. 
+the standard (non-interactive) testing of the process layer.
 
 A :xref:`gclean` object is constructed with input parameters that are
-relevant to interactive use.
-:xref:`gclean` implements the functionality required for iterative image reconstruction using 
+relevant to interactive use. Once constructed,
+:xref:`gclean` implements the `Python iterator protocol <https://docs.python.org/3/howto/functional.html#iterators>`_
+This means that it provides :code:`__next__` and :code:`__iter__` functions. The :code:`__next__` function
+provides the functionality required for a  :xref:iterative image reconstruction using
 calls to :xref:`tclean` for the residual update step, calls to :xref:`deconvolve` for the
 model update step, and methods to manage iteration control state and checks for global stopping
-criteria.  Iteration control state is maintained as a Python dictionary that grows with 
-each set of iteration blocks that are executed, and summarizes the entire convergence history
-of the imaging run. This :xref:`returndict` is returned to the GUI and used to update the 
-contents of the convergence plots and convergence state messages. 
+criteria.  Each time a new :xref:`returndict` is returned as a result of a call to :code:`__next__`.
+The :code:`__next__` function is not invoked directly but whenever a new vaule is fetched from
+the iterator or with an explicit call via :code:`next(gclean_object)`. The :xref:`returndict`
+which is returned by :code:`__next__` contains the convergence information from previous calls
+along with the results from the new call. Iteration control state is maintained as the
+:xref:`returndict` grows with each set of iteration blocks that are executed, and summarizes
+the entire convergence history of the imaging run. This :xref:`returndict` is returned to the GUI
+and used to update the contents of the convergence plots and convergence state messages.
 
-:xref:`gclean` deviates somewhat from the typical generator by also 
+:xref:`gclean` deviates somewhat from the typical iterator object by also
 including an :code:`update` function which accepts a dictionary of parameters to change for
 the next generation step. These parameters are the modifications the user has indicated from
 the interactive clean GUI.
@@ -130,18 +136,18 @@ The functions implemented within :xref:`gclean` are :
     constructed (with a subset of :xref:`tclean` parameters). Internal state is initialized,
     but no processing is done.
 
-    :green:`run one set of iterations and retrieve the next convergence dictionary` -- :code:`next(cl)` 
-    One model update step (deconvolution) is run, followed by one residual update step (major cycle). 
+    :green:`run one set of iterations and retrieve the next convergence dictionary` -- :code:`next(cl)`
+    One model update step (deconvolution) is run, followed by one residual update step (major cycle).
     For the initial call,
     only one residual update step is run.  Iteration control state is defined by user-supplied parameters
-    of code:`niter`, code:`nmajor`, :code:`cycleniter` and :code:`threshold` and a series of ordered 
+    of code:`niter`, code:`nmajor`, :code:`cycleniter` and :code:`threshold` and a series of ordered
     stopping criteria. The code:`next(cl)` function exits, and a dictionary returned after one major cycle
     is complete, after an error is encountered, or after global convergence criteria have been satisfied. The
     :code:`mask` which is provided specifies the area of the image cube to which the
     imaging algorithm should be applied. If the :code:`mask` contains all false or 0 values, no processing
     is performed.
 
-    :green:`modifying iteration control setup` -- :code:`cl.update( {...} )` 
+    :green:`modifying iteration control setup` -- :code:`cl.update( {...} )`
     The purpose of
     interactive clean is to allow for adjustments to the :code:`mask` and control
     parameters as processing progresses. This adjustment can be done before each
@@ -171,23 +177,23 @@ The typical interactive clean pattern of :code:`gclean` usage is::
       retdict = next(cl)
   cl.restore( )
 
-where :code:`user_continues` enables interactive mask editing and then 
+where :code:`user_continues` enables interactive mask editing and then
 checks whether the user wishes to stop and
 :code:`user_parameters` fetches updates to the control parameters from the user.
-:code:`retdict` is used to update convergence plots on the GUI. 
+:code:`retdict` is used to update convergence plots on the GUI.
 
 The typical implementation of :code:`next(cl)` within :xref:`gclean` is as follows::
 
   if !has_converged(global_state):
       ret_mod = run_model_update()
-      if ret_mod['iterdone']>0 : 
+      if ret_mod['iterdone']>0 :
          ret_res = run_residual_update()
-         ret_dict = merge(ret_mod,ret_res)         
+         ret_dict = merge(ret_mod,ret_res)
          global_state.append(ret_dict)
   return read(global_state)
 
 The interactive clean application currently being developed uses :xref:`tclean` for
 run_residual_update() and :xref:`deconvolve` for run_model_update(), and implements
-iteration control state and convergence checks using custom code within :xref:`gclean`. 
-These building blocks could (in the future) be replaced to implement alternate options 
-for the processing layer, as long as all the return dictionaries retain their structure. 
+iteration control state and convergence checks using custom code within :xref:`gclean`.
+These building blocks could (in the future) be replaced to implement alternate options
+for the processing layer, as long as all the return dictionaries retain their structure.
