@@ -43,8 +43,6 @@ is the project management site for ongoing development.
        :maxdepth: 3
 
        design/intro
-       design/boundary
-       python/casagui
 
 
 Index
