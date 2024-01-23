@@ -118,17 +118,15 @@ using calls to :xref:`tclean` for the residual update step, calls to :xref:`deco
 model update step, and methods to manage iteration control state and checks for global stopping
 criteria.  Each time :code:`__next__` is (*indirectly*) called a new :xref:`returndict` is returned
 which contains new state from one model update and one residual update along with the state from
-previous :code`__next__` calls. The :code:`__next__` function is not invoked directly but indirectly
+previous :code:`__next__` calls. The :code:`__next__` function is not invoked directly but indirectly
 as part of a loop::
 
   for imgdict in gclean(...):
       # loop body
 
-or with an explicit iterator call via :code:`next(gclean_object)`. The :xref:`returndict`
-which is returned by :code:`__next__` contains the convergence information from previous calls
-along with the results from the new call. Iteration control state is maintained as the
-:xref:`returndict` grows with each set of iteration blocks that are executed, and summarizes
-the entire convergence history of the imaging run. This :xref:`returndict` is returned to the GUI
+or with an explicit iterator call via :code:`next(gclean_object)`. Iteration control state is
+maintained as the :xref:`returndict` grows with each set of iteration blocks that are executed, and summarizes
+the entire convergence history of the current imaging run. This :xref:`returndict` is returned to the GUI
 and used to update the contents of the convergence plots and convergence state messages.
 
 :xref:`gclean` deviates somewhat from the typical iterator object by also
