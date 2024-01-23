@@ -87,7 +87,7 @@ html_static_path = ['_static']
 
 # These paths are either relative to html_static_path
 # or fully qualified paths (eg. https://...)
-html_css_files = ['css/s4defs-roles.css', 'sidebar-tweak.css']
+html_css_files = ['css/s4defs-roles.css']
 
 ###
 ### cause documentation for class.__call__ to be generated

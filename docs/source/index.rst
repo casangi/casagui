@@ -24,6 +24,7 @@ allows users to performe interactive image reconstruction using CASA.
 .. toctree::
    :maxdepth: 3
    :caption: Contents:
+   :tilesonly:
 
    applications/intro
 
@@ -43,6 +44,7 @@ is the project management site for ongoing development.
 .. toctree::
    :maxdepth: 3
    :caption: Contents:
+   :tilesonly:
 
    design/intro
    design/boundary
