@@ -1004,7 +1004,12 @@ class CubeMask:
                                                                                                         cube_on( )
                                                                                                 } } )''' ) )
         if self._pipe['control'] is None:
-            self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
+            ### self._pipe['control']._freeze_cursor_update is used to keep track of whether pixel
+            ### update has been "frozen" (by typing 'f')... for "specmode='mfs'" _freeze_cursor_update
+            ### was undefined which resulted in failure to update pixel tracking... so it is now
+            ### initialized upon construction in JavaScript...
+            self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self.__abort,
+                                              init_script=CustomJS( code='''cb_obj._freeze_cursor_update = false''' ) )
 
     def path( self ):
         '''return path to CASA image
