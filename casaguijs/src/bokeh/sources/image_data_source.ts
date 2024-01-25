@@ -41,13 +41,6 @@ export class ImageDataSource extends ColumnDataSource {
         super(attrs);
         this.imid = uuid4( )
     }
-    initialize(): void {
-        super.initialize();
-        const execute = () => {
-            if ( this.init_script != null ) this.init_script!.execute( this )
-        }
-        execute( )
-    }
 
     _mask_contour( mask: any[] ): {[key: string]: any} {
         // converts d3-contours (https://github.com/d3/d3-contour) generated contours into bokeh's multi-polygon format
@@ -67,6 +60,22 @@ export class ImageDataSource extends ColumnDataSource {
                               ys: [ split_tuples.map( ps => ps.map(  y => y[1] ) ) ]  }
         return reformatted
     }
+
+    initialize(): void {
+        super.initialize();
+        if ( this._mask_contour_source != null &&
+             'msk' in this.data &&
+             this.data.msk.length > 0 &&
+             this.data.msk[0].length > 0 ) {
+            const mask = <Array<any>>this.data.msk
+            this._mask_contour_source.data = this._mask_contour( mask )
+        }
+        const execute = () => {
+            if ( this.init_script != null ) this.init_script!.execute( this )
+        }
+        execute( )
+    }
+
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
