@@ -63,6 +63,9 @@ export class ImageDataSource extends ColumnDataSource {
 
     initialize(): void {
         super.initialize();
+        // when an initial mask is supplied by the user, it is included
+        // in the data object. In case there is a non-zero mask, we must
+        // search for a contour upon initialization...
         if ( this._mask_contour_source != null &&
              'msk' in this.data &&
              this.data.msk.length > 0 &&
