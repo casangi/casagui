@@ -43,7 +43,7 @@ from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
-                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Paragraph
+                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet
 from bokeh.models import WheelZoomTool, LassoSelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
@@ -1856,7 +1856,7 @@ class CubeMask:
         return self._coord_ctrl_group
 
     def status_text( self, text='', **kw ):
-        self._status_div =  set_attributes( Paragraph( text=text ), **kw )
+        self._status_div =  set_attributes( Div( text=text ), **kw )
         return self._status_div
 
     def pixel_tracking_text( self ):
