@@ -46,8 +46,11 @@ from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip
 from ..utils import resource_manager, reset_resource_manager, is_notebook
+
+# pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+# pylint: enable=no-name-in-module
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask, AppContext
