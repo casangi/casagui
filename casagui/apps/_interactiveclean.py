@@ -47,25 +47,7 @@ from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
-
-try:
-    ## gclean version number needed for proper interactive clean behavior
-    # pylint: disable=no-name-in-module
-    from casatasks.private.imagerhelpers._gclean import _GCV004
-    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-    # pylint: enable=no-name-in-module
-except:
-    try:
-        ###
-        ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
-        ###
-        #print('warning: using tclean compatibility layer...')
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV004
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
-    except:
-        _gclean = None
-        from casagui.utils import warn_import
-        warn_import('casatasks')
+from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask, AppContext
