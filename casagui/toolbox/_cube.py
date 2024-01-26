@@ -43,7 +43,7 @@ from contextlib import asynccontextmanager
 from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
-                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet
+                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Paragraph
 from bokeh.models import WheelZoomTool, LassoSelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
@@ -201,7 +201,7 @@ class CubeMask:
                                                                    value: { chan: source.cur_chan,
                                                                             src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_sub_chan( ) {
                                                   if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
@@ -219,7 +219,7 @@ class CubeMask:
                                                                    value: { chan: source.cur_chan,
                                                                             src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_add_cube( ) {
                                                   if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
@@ -237,7 +237,7 @@ class CubeMask:
                                                                    value: { chan: source.cur_chan,
                                                                             src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_sub_cube( ) {
                                                   if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
@@ -255,7 +255,7 @@ class CubeMask:
                                                                    value: { chan: source.cur_chan,
                                                                             src: mask_region_ds._src_chan } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }''',
                    'bitmask-hotkey-setup':    '''
                                               function state_translate_selection( dx, dy ) {
@@ -556,7 +556,7 @@ class CubeMask:
                                                       mask_region_ds._src_chan = source.cur_chan
                                                       mask_region_button.icon = mask_region_icons['on']
                                                   } else {
-                                                      if ( status ) status.text = '<div>no region found</div>'
+                                                      if ( status ) status.text = '<p>no region found</p>'
                                                       return
                                                   }
                                                   region.fill_color = 'rgba(0, 0, 0, 0)'
@@ -1855,8 +1855,8 @@ class CubeMask:
 
         return self._coord_ctrl_group
 
-    def status_text( self, text='' ):
-        self._status_div =  Div( text=text )
+    def status_text( self, text='', **kw ):
+        self._status_div =  set_attributes( Paragraph( text=text ), **kw )
         return self._status_div
 
     def pixel_tracking_text( self ):

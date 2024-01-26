@@ -551,12 +551,12 @@ class InteractiveClean:
                                                                  'Stopping criteria encountered',
                                                                  'Unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
-                                                   stopstatus.text = '<div>' +
+                                                   stopstatus.text = '<p>' +
                                                                      stopstr[ status < 0 || status >= stopstr.length ?
                                                                               stopstr.length - 1 : status ] +
-                                                                     '</div>'
+                                                                     '</p>'
                                                } else {
-                                                   stopstatus.text = `<div>${status}</div>`
+                                                   stopstatus.text = `<p>${status}</p>`
                                                }
                                            }''',
 
@@ -685,7 +685,7 @@ class InteractiveClean:
         self._init_pipes( )
 
         self._status['log'] = self._clean.cmds( )
-        self._status['stopcode']= self._cube.status_text( "<div>initial residual image</div>" if image_channels > 1 else "<div>initial <b>single-channel</b> residual image</div>" )
+        self._status['stopcode']= self._cube.status_text( "<p>initial residual image</p>" if image_channels > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230 )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
@@ -928,33 +928,33 @@ class InteractiveClean:
                                                                    code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
                                                                            if ( values.length > 2 ) {
                                                                              status._error_set = true
-                                                                             status.text = '<div>enter at most two indexes</div>'
+                                                                             status.text = '<p>enter at most two indexes</p>'
                                                                            } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
                                                                              status._error_set = true
-                                                                             status.text = '<div>invalid channel entered</div>'
+                                                                             status.text = '<p>invalid channel entered</p>'
                                                                            } else {
                                                                              if ( status._error_set ) {
                                                                                status._error_set = false
-                                                                               status.text = '<div/>'
+                                                                               status.text = '<p/>'
                                                                              }
                                                                              if ( values.length == 1 ) {
                                                                                if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
-                                                                                 status.text= `<div>moving to channel ${values[0]}</div>`
+                                                                                 status.text= `<p>moving to channel ${values[0]}</p>`
                                                                                  slider.value = values[0]
                                                                                } else {
                                                                                  status._error_set = true
-                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                                 status.text = `<p>channel ${values[0]} out of range</p>`
                                                                                }
                                                                              } else if ( values.length == 2 ) {
                                                                                if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
                                                                                  status._error_set = true
-                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
+                                                                                 status.text = `<p>channel ${values[0]} out of range</p>`
                                                                                } else {
                                                                                  if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
                                                                                    status._error_set = true
-                                                                                   status.text = `<div>stokes ${values[1]} out of range</div>`
+                                                                                   status.text = `<p>stokes ${values[1]} out of range</p>`
                                                                                  } else {
-                                                                                   status.text= `<div>moving to channel ${values[0]}/${values[1]}</div>`
+                                                                                   status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
                                                                                    slider.value = values[0]
                                                                                    img.channel( values[0], values[1] )
                                                                                  }
