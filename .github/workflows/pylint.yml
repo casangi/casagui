@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
 #         python-version: ["3.8", "3.9", "3.10"]
-        python-version: ["3.8"]
+        python-version: ["3.10"]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -37,7 +37,7 @@ jobs:
         pip install regions
     - name: Install bokeh
       run: |
-        pip install bokeh
+        pip install "bokeh>=3.2"
     - name: Create dummy version file
       run: |
         touch casagui/__version__.py
