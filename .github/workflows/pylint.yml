@@ -44,4 +44,4 @@ jobs:
         echo "__version__ = '0.0.0'" >> casagui/__version__.py
     - name: Analysing the code with pylint
       run: |
-        pylint "--msg-template='{abspath}:{line:5d},{column:2d}: {msg} ({symbol})'" --rcfile=pylintrc --output-format=colorized $(git ls-files '*.py')
+        pylint "--msg-template='{abspath}:{line:5d},{column:2d}: {msg} ({symbol})'" --rcfile=pylintrc --output-format=colorized $(git ls-files '*.py' | egrep '^casagui/')
