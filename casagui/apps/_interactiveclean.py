@@ -253,39 +253,6 @@ class InteractiveClean:
                         'flux':     'forestgreen' }
 
         ###
-        ### Auto Masking et al.
-        self._usemask = 'user'
-
-        ###
-        ### If the user has supplied a mask, do NOT modify it after initial tclean/deconvolve call...
-        ### otherwise if the 'initial_mask_pixel' is a boolean then initialize the mask pixels
-        ### to 'initial_mask_pixel' before loading the GUI...
-        ###
-        if type(initial_mask_pixel) is bool:
-            self._reset_mask_pixels = True
-            self._reset_mask_pixels_value = initial_mask_pixel
-        else:
-            self._reset_mask_pixels = False
-            self._reset_mask_pixels_value = None
-
-        ###
-        ### set up masking mode based on 'usemask' and 'mask'
-        ###
-        if usemask == 'auto-multithresh':
-            self._usemask = 'auto-multithresh'
-        elif usemask == 'pb':
-            self._usemask = 'pb'
-        elif usemask == 'user':
-            if mask != '':
-                if isinstance( mask, str ) and os.path.isdir( mask ):
-                    ### user has supplied a mask on disk
-                    self._reset_mask_pixels = False
-                else:
-                    raise RuntimeError( f'''user supplied mask does not exist or is not a directory: {mask}''' )
-        else:
-            raise RuntimeError( f'''unrecognized mask type: {usemask}''' )
-
-        ###
         ### clean generator
         ###
         if _gclean is None:
@@ -1176,13 +1143,6 @@ class InteractiveClean:
         self.__reset( )
         self._init_pipes()
         self._cube._init_pipes()
-        ###
-        ### The first time through, reinitialize the mask pixel values if the
-        ### user has not supplied a mask...
-        ###
-        if self._reset_mask_pixels:
-            self._reset_mask_pixels = False
-            self._cube.set_all_mask_pixels(self._reset_mask_pixels_value)
 
     @asynccontextmanager
     async def serve( self ):
