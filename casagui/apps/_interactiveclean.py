@@ -270,7 +270,7 @@ class InteractiveClean:
                                noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold,
                                minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
                                minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
-                               usemask=self._usemask, mask=mask
+                               usemask=usemask, mask=mask
                       )
         ###
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
