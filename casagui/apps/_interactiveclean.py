@@ -542,6 +542,12 @@ class InteractiveClean:
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
                                                    }
+                                               } else if ( msg.result == 'converged' ) {
+                                                   state.mode = 'interactive'
+                                                   btns['stop'].button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
                                                } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
@@ -675,7 +681,7 @@ class InteractiveClean:
                 iteration_limit = int(msg['value']['niter'])
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
-                if len(self._convergence_data['chan']) == 0 or stopcode == 7 or stopcode == -1:
+                if len(self._convergence_data['chan']) == 0 or stopcode == -1:
                     ### stopcode == -1 indicates an error condition within gclean
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
@@ -684,6 +690,11 @@ class InteractiveClean:
                     return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, iterdone=0, iterleft=iterleft,
                                  majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
+                if stopcode == 0:
+                    ### stopcode == 0 indicates that some stopping criteria has been reached
+                    return dict( result='converged', stopcode=stopcode, cmd=self._clean.cmds( ),
+                                 convergence=None, majordone=majordone,
+                                 majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
                 if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
                    len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
                     return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
