@@ -22,7 +22,7 @@ export namespace ImageDataSource {
   export type Props = ColumnDataSource.Props & {
       init_script: p.Property<CallbackLike0<ImageDataSource> | null>;
       image_source: p.Property<ImagePipe>
-      _mask_contour_source: p.Property<ColumnDataSource | null>   // source for multi_polygon contours
+      _mask_contour_source: p.Property<ColumnDataSource | null>  // source for multi_polygon contours
       num_chans: p.Property<[Number,Number]>                     // [ stokes, spectral ]
       cur_chan:  p.Property<[Number,Number]>                     // [ stokes, spectral ]
   }
@@ -95,7 +95,7 @@ export class ImageDataSource extends ColumnDataSource {
                                    }, this.imid )
     }
 
-    adjust_colormap( bounds: [ number, number ] | string,
+    adjust_colormap( bounds: [ number[], number[] ] | string,
                      transfer: {[key: string]: any},
                      cb: (msg:{[key: string]: any}) => any ) {
         this.image_source.adjust_colormap( bounds, transfer, cb, this.imid, true )

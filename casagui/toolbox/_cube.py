@@ -40,18 +40,19 @@ from sys import platform
 from os.path import dirname, join
 import websockets
 from contextlib import asynccontextmanager
-from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, LODStart, LODEnd, ValueSubmit
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
-                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet
+                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
 from bokeh.models import WheelZoomTool, LassoSelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
+from casagui.bokeh.models import EditSpan
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
 
-from ..bokeh.tools import DragTool, CBResetTool
+from ..bokeh.tools import CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
 from bokeh.models.dom import HTML
@@ -518,6 +519,21 @@ class CubeMask:
                                                                }
                                                            }'''
         }
+
+        def span_update( span1, span2 ):
+            return f'''if ( ! {span1}._edited ) {{
+                           {span1}._editing = true
+                           if ( {span1}.location <= {span2}.location ) {{
+                               {span1}.location = histogram.data_source.data.left[0]
+                               min.value = {span1}.location.toString( )
+                           }} else {{
+                               {span1}.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
+                               max.value = {span1}.location.toString( )
+                           }}
+                           {span1}._editing = false
+                       }}
+                       '''
+
         self._js = { ### update stats in response to channel changes
                      ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
                      ### The slider and the events from the update of the image source are
@@ -564,12 +580,20 @@ class CubeMask:
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
                                                                msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                                        if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        }
                                                                         if ( cb ) cb.execute( this ) } )
-                                           }''',
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( cb ) cb.execute( this ) } )
-                                           }''',
+                                                               msg => { if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        }
+                                                                        if ( cb ) cb.execute( this ) } )
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
@@ -1439,31 +1463,58 @@ class CubeMask:
         bins = np.linspace( chan.min( ), chan.max( ), self._cm_adjust['bins'] )
         hist, edges = np.histogram( chan, density=False, bins=bins )
 
-        self._cm_adjust['left span'] = Span(location=edges[0], dimension='height', line_color='red', line_width=1)
-        self._cm_adjust['right span'] = Span(location=edges[-1], dimension='height', line_color='red', line_width=1)
+        span_edited_funcs = '''function set_edited( span ) {
+                                   if (typeof span._original_dash == 'undefined')
+                                       span._original_dash = span.line_dash
+                                   span.line_dash = [ ]
+                                   span._edited = true
+                               }
+                               function clear_edited( span ) {
+                                   if (typeof span._original_dash != 'undefined')
+                                       span.line_dash = span._original_dash
+                                   span._edited = false
+                               }
+                               '''
 
-        self._cm_adjust['left input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
-        self._cm_adjust['right input'] = TextInput( value=repr(edges[-1]), prefix="max", max_width=140 )
-        self._cm_adjust['right input tt'] = Tooltip(content=HTML("<b>HTML</b> tooltip"), position="right",target=self._cm_adjust['right input'], visible=True)
+        self._cm_adjust['span one'] = EditSpan( location=edges[0], dimension='height', line_color='red', line_width=1,
+                                                 editable=True, line_dash='dashed' )
+        self._cm_adjust['span two'] = EditSpan( location=edges[-1], dimension='height', line_color='red', line_width=1,
+                                                  editable=True, line_dash='dashed' )
 
-        self._cm_adjust['hover'] = HoverTool( )
-        self._cm_adjust['drag'] = DragTool( )
-        self._cm_adjust['left tri'] = PolyAnnotation( xs=[ 100, 100, 120 ], ys=[ 100, 140, 120 ], fill_color=self._cm_adjust['left span'].line_color,
-                                                      visible=False, xs_units='screen', ys_units='screen' )
-        self._cm_adjust['right tri'] = PolyAnnotation( xs=[ 140, 140, 120 ], ys=[ 100, 140, 120 ], fill_color=self._cm_adjust['left span'].line_color,
-                                                       visible=False, xs_units='screen', ys_units='screen' )
+        self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
+        self._cm_adjust['min input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                    span2=self._cm_adjust['span two'] ),
+                                                                         code=span_edited_funcs +
+                                                                              '''if ( span1.location <= span2.location ) {
+                                                                                     span1._refresh_colormap = true
+                                                                                     span1.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span1)
+                                                                                 } else {
+                                                                                     span2._refresh_colormap = true
+                                                                                     span2.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span2)
+                                                                                 }''' ) )
+
+        self._cm_adjust['max input'] = TextInput( value=repr(edges[-1]), prefix="max", max_width=140 )
+        self._cm_adjust['max input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                    span2=self._cm_adjust['span two'] ),
+                                                                         code=span_edited_funcs +
+                                                                              '''if ( span1.location >= span2.location ) {
+                                                                                     span1._refresh_colormap = true
+                                                                                     span1.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span1)
+                                                                                 } else {
+                                                                                     span2._refresh_colormap = true
+                                                                                     span2.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span2)
+                                                                                 }''' ) )
 
         self._cm_adjust['reset'] = CBResetTool( )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
-                                         tools=[ self._cm_adjust['drag'],
-                                                 self._cm_adjust['hover'],
-                                                 self._cm_adjust['reset'] ] )
+                                         tools=[ self._cm_adjust['reset'],
+                                                 'wheel_zoom', 'pan', 'reset' ] )
 
         self._cm_adjust['fig'].toolbar.active_scroll = self._cm_adjust['fig'].select_one(WheelZoomTool)
-        self._cm_adjust['fig'].toolbar.active_drag = self._cm_adjust['fig'].select_one(DragTool)
-
-        self._cm_adjust['fig'].add_layout( self._cm_adjust['left tri'] )
-        self._cm_adjust['fig'].add_layout( self._cm_adjust['right tri'] )
 
         # Create a new BasicTickFormatter
         formatter = BasicTickFormatter()
@@ -1472,11 +1523,11 @@ class CubeMask:
         formatter.precision = 1
 
         self._cm_adjust['fig'].yaxis.formatter = formatter
-        self._cm_adjust['fig'].renderers.extend([self._cm_adjust['left span'], self._cm_adjust['right span']])
-        #self._cm_adjust['fig'].yaxis.visible = False
+        self._cm_adjust['fig'].renderers.extend([self._cm_adjust['span one'], self._cm_adjust['span two']])
 
-        self._cm_adjust['histogram'] = self._cm_adjust['fig'].quad( top=hist, bottom=0, left=edges[:-1], right=edges[1:],
-                                                                    fill_color="blue", line_color="blue" )
+        self._cm_adjust['hist-ds'] = self._pipe['image'].histogram_source( data=dict( left=list(edges[:-1]), right=list(edges[1:]), top=list(hist), bottom=[0]*len(hist) ) )
+        self._cm_adjust['hist-glyph'] = Quad( left="left", right="right", top="top", bottom=0, fill_color="blue", line_color="blue" )
+        self._cm_adjust['histogram'] = self._cm_adjust['fig'].add_glyph( self._cm_adjust['hist-ds'], self._cm_adjust['hist-glyph'] )
 
         ### linear: 𝑦=𝑥
         ### log: 𝑦=log𝛼𝑥+1(𝛼𝑥+1)  == Math.log(alpha * x + 1.0) / Math.log(alpha + 1.0)
@@ -1492,29 +1543,81 @@ class CubeMask:
                                                       ('square', 'square'), ('gamma', 'gamma'), ('power', 'power') ],
                                                button_type='light' )
 
-        movement_state = dict( fig=self._cm_adjust['fig'],
-                               ht=self._cm_adjust['hover'],
-                               dt=self._cm_adjust['drag'],
-                               lspan=self._cm_adjust['left span'],rspan=self._cm_adjust['right span'],
-                               ltri=self._cm_adjust['left tri'],
-                               ltxt=self._cm_adjust['left input'],
-                               rtri=self._cm_adjust['right tri'],
-                               rtxt=self._cm_adjust['right input'],
-                               source=self._image_source,
-                               id=self._ids['colormap-adjust'],
-                               ctrl=self._pipe['control'],
-                               histogram=self._cm_adjust['histogram'],
-                               scaling=self._cm_adjust['scaling'],
-                               alpha=self._cm_adjust['alpha-value'],
-                               gamma=self._cm_adjust['gamma-value'],
-                               equation=self._cm_adjust['equation'] )
-
         colormap_refresh_code = '''let args = { }
                                    if ( alpha.visible ) args = { alpha: parseFloat(alpha.value), ...args }
                                    if ( gamma.visible ) args = { gamma: parseFloat(gamma.value), ...args }
-                                   source.adjust_colormap( [ lspan._modified ? lspan.location : NaN,
-                                                             rspan._modified ? rspan.location : NaN ],
+                                   const [ minspan, maxspan ] = span1.location <= span2.location ? [ span1, span2 ] : [ span2, span1 ]
+                                   source.adjust_colormap( [ minspan._edited ? [ minspan.location ] : [ ],
+                                                             maxspan._edited ? [ maxspan.location ] : [ ] ],
                                                            { scaling: scaling.label, args }, msg => { source.refresh( ) } )'''
+
+        ###
+        ###  "( span1._editing && span2._editing )" update happens when the
+        ###  one of the spans is being dragged. Image is updated here when
+        ###  the LODEnd event is received
+        ###
+        ###  Otherwise the only time this should be called is in responce to
+        ###  either the min or max text input being changed directly. In this
+        ###  case the image is updated as a result of the text input change.
+        ###
+        span_cb = '''if ( span1._editing || span2._editing ) {
+                         min.value = (Math.min(span1.location,span2.location)).toString( )
+                         max.value = (Math.max(span1.location,span2.location)).toString( )
+                     }
+                     if ( cb_obj._refresh_colormap ) {
+                         cb_obj._refresh_colormap = false
+                         %s
+                     }'''
+
+        self._cm_adjust['span one'].js_on_change( 'location', CustomJS( args=dict( source=self._image_source,
+                                                                                   min=self._cm_adjust['min input'],
+                                                                                   max=self._cm_adjust['max input'],
+                                                                                   span1=self._cm_adjust['span one'],
+                                                                                   span2=self._cm_adjust['span two'],
+                                                                                   scaling=self._cm_adjust['scaling'],
+                                                                                   alpha=self._cm_adjust['alpha-value'],
+                                                                                   gamma=self._cm_adjust['gamma-value'],
+                                                                                   equation=self._cm_adjust['equation'] ),
+                                                                        code=span_cb % colormap_refresh_code ) )
+        self._cm_adjust['span two'].js_on_change( 'location', CustomJS( args=dict( source=self._image_source,
+                                                                                   min=self._cm_adjust['min input'],
+                                                                                   max=self._cm_adjust['max input'],
+                                                                                   span1=self._cm_adjust['span one'],
+                                                                                   span2=self._cm_adjust['span two'],
+                                                                                   scaling=self._cm_adjust['scaling'],
+                                                                                   alpha=self._cm_adjust['alpha-value'],
+                                                                                   gamma=self._cm_adjust['gamma-value'],
+                                                                                   equation=self._cm_adjust['equation'] ),
+                                                                        code=span_cb % colormap_refresh_code ) )
+
+        self._cm_adjust['span one'].js_on_event( LODStart, CustomJS( code= span_edited_funcs +
+                                                                           '''cb_obj.origin._editing = true
+                                                                              set_edited( cb_obj.origin )''' ) )
+        self._cm_adjust['span one'].js_on_event( LODEnd, CustomJS( args=dict( source=self._image_source,
+                                                                              min=self._cm_adjust['min input'],
+                                                                              max=self._cm_adjust['max input'],
+                                                                              span1=self._cm_adjust['span one'],
+                                                                              span2=self._cm_adjust['span two'],
+                                                                              scaling=self._cm_adjust['scaling'],
+                                                                              alpha=self._cm_adjust['alpha-value'],
+                                                                              gamma=self._cm_adjust['gamma-value'],
+                                                                              equation=self._cm_adjust['equation'] ),
+                                                                   code='''cb_obj.origin._editing = false;'''+colormap_refresh_code ) )
+        self._cm_adjust['span two'].js_on_event( LODStart, CustomJS( code= span_edited_funcs +
+                                                                           '''cb_obj.origin._editing = true
+                                                                              set_edited( cb_obj.origin )''' ) )
+        self._cm_adjust['span two'].js_on_event( LODEnd, CustomJS( args=dict( source=self._image_source,
+                                                                              min=self._cm_adjust['min input'],
+                                                                              max=self._cm_adjust['max input'],
+                                                                              span1=self._cm_adjust['span one'],
+                                                                              span2=self._cm_adjust['span two'],
+                                                                              scaling=self._cm_adjust['scaling'],
+                                                                              alpha=self._cm_adjust['alpha-value'],
+                                                                              gamma=self._cm_adjust['gamma-value'],
+                                                                              equation=self._cm_adjust['equation'] ),
+                                                                   code='''cb_obj.origin._editing = false;'''+colormap_refresh_code ) )
+
+
         update_scaling_state = '''alpha.visible = false
                                   gamma.visible = false
                                   if ( scaling.label == 'linear' ) {
@@ -1539,181 +1642,58 @@ class CubeMask:
                                       equation.text = scaling.label
                                   }'''
 
-
-        self._cm_adjust['reset'].postcallback = CustomJS( args=movement_state,
-                                                          code='''scaling.label = scaling.menu[0][0]
+        self._cm_adjust['reset'].postcallback = CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                     span2=self._cm_adjust['span two'],
+                                                                     mintxt=self._cm_adjust['min input'],
+                                                                     maxtxt=self._cm_adjust['max input'],
+                                                                     source=self._image_source,
+                                                                     histogram=self._cm_adjust['histogram'],
+                                                                     scaling=self._cm_adjust['scaling'],
+                                                                     alpha=self._cm_adjust['alpha-value'],
+                                                                     gamma=self._cm_adjust['gamma-value'],
+                                                                     equation=self._cm_adjust['equation'] ),
+                                                          code=span_edited_funcs +
+                                                               '''scaling.label = scaling.menu[0][0]
                                                                   %s
                                                                   scaling.change.emit( )
-                                                                  lspan.location = histogram.data_source.data.left[0]
-                                                                  rspan.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
-                                                                  ltxt.value = lspan.location.toString( )
-                                                                  rtxt.value = rspan.location.toString( )
+                                                                  span1.location = histogram.data_source.data.left[0]
+                                                                  clear_edited(span1)
+                                                                  span2.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
+                                                                  clear_edited(span2)
+                                                                  mintxt.value = span1.location.toString( )
+                                                                  maxtxt.value = span2.location.toString( )
                                                                   %s''' % ( update_scaling_state, colormap_refresh_code ) )
 
-        self._cm_adjust['scaling'].js_on_event( "menu_item_click", CustomJS( args=movement_state,
+        self._cm_adjust['scaling'].js_on_event( "menu_item_click", CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                        span2=self._cm_adjust['span two'],
+                                                                                        mintxt=self._cm_adjust['min input'],
+                                                                                        maxtxt=self._cm_adjust['max input'],
+                                                                                        source=self._image_source,
+                                                                                        histogram=self._cm_adjust['histogram'],
+                                                                                        scaling=self._cm_adjust['scaling'],
+                                                                                        alpha=self._cm_adjust['alpha-value'],
+                                                                                        gamma=self._cm_adjust['gamma-value'],
+                                                                                        equation=self._cm_adjust['equation'] ),
                                                                              code='''if ( cb_obj.item != cb_obj.origin.label ) {
                                                                                          scaling.label = cb_obj.item
                                                                                          %s
                                                                                          %s
                                                                                      }''' % ( update_scaling_state, colormap_refresh_code )) )
 
-        ##############################################################################################
-        ###  Set up span state when entering because things like displaying the "developer tools"  ###
-        ###  changes where the spans are displayed and can leave the triangles dangling...         ###
-        ##############################################################################################
-        self._cm_adjust['fig'].js_on_event( MouseLeave, CustomJS( args=movement_state,
-                                                                  code='''ltri.visible = false
-                                                                          rtri.visible = false''' ) )
-        tri_resync_code = '''function resync_tri( span, tri ) {
-                                 span._view = Bokeh.find.view( span )
-                                 span._coord = Bokeh.find.span_coords(span._view)
-                                 span._plot_view = span._view.plot_view
-                                 const x_delta = Bokeh.find.px_from_sx( span._plot_view, span._coord.sleft ) - tri.xs[0]
-                                 tri.xs = tri.xs.map(x => x + x_delta)
-                             }'''
-
-        self._cm_adjust['fig'].js_on_event( MouseEnter, CustomJS( args=movement_state,
-                                                                  ##########################################################################
-                                                                  ### The view must be discoved each time because resizes of the figure  ###
-                                                                  ### cause a new view to be created... holding onto the old view just   ###
-                                                                  ### results in the offsets not being updated because the old, adjusted ###
-                                                                  ### screen coordinates are returned again                              ###
-                                                                  ##########################################################################
-                                                                  code=tri_resync_code +
-                                                                       '''function initialize_tri( span, tri, span_offset_direction ) {
-                                                                              resync_tri( span, tri )
-                                                                              span._modified = false
-                                                                              const y_delta = span._coord.height / 2 - tri.ys[2]
-                                                                              tri.ys = tri.ys.map(y => y + y_delta)
-                                                                              span._span_offset_direction = span_offset_direction
-                                                                          }
-                                                                          if ( typeof fig._plot_view == 'undefined' ) {
-                                                                              fig._plot_view = Bokeh.find.view( fig )
-                                                                              initialize_tri( lspan, ltri, -1 )
-                                                                              initialize_tri( rspan, rtri,  1 )
-                                                                          } else {
-                                                                              resync_tri( lspan, ltri )
-                                                                              resync_tri( rspan, rtri )
-                                                                          }''' ) )
-
-        ##############################################################################################
-        ###  Hover tool handles making one triangle visible when the mouse is close to a span, and ###
-        ###  making it active when the mouse is within the triangle.                               ###
-        ##############################################################################################
-        self._cm_adjust['hover'].callback = CustomJS( args=movement_state,
-                                                      code=tri_resync_code +
-                                                           '''function check_span( sx, sy, span, tri, other_tri ) {
-                                                                  if ( sx > span._coord.sleft - 20 && sx < span._coord.sleft + 20 && ! other_tri.visible ) {
-                                                                      resync_tri( span, tri )
-                                                                      tri.visible = true
-                                                                  } else {
-                                                                      tri.visible = false
-                                                                  }
-                                                              }
-                                                              if ( cb_obj.event_type === 'move' ) {
-                                                                  const { sx, sy } = cb_data.geometry
-                                                                  if ( isFinite( sx ) && isFinite( sy ) ) {
-                                                                      check_span( sx, sy, lspan, ltri, rtri )
-                                                                      check_span( sx, sy, rspan, rtri, ltri )
-                                                                  }
-                                                              }''' )
-
-
-        self._cm_adjust['drag'].start = CustomJS( args=movement_state,
-                                                  code=tri_resync_code +
-                                                       '''const { sx, sy, x, y } = cb_data
-                                                          const px = Bokeh.find.px_from_sx(fig._plot_view,sx)
-                                                          const py = Bokeh.find.py_from_sy(fig._plot_view,sy)
-                                                          function start_check( tri, span ) {
-                                                              if ( tri.visible && casalib.d3.polygonContains(casalib.zip( tri.xs, tri.ys ),[sx,sy]) ) {
-                                                                  tri._dragging = true
-                                                                  tri._last_point = { sx, sy, x, y }
-                                                                  tri._span_delta = Math.abs(Bokeh.find.dx_from_px(fig._plot_view, sx) - span.location) * span._span_offset_direction
-                                                              }
-                                                          }
-                                                          resync_tri( lspan, ltri )
-                                                          resync_tri( rspan, rtri )
-                                                          start_check(ltri,lspan)
-                                                          start_check(rtri,rspan)''' )
-
-        self._cm_adjust['drag'].move = CustomJS( args=movement_state,
-                                                 code='''function move_is_ok( x_delta, span, other_span ) {
-                                                             const sx = Bokeh.find.sx_from_dx(fig._plot_view,span.location)
-                                                             const osx = Bokeh.find.sx_from_dx(fig._plot_view,other_span.location)
-                                                             return (Math.abs(sx + x_delta * span._span_offset_direction - osx) ) > 30
-                                                         }
-                                                         function move_check( tri, span, text, other_span ) {
-                                                             if ( tri._dragging ) {
-                                                                 const { sx, sy, x, y } = cb_data
-                                                                 const x_delta = sx - tri._last_point.sx
-                                                                 const y_delta = sy - tri._last_point.sy
-                                                                 if ( move_is_ok( x_delta, span, other_span ) ) {
-                                                                     if ( y_delta != 0 )
-                                                                         tri.ys = tri.ys.map(y => y + y_delta)
-                                                                     if ( x_delta != 0 ) {
-                                                                         const dx_delta = x - tri._last_point.x + tri._span_delta
-                                                                         span.location = x + dx_delta
-                                                                         span._coord = Bokeh.find.span_coords(span._view)
-                                                                         tri.xs = tri.xs.map(x => x + x_delta)
-                                                                         span._modified = true
-                                                                         text.value = span.location.toString( )
-                                                                     }
-                                                                     tri._last_point = { sx, sy, x, y }
-                                                                 }
-                                                             }
-                                                         }
-                                                         move_check( ltri, lspan, ltxt, rspan )
-                                                         move_check( rtri, rspan, rtxt, lspan )''' )
-
-        self._cm_adjust['drag'].end = CustomJS( args=movement_state,
-                                                code=tri_resync_code +
-                                                     '''function end_check( tri ) {
-                                                            if ( tri._dragging ) {
-                                                                tri._dragging = false
-                                                            }
-                                                        }
-                                                        if ( ltri._dragging || rtri._dragging ) {
-                                                            const lsx = Bokeh.find.sx_from_dx( fig._plot_view, lspan.location )
-                                                            const rsx = Bokeh.find.sx_from_dx( fig._plot_view, rspan.location )
-                                                            if ( lsx + 30 >= rsx || rsx - 30 <= lsx ) {
-                                                                if ( ltri._dragging ) {
-                                                                    const x = Bokeh.find.dx_from_px( fig._plot_view, Bokeh.find.px_from_sx(fig._plot_view, rsx - 40) )
-                                                                    lspan._modified = true
-                                                                    lspan.location = x
-                                                                    ltxt.value = x.toString( )
-                                                                } else {
-                                                                    const x = Bokeh.find.dx_from_px( fig._plot_view, Bokeh.find.px_from_sx(fig._plot_view, lsx + 40) )
-                                                                    rspan._modified = true
-                                                                    rspan.location = x
-                                                                    rtxt.value = x.toString( )
-                                                                }
-                                                            }
-                                                        }
-                                                        end_check(ltri)
-                                                        end_check(rtri)
-                                                        resync_tri( lspan, ltri )
-                                                        resync_tri( rspan, rtri )
-                                                        ''' + colormap_refresh_code )
-
-        scaling_parameter_callback = CustomJS( args=movement_state,
+        scaling_parameter_callback = CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                          span2=self._cm_adjust['span two'],
+                                                          mintxt=self._cm_adjust['min input'],
+                                                          maxtxt=self._cm_adjust['max input'],
+                                                          source=self._image_source,
+                                                          histogram=self._cm_adjust['histogram'],
+                                                          scaling=self._cm_adjust['scaling'],
+                                                          alpha=self._cm_adjust['alpha-value'],
+                                                          gamma=self._cm_adjust['gamma-value'],
+                                                          equation=self._cm_adjust['equation'] ),
                                                code=colormap_refresh_code )
 
         self._cm_adjust['alpha-value'].js_on_change( 'value', scaling_parameter_callback )
         self._cm_adjust['gamma-value'].js_on_change( 'value', scaling_parameter_callback )
-        self._cm_adjust['left input'].js_on_change( 'value', CustomJS( args=movement_state,
-                                                                       code='''const newval = parseFloat(cb_obj.value)
-                                                                               if ( newval != lspan.location ) {
-                                                                                   lspan.location = newval
-                                                                                   lspan._modified = true
-                                                                                   %s
-                                                                               }''' % ( colormap_refresh_code ) ) )
-        self._cm_adjust['right input'].js_on_change( 'value', CustomJS( args=movement_state,
-                                                                        code='''const newval = parseFloat(cb_obj.value)
-                                                                                if ( newval != rspan.location ) {
-                                                                                   rspan.location = newval
-                                                                                   rspan._modified = true
-                                                                                   %s
-                                                                               }''' % ( colormap_refresh_code ) ) )
 
         async def colormap_adjust_update( msg, self=self ):
             if 'action' in msg and msg['action'] == 'fetch':
@@ -1724,28 +1704,11 @@ class CubeMask:
 
             return dict( result='failure', update={ } )
 
-        self._pipe['control'].register( self._ids['colormap-adjust'], colormap_adjust_update )
-        self._image_source.js_on_change( 'data', CustomJS( args=movement_state,
-                                                           code='''function adjust_update( msg ) {
-                                                                       histogram.data_source.data.top = msg.hist
-                                                                       histogram.data_source.data.left = msg.edges.slice(0,msg.edges.length-1)
-                                                                       histogram.data_source.data.right = msg.edges.slice(1,msg.edges.length)
-                                                                       if ( ! lspan._modified ) {
-                                                                           lspan.location = msg.edges[0]
-                                                                           ltxt.value = lspan.location.toString( )
-                                                                       }
-                                                                       if ( ! rspan._modified ) {
-                                                                           rspan.location = msg.edges[msg.edges.length-1]
-                                                                           rtxt.value = rspan.location.toString( )
-                                                                       }
-                                                                   }
-                                                                   ctrl.send( id, { action: 'fetch' }, adjust_update )''' ) )
-
         return column( self._cm_adjust['fig'],
-                       row( Tip( self._cm_adjust['left input'],
+                       row( Tip( self._cm_adjust['min input'],
                                   tooltip=Tooltip( content=HTML("set minimum clip here or drag the left red line above"),
                                                    position="top" ) ),
-                            Tip( self._cm_adjust['right input'],
+                            Tip( self._cm_adjust['max input'],
                                   tooltip=Tooltip( content=HTML("set maximum clip here or drag the right red line above"),
                                                    position="top_left" ) ) ),
                        row( Tip( self._cm_adjust['scaling'],
@@ -1890,6 +1853,7 @@ class CubeMask:
                                                                   mask_region_icons=self._mask_icons_,
                                                                   mask_region_button=self._mask_add_sub['mask'],
                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                  contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
                                                        code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
@@ -1902,6 +1866,7 @@ class CubeMask:
                                                                   mask_region_icons=self._mask_icons_,
                                                                   mask_region_button=self._mask_add_sub['mask'],
                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                  contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
                                                        code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
@@ -1931,6 +1896,11 @@ class CubeMask:
             ###
             self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
                                                       stats_source=self._statistics_source,
+                                                      min=self._cm_adjust['min input'],
+                                                      max=self._cm_adjust['max input'],
+                                                      span1=self._cm_adjust['span one'],
+                                                      span2=self._cm_adjust['span two'],
+                                                      histogram=self._cm_adjust['histogram'],
                                                       cb=self._slider_callback ),
                                            code=(self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
             self._slider.js_on_change( 'value', self._cb['slider'] )
@@ -2092,8 +2062,9 @@ class CubeMask:
                                                               mask_region_button=self._mask_add_sub['mask'],
                                                               mask_region_icons=self._mask_icons_,
                                                               mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                              contour_ds=self._bitmask_contour_ds,
                                                               status=self._status_div, statprec=7 ),
-                                                              code='let source = cb_obj;' +
+                                                              code='''let source = cb_obj;''' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['contour-maskmod'] +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
@@ -2165,6 +2136,7 @@ class CubeMask:
                                                       selector=self._bitmask_color_selector,
                                                       mask_region_button=self._mask_add_sub['mask'],
                                                       mask_region_icons=self._mask_icons_,
+                                                      contour_ds=self._bitmask_contour_ds,
                                                       mask_region_ds=self._bitmask_contour_maskmod_ds ),
                                            code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
                                                    self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )

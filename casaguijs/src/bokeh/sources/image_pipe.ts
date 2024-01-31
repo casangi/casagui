@@ -1,3 +1,4 @@
+import { ColumnDataSource } from "@bokehjs/models/sources/column_data_source"
 import { DataPipe } from "./data_pipe"
 import * as p from "@bokehjs/core/properties"
 
@@ -20,6 +21,7 @@ export namespace ImagePipe {
         dataid: p.Property<string>
         shape: p.Property<[number,number,number,number]>
         fits_header_json: p.Property<string | null>
+        _histogram_source: p.Property<ColumnDataSource | null>     // source for histogram updates
         channel: p.Property<( index: [number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         spectra: p.Property<( index: [number,number,number], cb: (msg:{[key: string]: any}) => any, id: string ) => void>
         refresh: p.Property<( cb: (msg:{[key: string]: any}) => any, id: string, default_index: [number] ) => void>
@@ -57,7 +59,15 @@ export class ImagePipe extends DataPipe {
     channel( index: [number, number], cb: (msg:{[key: string]: any}) => any, id: string ): void {
         this.position[id] = { index }
         let message = { action: 'channel', index, id }
-        super.send( this.dataid, message, cb )
+        super.send( this.dataid, message,
+                    (msg:{[key: string]: any}) => {
+                        // update histogram (for colormap adjust etc.)
+                        if ( this._histogram_source != null && 'hist' in msg &&
+                             'top' in msg.hist && 'bottom' in msg.hist &&
+                             'left' in msg.hist && 'right' in msg.hist ) {
+                            this._histogram_source.data = msg.hist
+                        }
+                        cb(msg) } )
     }
     // fetch spectra
     //    index: [ RA index, DEC index, stokes index ]
@@ -67,7 +77,7 @@ export class ImagePipe extends DataPipe {
         super.send( this.dataid, message, cb, squash_queue )
     }
 
-    adjust_colormap( bounds: [ number, number ] | string, transfer: {[key: string]: any},
+    adjust_colormap( bounds: [ number[], number[] ] | string, transfer: {[key: string]: any},
                      cb: (msg:{[key: string]: any}) => any, id: string, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false  ) {
         const message = { action: 'adjust-colormap', bounds, transfer, id }
         super.send( this.dataid, message, cb, squash_queue )
@@ -92,10 +102,11 @@ export class ImagePipe extends DataPipe {
     }
 
     static {
-        this.define<ImagePipe.Props>(({Number, Nullable, String, Tuple }) => ({
+        this.define<ImagePipe.Props>(({Number, Nullable, String, Tuple, Ref }) => ({
             dataid: [ String ],
             shape: [ Tuple(Number,Number,Number,Number) ],
-            fits_header_json: [ Nullable(String), null ]
+            fits_header_json: [ Nullable(String), null ],
+            _histogram_source: [ Ref(ColumnDataSource), null ]
         }));
     }
 }
