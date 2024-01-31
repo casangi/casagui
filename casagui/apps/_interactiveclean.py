@@ -548,6 +548,10 @@ class InteractiveClean:
                                                    enable(false)
                                                    state.stopped = false
                                                    update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                                   refresh( msg )
                                                } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
