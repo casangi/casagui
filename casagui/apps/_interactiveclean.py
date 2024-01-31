@@ -686,30 +686,14 @@ class InteractiveClean:
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
-                if len(self._convergence_data['chan']) == 0:
-                    return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, iterdone=0, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
-                if stopcode == 0:
-                    ### stopcode == 0 indicates that some stopping criteria has been reached
-                    return dict( result='converged', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, majordone=majordone,
-                                 majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
-                if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
-                   len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
-                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
-                else:
-                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=self._convergence_data['chan'],
-                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
-
-                return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
+                ### stopcode != 0 indicates that some stopping criteria has been reached
+                ###               this will also catch errors as well as convergence
+                ###               (so 'converged' isn't quite right...)
+                return dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=self._clean.cmds( ),
                              convergence=self._convergence_data['chan'],
                              iterdone=iteration_limit - iterleft, iterleft=iterleft,
                              majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
+
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
