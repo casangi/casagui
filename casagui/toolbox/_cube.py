@@ -194,7 +194,7 @@ class CubeMask:
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
                                                                    action: 'addition',
@@ -212,7 +212,7 @@ class CubeMask:
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys.length) ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
                                                                    action: 'subtract',
@@ -230,7 +230,7 @@ class CubeMask:
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
                                                                    action: 'addition',
@@ -248,7 +248,7 @@ class CubeMask:
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( mask_region_ds.data.xs.length > 0 && mask_region_ds.data.ys.length > 0 ) {
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
                                                                    action: 'subtract',
@@ -539,17 +539,14 @@ class CubeMask:
                                                   mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
                                                   mask_region_button.icon = mask_region_icons['off']
                                               }
-                                              function is_empty( array ) {
-                                                  return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
-                                              }
                                               function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
                                                   if ( xs.length > 0 && ys.length > 0 ) {
                                                       annotations[0].xs = xs
                                                       annotations[0].ys = ys
                                                       mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
                                                       mask_region_button.icon = mask_region_icons['off']
-                                                  } else if ( ! is_empty(contour_ds.data.xs) &&
-                                                              ! is_empty(contour_ds.data.ys) ) {
+                                                  } else if ( ! casalib.is_empty(contour_ds.data.xs) &&
+                                                              ! casalib.is_empty(contour_ds.data.ys) ) {
                                                       annotations[0].xs = [ ]
                                                       annotations[0].ys = [ ]
                                                       mask_region_ds.data = contour_ds.data
@@ -968,11 +965,17 @@ class CubeMask:
             ### init_script code sets up Ctrl key handling for switching the add/subtract plot tool actions from single channel ###
             ### operation to all channel operation                                                                              ###
             #######################################################################################################################
+            ### It could be that 'casalib.is_empty' should move to the actual casalib instead of being wedged in here           ###
+            #######################################################################################################################
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
                                              stats=True, abort=self.__abort, address=find_ws_address( ),
                                              init_script=CustomJS( args=self._mask_add_sub,
                                                                    code='''add._mode = 'chan'
                                                                            sub._mode = 'chan'
+                                                                           function is_empty( array ) {
+                                                                               return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
+                                                                           }
+                                                                           casalib.is_empty = is_empty
                                                                            function cube_on( ) {
                                                                                add._mode = 'cube'
                                                                                add.icon = img['add']['cube']
