@@ -44,7 +44,7 @@ from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, LODStart, LO
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
                          LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
-from bokeh.models import WheelZoomTool, LassoSelectTool
+from bokeh.models import WheelZoomTool, LassoSelectTool, ResetTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
@@ -1509,10 +1509,11 @@ class CubeMask:
                                                                                      set_edited(span2)
                                                                                  }''' ) )
 
-        self._cm_adjust['reset'] = CBResetTool( )
+        self._cm_adjust['reset'] = CBResetTool( description="Reset pan/zoom and extents" )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
                                          tools=[ self._cm_adjust['reset'],
-                                                 'wheel_zoom', 'pan', 'reset' ] )
+                                                 'wheel_zoom', 'pan',
+                                                 ResetTool( description="Reset pan/zoom but preserve extents" ) ] )
 
         self._cm_adjust['fig'].toolbar.active_scroll = self._cm_adjust['fig'].select_one(WheelZoomTool)
 
