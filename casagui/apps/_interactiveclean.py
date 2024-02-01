@@ -33,6 +33,7 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
+from pathlib import Path
 from html import escape as html_escape
 from contextlib import asynccontextmanager
 from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step, InlineStyleSheet
@@ -218,7 +219,7 @@ class InteractiveClean:
         ### Create application context (which includes a temporary directory).
         ### This sets the title of the plot.
         ###
-        self._app_state = AppContext( 'Interactive Clean' )
+        self._app_state = AppContext( Path(vis).stem )
 
         ###
         ### Whether or not the Interactive Clean session is running remotely
