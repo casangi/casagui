@@ -1967,7 +1967,10 @@ class CubeMask:
                                                                        ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
                                                                        ###  convergence data is available...
                                                                        code='''if ( cb_obj.item != cb_obj.origin.label ) {
-                                                                                   source.channel( source.cur_chan[1], %s, msg => { cb_obj.origin.label = cb_obj.item } )
+                                                                                   source.channel( source.cur_chan[1], %s,
+                                                                                                   msg => { cb_obj.origin.label = cb_obj.item
+                                                                                                            if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                                                                          } )
                                                                                }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
                                                                                                          zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
 
