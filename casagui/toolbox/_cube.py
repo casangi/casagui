@@ -1481,6 +1481,11 @@ class CubeMask:
         self._cm_adjust['span two'] = EditSpan( location=edges[-1], dimension='height', line_color='red', line_width=1,
                                                   editable=True, line_dash='dashed' )
 
+        ###
+        ### Bokeh supports 'description=Tooltip( content=HTML("..."), position="..." )'. However,
+        ### The Tooltip(...) works by creating an "i" in a circle with the label that can be clicked.
+        ### With "prefix=..." and no label, no button is displayed.
+        ###
         self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
         self._cm_adjust['min input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
                                                                                     span2=self._cm_adjust['span two'] ),
