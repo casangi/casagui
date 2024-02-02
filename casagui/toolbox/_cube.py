@@ -1363,7 +1363,7 @@ class CubeMask:
             self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
 
             self._spectra = set_attributes( figure( height=180, width=800,
-                                                    title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
+                                                    tools=[ self._hover['spectra'] ] ), **kw )
             self._spectra.add_layout(self._sp_span)
 
             self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
@@ -2004,11 +2004,6 @@ class CubeMask:
                                                        var x_pos = Math.floor(geometry.x);
                                                        var y_pos = Math.floor(geometry.y);
                                                        specds.spectra( x_pos, y_pos, imageds.cur_chan[0], true )
-                                                       if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                           specfig.title.text = `Spectrum (${x_pos},${y_pos})`
-                                                       } else {
-                                                           specfig.title.text = 'Spectrum'
-                                                       }
                                                    } else if ( cb_obj.event_name === 'mouseenter' ) {
                                                        ctrl._freeze_cursor_update = false
                                                    }

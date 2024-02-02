@@ -816,7 +816,7 @@ class InteractiveClean:
                     </div>'''
 
         hover = HoverTool( tooltips=TOOLTIPS )
-        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ], title='Convergence',
+        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ],
                                            x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual',
                                            sizing_mode='stretch_width' )
 
