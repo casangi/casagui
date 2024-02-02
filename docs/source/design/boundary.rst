@@ -171,7 +171,20 @@ The functions implemented within :xref:`gclean` are :
     :green:`creating the restored image` -- :code:`cl.restore( )` called after the completion
     of the :xref:`gclean` processing. This creates the final, restored image and
     returns a dictionary which contains an :code:`image` field whose value is the
-    path to the restored image.
+    path to the restored image. 
+
+    :green:`retrieve list of executed commands` -- :code:`cl.cmds( history=False )` called
+    to retrieve the list of :code:`tclean`, :code:`deconvolve` etc. to display as a log
+    for the user. If :code:`history` is set to :code:`True` then the entire history is
+    returned. Otherwise, the commands since the last :code:`next(gc)` execution are
+    returned.
+
+    :green:`special Python functions that create an iterator` -- :code:`__next__`, :code:`__anext__`
+    (:code:`__anext__` is an *asyncio* version of :code:`__next`) should perform one model update
+    step (deconvolution) is run, followed by one residual update step (major cycle). The special
+    :code:`__iter__` and :code:`__aiter__` functions should just return :code:`self`, and the
+    :code:`__del__` function should run :code:`restore`.
+
 
 The typical interactive clean pattern of :code:`gclean` usage is::
 
