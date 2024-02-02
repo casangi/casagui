@@ -44,7 +44,7 @@ from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, LODStart, LO
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
                          LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
-from bokeh.models import WheelZoomTool, LassoSelectTool, ResetTool
+from bokeh.models import WheelZoomTool, PanTool, ResetTool, PolySelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
@@ -1238,7 +1238,8 @@ class CubeMask:
             ### set tools that are active by default
             ###
             self._image.toolbar.active_scroll = self._image.select_one(WheelZoomTool)
-            self._image.toolbar.active_drag = self._image.select_one(LassoSelectTool)
+            self._image.toolbar.active_drag = self._image.select_one(PanTool)
+            self._image.toolbar.active_tap = self._image.select_one(PolySelectTool)
 
             ###
             ### set tick formatting
