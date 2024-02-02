@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022,2024
+# Copyright (C) 2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,17 +25,19 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''End user applications supplied by ``casagui``.'''
+'''Reuse doc string'''
 
-from ._plotants import plotants
-from ._plotbandpass import plotbandpass
-from ._makemask import MakeMask
-from ._interactiveclean import InteractiveClean
-from ..bokeh.state import initialize_session
-from ..utils import copydoc
-initialize_session()
+from typing import Callable, TypeVar, ParamSpec
 
-@copydoc(InteractiveClean)
-def run_iclean( *args, **kwargs ):
-    ic = InteractiveClean( *args, **kwargs )
-    return ic( )
+P = ParamSpec("P")
+T = TypeVar("T")
+
+def copydoc(src: Callable[P, T]):
+    """Copy documentation from src"""
+
+    def decorator(dest: Callable) -> Callable[P, T]:
+        dest.__doc__ = src.__doc__
+        return dest
+
+    return decorator
+

@@ -40,6 +40,7 @@ from ._ResourceManager import _ResourceManager
 from ._logging import get_logger
 from ._regions import polygon_indexes
 from ._docenum import DocEnum
+from ._copydoc import copydoc
 
 from astropy import units as u
 from regions import PixCoord
