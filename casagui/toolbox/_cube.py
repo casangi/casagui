@@ -2243,15 +2243,15 @@ class CubeMask:
                              <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                              <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>''',
                          'mask': '''
+                             <tr><td><b>f</b></td><td>freeze cursor tracking updates until the mouse <b>re-enters</b> the channel plot</td></tr>
                              <tr><td><b>a</b></td><td>add region to the mask for the current channel</td></tr>
                              <tr><td><b>s</b></td><td>subtract region from the mask for the current channel</td></tr>
-                             <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
                              <tr><td><b>shift</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
                              <tr><td><b>shift</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
+                             <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
                              <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
-                             <tr><td><b>escape</b></td><td>remove displayed region</td></tr>
+                             <tr><td><b>escape</b></td><td>unselect the selected region</td></tr>
                              <tr><td><b>down</b></td><td>move selected region down one pixel</td></tr>
-                             <tr><td><b>f</b></td><td>freeze cursor tracking updates until the mouse <b>re-enters</b> the channel plot</td></tr>
                              <tr><td><b>up</b></td><td>move selected region up one pixel</td></tr>
                              <tr><td><b>left</b></td><td>move selected region one pixel to the left</td></tr>
                              <tr><td><b>right</b></td><td>move selected region one pixel to the right</td></tr>
