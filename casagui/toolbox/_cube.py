@@ -2029,14 +2029,14 @@ class CubeMask:
                                                         if ( pix_wrld && pix_wrld.label == 'pixel' ) {
                                                             pixlabel.text = '' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
                                                                             " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " masked" : " unmasked") : '')
                                                         } else {
                                                             const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
                                                                                                     Number(msg.update.index[1]) )
                                                             imageds.wcs( ).imageToWorldCoords(pt,false)
                                                             let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
                                                             pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " masked" : " unmasked") : '')
                                                         }
                                                     }
                                                 }
