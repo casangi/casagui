@@ -8,15 +8,13 @@ from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing
 from xradio.vis.read_processing_set import read_processing_set
 
 from bokeh.models.formatters import DatetimeTickFormatter
-import dask
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar, Profiler, ResourceProfiler, CacheProfiler, visualize
 import datashader as ds
 import datashader.transfer_functions as tf 
 import holoviews as hv
 import holoviews.operation.datashader
-import hvplot.dask
-import matplotlib.pyplot as plt
+import hvplot
 from numpy import absolute as np_abs
 from pandas import to_datetime
 
@@ -26,8 +24,11 @@ def vis_to_ps(vis_path):
     input vis_path(str): path to input .ms or .zarr file
     returns (xarray Dataset): xradio processing set
     '''
+    zarr_name = vis_path
     basename, ext = os.path.splitext(vis_path)
-    if ext != ".zarr":
+    if ext == ".zarr":
+        zarr_name = vis_path
+    else:
         ms_name = vis_path
         zarr_name = basename + ".vis.zarr"
         if not os.path.exists(zarr_name):
@@ -150,7 +151,7 @@ def main(argv):
     plot = create_plot(img, "time", "amp")
 
     # Save plot in current directory
-    filename = os.path.splitext(os.path.basename(vis_path))[0] + ".png"
+    filename = os.path.splitext(os.path.basename(vis_path))[0] + "_scatter.png"
     print(f"Saving plot to {filename}")
     hvplot.save(plot, filename)
 
