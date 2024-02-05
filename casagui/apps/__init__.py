@@ -35,7 +35,7 @@ from ..bokeh.state import initialize_session
 from ..utils import copydoc
 initialize_session()
 
-#@copydoc(InteractiveClean)
+@copydoc(InteractiveClean)
 def run_iclean( *args, **kwargs ):
     ic = InteractiveClean( *args, **kwargs )
     return ic( )
