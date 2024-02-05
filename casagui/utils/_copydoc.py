@@ -27,17 +27,19 @@
 ########################################################################
 '''Reuse doc string'''
 
-from typing import Callable, TypeVar, ParamSpec
-
-P = ParamSpec("P")
-T = TypeVar("T")
-
-def copydoc(src: Callable[P, T]):
-    """Copy documentation from src"""
-
-    def decorator(dest: Callable) -> Callable[P, T]:
-        dest.__doc__ = src.__doc__
-        return dest
-
-    return decorator
-
+# ParamSpec is available with Python >= 3.10
+#from typing import Callable, TypeVar, ParamSpec
+#
+#P = ParamSpec("P")
+#T = TypeVar("T")
+#
+def copydoc(src):
+#def copydoc(src: Callable[P, T]):
+#    """Copy documentation from src"""
+#
+#    def decorator(dest: Callable) -> Callable[P, T]:
+#        dest.__doc__ = src.__doc__
+#        return dest
+#
+#    return decorator
+    pass
