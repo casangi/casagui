@@ -28,6 +28,7 @@
 from casagui.bokeh.state import initialize_bokeh
 from tempfile import TemporaryDirectory
 from bokeh.io import output_file
+from bokeh.plotting import curdoc
 from os.path import join
 import unicodedata
 import re
@@ -51,7 +52,7 @@ class AppContext:
         value = re.sub(r'[^\w\s-]', '', value.lower())
         return re.sub(r'[-\s]+', '-', value).strip('-_')
 
-    def __init__( self, title, prefix=None ):
+    def __init__( self, title, prefix=None, theme=None ):
 
         ###
         ### Setup up Bokeh paths, inject casagui libraries into Bokeh HTML output
@@ -61,6 +62,21 @@ class AppContext:
         if prefix is None:
             ## create a prefix from the title
             prefix = self._slugify(title)[:10]
+
+        if type(theme) is str:
+            if theme.startswith('dark'):
+                curdoc( ).theme = 'dark_minimal'
+            elif theme.startswith('caliber'):
+                curdoc().theme = 'caliber'
+            elif theme.startswith('light'):
+                curdoc().theme = 'light_minimal'
+            elif theme.startswith('night'):
+                curdoc().theme = 'night_sky'
+            elif theme.startswith('contrast'):
+                curdoc().theme = 'contrast'
+            else:
+                raise RuntimeError(f'''Unknown theme: '{theme}' ''')
+
         self.__workdir = TemporaryDirectory(prefix=prefix)
         self.__htmlpath = join( self.__workdir.name, f'''{self._slugify(title)}.html''' )
         output_file( self.__htmlpath, title=title )

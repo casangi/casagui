@@ -218,7 +218,7 @@ class InteractiveClean:
         ### Create application context (which includes a temporary directory).
         ### This sets the title of the plot.
         ###
-        self._app_state = AppContext( 'Interactive Clean' )
+        self._app_state = AppContext( 'Interactive Clean', theme='dark' )
 
         ###
         ### Whether or not the Interactive Clean session is running remotely
