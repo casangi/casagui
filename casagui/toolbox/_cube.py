@@ -550,6 +550,26 @@ class CubeMask:
                      ### the cursor is inside, hotkeys are active (and slider is updated). When outside
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
+                     'pixel-update-func': ''' function update_pixel( msg ) {
+                                                    if ( msg.update &&
+                                                         'pixel' in msg.update &&
+                                                         'index' in msg.update &&
+                                                         msg.update.index.length == 2 ) {
+                                                        const digits = 5
+                                                        if ( pix_wrld && pix_wrld.label == 'pixel' ) {
+                                                            pixlabel.text = '<p ALIGN=RIGHT>' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
+                                                                            "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
+                                                        } else {
+                                                            const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
+                                                                                                    Number(msg.update.index[1]) )
+                                                            imageds.wcs( ).imageToWorldCoords(pt,false)
+                                                            let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
+                                                            pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
+                                                        }
+                                                    }
+                                                }''',
                      'contour-maskmod': '''   function maskmod_region_clear( ) {
                                                   annotations[0].xs = [ ]
                                                   annotations[0].ys = [ ]
@@ -586,6 +606,10 @@ class CubeMask:
                                                                             %s
                                                                         }
                                                                         if ( cb ) cb.execute( this ) } )
+                                               ctrl.send( ids['pixel-value'],
+                                                          { action: 'pixel',
+                                                            value: { chan: imageds.cur_chan, index: source._current_pos } },
+                                                            update_pixel, true )
                                                if ( go_to && ! go_to._has_focus ) {
                                                    go_to.value = String( slider.value )
                                                }
@@ -1914,14 +1938,15 @@ class CubeMask:
             ###
             self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
                                                       stats_source=self._statistics_source,
+                                                      pixlabel = self._pixel_tracking_text,
                                                       min=self._cm_adjust['min input'],
                                                       max=self._cm_adjust['max input'],
                                                       span1=self._cm_adjust['span one'],
                                                       span2=self._cm_adjust['span two'],
                                                       histogram=self._cm_adjust['histogram'],
-                                                      go_to=self._goto,
-                                                      cb=self._slider_callback ),
-                                           code=(self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
+                                                      go_to=self._goto, cb=self._slider_callback,
+                                                      ids=self._ids, ctrl=self._pipe['control'], pix_wrld=self._coord_ctrl_dropdown ),
+                                           code='''let imageds=source;''' + self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
 
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
@@ -2081,36 +2106,17 @@ class CubeMask:
                                                    }
                                                }"""
 
-
         if self._pixel_tracking_text:
             ###
             ### code for updating pixel value due to cursor movements
             ###
-            movement_code_pixel_update = '''if ( cb_obj.event_type === 'move' ) {
-                                                function update_pixel( msg ) {
-                                                    if ( msg.update &&
-                                                         'pixel' in msg.update &&
-                                                         'index' in msg.update &&
-                                                         msg.update.index.length == 2 ) {
-                                                        const digits = 5
-                                                        if ( pix_wrld && pix_wrld.label == 'pixel' ) {
-                                                            pixlabel.text = '<p ALIGN=RIGHT>' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
-                                                                            "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
-                                                        } else {
-                                                            const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
-                                                                                                    Number(msg.update.index[1]) )
-                                                            imageds.wcs( ).imageToWorldCoords(pt,false)
-                                                            let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                            pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
-                                                        }
-                                                    }
-                                                }
+            movement_code_pixel_update = self._js['pixel-update-func'] + '''
+                                            if ( cb_obj.event_type === 'move' ) {
                                                 if ( ctrl._freeze_cursor_update == false ) {
                                                     var geometry = cb_data['geometry'];
                                                     var x_pos = Math.floor(geometry.x);
                                                     var y_pos = Math.floor(geometry.y);
+                                                    imageds._current_pos = [ x_pos, y_pos ]
                                                     if ( ! pixlabel.disabled && isFinite(x_pos) && isFinite(y_pos) ) {
                                                         /* SEGV: cannot fetch pixels while tclean may be modifying the image */
                                                         ctrl.send( ids['pixel-value'],
