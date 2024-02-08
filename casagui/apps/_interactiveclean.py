@@ -44,7 +44,7 @@ from bokeh.io import reset_output as reset_bokeh_output, output_notebook
 from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
-from ..bokeh.models import TipButton, Tip
+from ..bokeh.models import TipButton, Tip, EvTextInput
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 # pylint: disable=no-name-in-module
@@ -861,7 +861,7 @@ class InteractiveClean:
         self._fig['image-source'] = self._cube.js_obj( )
 
         if image_channels > 1:
-            self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
+            self._control['goto'] = self._cube.goto( )
             self._fig['spectra'] = self._cube.spectra( width=450 )
             self._fig['slider'] = self._cube.slider( CustomJS( args=dict( flux_src=self._flux_data,
                                                                           residual_src=self._residual_data,
@@ -870,48 +870,9 @@ class InteractiveClean:
                                                                           conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
                                                                           img_src=self._fig['image-source'],
                                                                           stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                               code=self._js['update-converge'] + self._js['slider-update'] ) )
-
-
-            self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
-                                                                              slider=self._fig['slider'],
-                                                                              status=self._status['stopcode'] ),
-                                                                   code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
-                                                                           if ( values.length > 2 ) {
-                                                                             status._error_set = true
-                                                                             status.text = '<p>enter at most two indexes</p>'
-                                                                           } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
-                                                                             status._error_set = true
-                                                                             status.text = '<p>invalid channel entered</p>'
-                                                                           } else {
-                                                                             if ( status._error_set ) {
-                                                                               status._error_set = false
-                                                                               status.text = '<p/>'
-                                                                             }
-                                                                             if ( values.length == 1 ) {
-                                                                               if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
-                                                                                 status.text= `<p>moving to channel ${values[0]}</p>`
-                                                                                 slider.value = values[0]
-                                                                               } else {
-                                                                                 status._error_set = true
-                                                                                 status.text = `<p>channel ${values[0]} out of range</p>`
-                                                                               }
-                                                                             } else if ( values.length == 2 ) {
-                                                                               if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
-                                                                                 status._error_set = true
-                                                                                 status.text = `<p>channel ${values[0]} out of range</p>`
-                                                                               } else {
-                                                                                 if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
-                                                                                   status._error_set = true
-                                                                                   status.text = `<p>stokes ${values[1]} out of range</p>`
-                                                                                 } else {
-                                                                                   status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
-                                                                                   slider.value = values[0]
-                                                                                   img.channel( values[0], values[1] )
-                                                                                 }
-                                                                               }
-                                                                             }
-                                                                           }''' ) )
+                                                               code=self._js['update-converge'] + self._js['slider-update'] ),
+                                                     show_value=False, title='', margin=(14,5,5,5), width=None, width_policy='max'
+                                                   )
         else:
             self._control['goto'] = None
             self._fig['slider'] = None
@@ -1044,7 +1005,15 @@ class InteractiveClean:
                                                    help_button,
                                                   ),
                                               self._fig['image'],
-                                              self._fig['cursor_pixel_text'],
+                                              row(
+                                                  self._fig['cursor_pixel_text'],
+                                                  self._control['goto'] if self._control['goto'] else Div( ),
+                                                  Tip( self._fig['slider'],
+                                                       tooltip=Tooltip( content=HTML("slide control to the desired channel"),
+                                                                        position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
+                                                  #self._fig['slider'],
+                                                  width_policy='max', height_policy='min',
+                                              ),
                                               height_policy='max', width_policy='max',
                                       ),
                                       column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],
@@ -1059,15 +1028,12 @@ class InteractiveClean:
                                                                                        Tip( self._control['threshold'],
                                                                                             tooltip=Tooltip( content=HTML( 'stopping threshold' ),
                                                                                                              position='bottom' ) ) ),
-                                                                                  row( Tip( self._control['goto'],
-                                                                                            tooltip=Tooltip( content=HTML( 'to go to a specific channel, <b>enter</b> the channel number and press <b>return</b>' ),
-                                                                                                             position='bottom' ) ) if self._fig['slider'] else Div( ),
-                                                                                       row( Tip( self._control['cycleniter'],
-                                                                                                 tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
-                                                                                                                  position='bottom' ) ),
-                                                                                            Tip( self._control['cycle_factor'],
-                                                                                                 tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
-                                                                                                                  position='bottom_left' ) ), background="lightgray" ) ),
+                                                                                  row( Tip( self._control['cycleniter'],
+                                                                                            tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
+                                                                                                             position='bottom' ) ),
+                                                                                       Tip( self._control['cycle_factor'],
+                                                                                            tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
+                                                                                                             position='bottom_left' ) ), background="lightgray" ),
                                                                                   row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
                                                                     title='Iteration' ),
                                                            TabPanel( child=self._cube.colormap_adjust( ),
@@ -1075,10 +1041,7 @@ class InteractiveClean:
                                                            TabPanel( child=self._cube.statistics( width=280 ),
                                                                      title='Statistics' ) ],
                                                     sizing_mode='stretch_width' ),
-                                              Tip( self._fig['slider'],
-                                                   tooltip=Tooltip( content=HTML("slide control to the desired channel"),
-                                                                    position="top" ) ) if self._fig['slider'] else Div( ),
-                                              height_policy='max', max_width=320
+                                              height_policy='max', max_width=300
                                       ),
                                       width_policy='max', height_policy='max' ),
                                   row(

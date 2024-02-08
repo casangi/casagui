@@ -51,7 +51,7 @@ from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe,
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.models import EditSpan
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
-
+from ..bokeh.models import EvTextInput
 from ..bokeh.tools import CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
@@ -108,6 +108,7 @@ class CubeMask:
         self._bitmask_contour_maskmod = None               # display mask contour as a region MultiPolygon (for copy/paste)
         self._bitmask_contour_maskmod_ds = None            # display mask contour data source
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
+        self._goto = None                                  # goto channel
         self._slider = None                                # slider to move from plane to plane
         self._slider_callback = None                       # called after the channel update for slider movement is complete
         self._spectra = None                               # figure displaying spectra along the frequency axis
@@ -585,6 +586,9 @@ class CubeMask:
                                                                             %s
                                                                         }
                                                                         if ( cb ) cb.execute( this ) } )
+                                               if ( go_to && ! go_to._has_focus ) {
+                                                   go_to.value = String( slider.value )
+                                               }
                                            }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
@@ -1300,6 +1304,13 @@ class CubeMask:
 
         return self._image
 
+    def goto( self, **kw ):
+        if self._goto is None:
+            self._init_pipes( )
+            self._goto = set_attributes( EvTextInput( value=self._slider.start if self._slider else '0',
+                                                      prefix="Channel", width=150 ), **kw )
+        return self._goto
+
     def slider( self, callback=None, **kw ):
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
@@ -1834,7 +1845,7 @@ class CubeMask:
 
     def pixel_tracking_text( self ):
 
-        self._pixel_tracking_text = PreText( text='', min_width=300 )
+        self._pixel_tracking_text = Div( text='', min_width=200 )
 
         async def pixel_value( msg, self=self ):
             if msg['action'] == 'pixel':
@@ -1908,9 +1919,70 @@ class CubeMask:
                                                       span1=self._cm_adjust['span one'],
                                                       span2=self._cm_adjust['span two'],
                                                       histogram=self._cm_adjust['histogram'],
+                                                      go_to=self._goto,
                                                       cb=self._slider_callback ),
                                            code=(self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
+
             self._slider.js_on_change( 'value', self._cb['slider'] )
+
+        if self._goto:
+            self._goto.js_on_event( 'mouseenter', CustomJS( args=dict( slider=self._slider ),
+                                                            code='''cb_obj.origin._has_focus = true
+                                                                    const view = Bokeh.find.view(cb_obj.origin)
+                                                                    view.input_el.focus( )
+                                                                    cb_obj.origin.value = ''
+                                                                    cb_obj.origin.prefix = "Go To"''' ) )
+            self._goto.js_on_event( 'mouseleave', CustomJS( args=dict( slider=self._slider ),
+                                                            code='''const view = Bokeh.find.view(slider)
+                                                                    cb_obj.origin.prefix = "Channel"
+                                                                    document.activeElement.blur( )
+                                                                    if ( slider ) cb_obj.origin.value = String(slider.value)
+                                                                    cb_obj.origin._has_focus = false
+                                                                    ''' ) )
+
+            self._goto.js_on_event( ValueSubmit, CustomJS( args=dict( img=self._image_source,
+                                                                      slider=self._slider,
+                                                                      status=self._status_div ),
+                                                           code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
+                                                                   if ( values.length > 2 ) {
+                                                                       status._error_set = true
+                                                                       status.text = '<p>enter at most two indexes</p>'
+                                                                   } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
+                                                                       status._error_set = true
+                                                                       status.text = '<p>invalid channel entered</p>'
+                                                                   } else {
+                                                                       if ( status._error_set ) {
+                                                                           status._error_set = false
+                                                                           status.text = '<p/>'
+                                                                       }
+                                                                       if ( values.length == 1 ) {
+                                                                           if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
+                                                                               status._error_set = false
+                                                                               status.text= `<p>moving to channel ${values[0]}</p>`
+                                                                               slider.value = values[0]
+                                                                           } else {
+                                                                               status._error_set = true
+                                                                               status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                           }
+                                                                       } else if ( values.length == 2 ) {
+                                                                           if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
+                                                                               status._error_set = true
+                                                                               status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                           } else {
+                                                                               if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<p>stokes ${values[1]} out of range</p>`
+                                                                               } else {
+                                                                                   status._error_set = false
+                                                                                   status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
+                                                                                   slider.value = values[0]
+                                                                                   img.channel( values[0], values[1] )
+                                                                               }
+                                                                           }
+                                                                       }
+                                                                   }
+                                                                   if ( ! status._error_set ) cb_obj.origin.value = "" ''' ) )
+
 
         if self._statistics_mask:
             self._statistics_mask.js_on_click( CustomJS( args=dict( source=self._image_source,
@@ -2022,16 +2094,16 @@ class CubeMask:
                                                          msg.update.index.length == 2 ) {
                                                         const digits = 5
                                                         if ( pix_wrld && pix_wrld.label == 'pixel' ) {
-                                                            pixlabel.text = '' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
-                                                                            " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " masked" : " unmasked") : '')
+                                                            pixlabel.text = '<p ALIGN=RIGHT>' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
+                                                                            "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
                                                         } else {
                                                             const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
                                                                                                     Number(msg.update.index[1]) )
                                                             imageds.wcs( ).imageToWorldCoords(pt,false)
                                                             let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                            pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " masked" : " unmasked") : '')
+                                                            pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
+                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
                                                         }
                                                     }
                                                 }
