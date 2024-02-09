@@ -1522,7 +1522,7 @@ class CubeMask:
         ### The Tooltip(...) works by creating an "i" in a circle with the label that can be clicked.
         ### With "prefix=..." and no label, no button is displayed.
         ###
-        self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
+        self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min" )
         self._cm_adjust['min input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
                                                                                     span2=self._cm_adjust['span two'] ),
                                                                          code=span_edited_funcs +
@@ -1536,7 +1536,7 @@ class CubeMask:
                                                                                      set_edited(span2)
                                                                                  }''' ) )
 
-        self._cm_adjust['max input'] = TextInput( value=repr(edges[-1]), prefix="max", max_width=140 )
+        self._cm_adjust['max input'] = TextInput( value=repr(edges[-1]), prefix="max" )
         self._cm_adjust['max input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
                                                                                     span2=self._cm_adjust['span two'] ),
                                                                          code=span_edited_funcs +
@@ -1752,7 +1752,7 @@ class CubeMask:
                                                    position="top" ) ),
                             Tip( self._cm_adjust['max input'],
                                   tooltip=Tooltip( content=HTML("set maximum clip here or drag the right red line above"),
-                                                   position="top_left" ) ) ),
+                                                   position="top_left" ) ), width_policy='min' ),
                        row( Tip( self._cm_adjust['scaling'],
                                   tooltip=Tooltip( content=HTML('scaling function applied to image intensities'),
                                                    position="top" ) ),
@@ -2116,13 +2116,15 @@ class CubeMask:
                                                     var geometry = cb_data['geometry'];
                                                     var x_pos = Math.floor(geometry.x);
                                                     var y_pos = Math.floor(geometry.y);
-                                                    imageds._current_pos = [ x_pos, y_pos ]
-                                                    if ( ! pixlabel.disabled && isFinite(x_pos) && isFinite(y_pos) ) {
-                                                        /* SEGV: cannot fetch pixels while tclean may be modifying the image */
-                                                        ctrl.send( ids['pixel-value'],
-                                                                   { action: 'pixel',
-                                                                     value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
-                                                                     update_pixel, true )
+                                                    if ( isFinite(x_pos) && isFinite(y_pos) ) {
+                                                        imageds._current_pos = [ x_pos, y_pos ]
+                                                        if ( ! pixlabel.disabled ) {
+                                                            /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                            ctrl.send( ids['pixel-value'],
+                                                                       { action: 'pixel',
+                                                                         value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
+                                                                         update_pixel, true )
+                                                        }
                                                     }
                                                 }
                                             }'''

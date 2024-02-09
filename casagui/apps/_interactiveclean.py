@@ -1038,10 +1038,10 @@ class InteractiveClean:
                                                                     title='Iteration' ),
                                                            TabPanel( child=self._cube.colormap_adjust( ),
                                                                      title='Colormap' ),
-                                                           TabPanel( child=self._cube.statistics( width=280 ),
+                                                           TabPanel( child=self._cube.statistics( width=340 ),
                                                                      title='Statistics' ) ],
                                                     sizing_mode='stretch_width' ),
-                                              height_policy='max', max_width=300
+                                              height_policy='max', width=340
                                       ),
                                       width_policy='max', height_policy='max' ),
                                   row(
