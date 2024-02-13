@@ -47,7 +47,7 @@ from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Sp
 from bokeh.models import WheelZoomTool, PanTool, ResetTool, PolySelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
+from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.models import EditSpan
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
@@ -70,7 +70,7 @@ class CubeMask:
         along with these optional components:
 
         *  slider to move through planes
-        *  spectra plot (in response to mouse movements in 2-D raster display)
+        *  spectrum plot (in response to mouse movements in 2-D raster display)
         *  statistics (table)
 
         Parameters
@@ -111,14 +111,14 @@ class CubeMask:
         self._goto = None                                  # goto channel
         self._slider = None                                # slider to move from plane to plane
         self._slider_callback = None                       # called after the channel update for slider movement is complete
-        self._spectra = None                               # figure displaying spectra along the frequency axis
+        self._spectrum = None                              # figure displaying spectrum along the frequency axis
         self._statistics = None                            # statistics data table
         self._statistics_mask = None                       # button to switch from channel statistics to mask statistics
         self._statistics_use_mask = False                  # whether statistics calculations will be based on the masked
                                                            # area or the whole channel
         self._palette = None                               # palette selection
         self._help_button = None                           # help button that creates a new tab/window (instead of hide/show Div)
-        self._image_spectra = None                         # spectra data source
+        self._image_spectrum = None                        # spectrum data source
         self._image_source = None                          # ImageDataSource
         self._statistics_source = None
         self._pipe = { 'image': None, 'control': None }    # data pipes
@@ -126,7 +126,7 @@ class CubeMask:
                       'mask-mod': str(uuid4( )),
                       'done': str(uuid4( )),
                       'config-statistics': str(uuid4( )),
-                      'pixel-value': str(uuid4( )),
+                      'fetch-spectrum': str(uuid4( )),
                       'colormap-adjust': str(uuid4( )) } # ids used for control messages
 
         ###########################################################################################################################
@@ -148,7 +148,7 @@ class CubeMask:
                                'img': dict( add=_add_, sub=_sub_ ) }
 
         self._fig = { }
-        self._hover = { 'spectra': None, 'image': None }   # HoverTools which are used to synchronize image/spectra
+        self._hover = { 'spectrum': None, 'image': None }   # HoverTools which are used to synchronize image/spectrum
                                                            # movement/taps and and corresponding display
 
         self._result = None                                # result to be filled in from Bokeh
@@ -550,26 +550,47 @@ class CubeMask:
                      ### the cursor is inside, hotkeys are active (and slider is updated). When outside
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
-                     'pixel-update-func': ''' function update_pixel( msg ) {
-                                                    if ( msg.update &&
-                                                         'pixel' in msg.update &&
-                                                         'index' in msg.update &&
-                                                         msg.update.index.length == 2 ) {
-                                                        const digits = 5
-                                                        if ( pix_wrld && pix_wrld.label == 'pixel' ) {
-                                                            pixlabel.text = '<p ALIGN=RIGHT>' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
-                                                                            "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
-                                                        } else {
-                                                            const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
-                                                                                                    Number(msg.update.index[1]) )
-                                                            imageds.wcs( ).imageToWorldCoords(pt,false)
-                                                            let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                            pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? (msg.update.mask ? " <b>masked</b>" : " <b>unmasked</b>") : '') + '</p>'
-                                                        }
-                                                    }
-                                                }''',
+                     'pixel-update-func': ''' function refresh_pixel_display( index, intensity, masked, world_coord=true ) {
+                                                  const digits = 5
+                                                  if ( world_coord ) {
+                                                      const pt = new casalib.coordtxl.Point2D( Number(index[0]), Number(index[1]) )
+                                                      isource.wcs( ).imageToWorldCoords(pt,false)
+                                                      let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  } else {
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + index[0] + ', ' + Number(index[1]) +
+                                                                      "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  }
+                                              }
+                                              function update_spectrum( _chan, _index, update_func ) {
+                                                  function array_equal( a1, a2 ) {
+                                                      return (a1.length == a2.length) && a1.every((element, index) => element === a2[index])
+                                                  }
+                                                  if ( isource._update_spectrum &&
+                                                       _chan[0] == isource._update_spectrum.chan[0] &&
+                                                       array_equal( _index, isource._update_spectrum.index ) ) {
+                                                      update_func( { ...isource._update_spectrum, chan: _chan } )
+                                                  } else {
+                                                      function _update_spectrum ( msg ) {
+                                                          if ( msg.update &&
+                                                               'spectrum' in msg.update &&
+                                                               'index' in msg.update &&
+                                                               'chan' in msg.update &&
+                                                               msg.update.index.length == 2 &&
+                                                               msg.update.index.length == 2 ) {
+                                                              const { spectrum, chan, index, mask } = msg.update
+                                                              isource._update_spectrum = { spectrum, mask, chan, index }
+                                                              update_func( isource._update_spectrum )
+                                                          } else console.log( 'Error: update of spectrum', msg )
+                                                      }
+                                                      ctrl.send( ids['fetch-spectrum'],
+                                                                 { action: 'spectrum',
+                                                                   value: { chan: _chan, index: isource._current_pos } },
+                                                                 _update_spectrum, true )
+                                                  }
+                                              }''',
                      'contour-maskmod': '''   function maskmod_region_clear( ) {
                                                   annotations[0].xs = [ ]
                                                   annotations[0].ys = [ ]
@@ -599,17 +620,20 @@ class CubeMask:
                                                   region.line_color = selector.color
                                               }''',
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                               isource.channel( slider.value, isource.cur_chan[0],
+                                                               msg => { if ( 'stats' in msg ) { isource.update_statistics( msg.stats ) }
                                                                         if ( 'hist' in msg ) {
                                                                             %s
                                                                             %s
                                                                         }
                                                                         if ( cb ) cb.execute( this ) } )
-                                               ctrl.send( ids['pixel-value'],
-                                                          { action: 'pixel',
-                                                            value: { chan: imageds.cur_chan, index: source._current_pos } },
-                                                            update_pixel, true )
+                                               update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
+                                                                ( spec ) => {
+                                                                    refresh_pixel_display( spec.index,
+                                                                                           spec.spectrum.y[spec.chan[1]],
+                                                                                           'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                           pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                } )
                                                if ( go_to && ! go_to._has_focus ) {
                                                    go_to.value = String( slider.value )
                                                }
@@ -1357,8 +1381,8 @@ class CubeMask:
 
         return self._slider
 
-    def spectra( self, **kw ):
-        '''Return the line graph of spectra from the image cube which is updated
+    def spectrum( self, **kw ):
+        '''Return the line graph of spectrum from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
 
         Parameters
@@ -1366,16 +1390,17 @@ class CubeMask:
         kw: keyword and value
             extra keyword/value paramaters passed on to ``figure``
         '''
-        if self._spectra is None:
+        if self._spectrum is None:
             if self._image is None:
                 ###
                 ### an exception is raised instead of just creating the image display because if we create
                 ### it here [by calling self.image( )], the user will silently lose the ability to set the
                 ### maximum number of annotations per channel (along with other future parameters)
                 ###
-                raise RuntimeError('spectra( ) requires an image cube display, but one has not yet been created')
+                raise RuntimeError('spectrum( ) requires an image cube display, but one has not yet been created')
 
-            self._image_spectra = SpectraDataSource(image_source=self._pipe['image'])
+            nelem = self._pipe['image'].shape[-1]
+            self._image_spectrum = ColumnDataSource( data={ 'x': list(range(nelem)), 'y': [0] * nelem } )
 
             self._sp_span = Span( location=-1,
                                   dimension='height',
@@ -1395,17 +1420,17 @@ class CubeMask:
                                                                 span.location = -1
                                                             }""" )
 
-            self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
+            self._hover['spectrum'] = HoverTool( callback=self._cb['sppos'] )
 
-            self._spectra = set_attributes( figure( height=180, width=800,
-                                                    tools=[ self._hover['spectra'] ] ), **kw )
-            self._spectra.add_layout(self._sp_span)
+            self._spectrum = set_attributes( figure( height=180, width=800,
+                                                    tools=[ self._hover['spectrum'] ] ), **kw )
+            self._spectrum.add_layout(self._sp_span)
 
-            self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
-            self._spectra.line( x='x', y='y', source=self._image_spectra )
-            self._spectra.grid.grid_line_width = 0.5
+            self._spectrum.x_range.range_padding = self._spectrum.y_range.range_padding = 0
+            self._spectrum.line( x='x', y='y', source=self._image_spectrum )
+            self._spectrum.grid.grid_line_width = 0.5
 
-        return self._spectra
+        return self._spectrum
 
     def coorddesc( self ):
         return self._pipe['image'].coorddesc( )
@@ -1871,15 +1896,16 @@ class CubeMask:
 
         self._pixel_tracking_text = Div( text='', min_width=200 )
 
-        async def pixel_value( msg, self=self ):
-            if msg['action'] == 'pixel':
+        async def fetch_spectrum( msg, self=self ):
+            if msg['action'] == 'spectrum':
                 chan = msg['value']['chan']
                 index = msg['value']['index']
-                return dict( result='success', update=dict(pixel=self._image_source.pixel_value( chan, index ),
-                                                           mask=self._pipe['image'].mask_value( chan, index ),
-                                                           index=index, chan=chan) )
+                spectrum, mask = self._pipe['image'].spectrum( index + [chan[0]], True )
+                return dict( result='success', update=dict( spectrum=spectrum,
+                                                            mask=mask,
+                                                            index=index, chan=chan ) )
 
-        self._pipe['control'].register( self._ids['pixel-value'], pixel_value )
+        self._pipe['control'].register( self._ids['fetch-spectrum'], fetch_spectrum )
         return self._pixel_tracking_text
 
     def connect( self ):
@@ -1936,7 +1962,7 @@ class CubeMask:
             ### ... NEED TO switch statistics updates to use _image_source.cur_chan instead...
             ### ... ALSO statistics would be based upon the SELECTION SET...
             ###
-            self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
+            self._cb['slider'] = CustomJS( args=dict( isource=self._image_source, slider=self._slider,
                                                       stats_source=self._statistics_source,
                                                       pixlabel = self._pixel_tracking_text,
                                                       min=self._cm_adjust['min input'],
@@ -1946,7 +1972,7 @@ class CubeMask:
                                                       histogram=self._cm_adjust['histogram'],
                                                       go_to=self._goto, cb=self._slider_callback,
                                                       ids=self._ids, ctrl=self._pipe['control'], pix_wrld=self._coord_ctrl_dropdown ),
-                                           code='''let imageds=source;''' + self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
+                                           code=self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
 
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
@@ -2076,7 +2102,7 @@ class CubeMask:
         ### cursor movement code snippets
         movement_code_spectrum_update = ''
         movement_code_pixel_update = ''
-        if self._spectra:
+        if self._spectrum:
             ###
             ### this is set up in connect( ) because slider must be updated if it is used othersize
             ### channel should be directly set (previously the slider was implicitly set when a new
@@ -2090,20 +2116,27 @@ class CubeMask:
                                                              //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
                                                     }''' )
 
-            self._spectra.js_on_event('tap', self._cb['sptap'])
+            self._spectrum.js_on_event('tap', self._cb['sptap'])
 
             ###
             ### code for spectrum update due to cursor movement
             ###
-            movement_code_spectrum_update = """if ( ! specfig.disabled && ! imagefig.disabled ) {
-                                                   if ( cb_obj.event_type === 'move' && ctrl._freeze_cursor_update !== true ) {
-                                                       var geometry = cb_data['geometry'];
-                                                       var x_pos = Math.floor(geometry.x);
-                                                       var y_pos = Math.floor(geometry.y);
-                                                       specds.spectra( x_pos, y_pos, imageds.cur_chan[0], true )
-                                                   } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                       ctrl._freeze_cursor_update = false
+            movement_code_spectrum_update = """if ( cb_obj.event_type === 'move' ) {
+                                                   if ( ctrl._freeze_cursor_update == false ) {
+                                                       var geometry = cb_data['geometry']
+                                                       var x_pos = Math.floor(geometry.x)
+                                                       var y_pos = Math.floor(geometry.y)
+                                                       if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                           isource._current_pos = [ x_pos, y_pos ]
+                                                           if ( ! specfig.disabled && ! imagefig.disabled ) {
+                                                               /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                               update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                                ( spec ) => specds.data = spec.spectrum )
+                                                           }
+                                                       }
                                                    }
+                                               } else if ( cb_obj.event_name === 'mouseenter' ) {
+                                                   ctrl._freeze_cursor_update = false
                                                }"""
 
         if self._pixel_tracking_text:
@@ -2113,25 +2146,28 @@ class CubeMask:
             movement_code_pixel_update = self._js['pixel-update-func'] + '''
                                             if ( cb_obj.event_type === 'move' ) {
                                                 if ( ctrl._freeze_cursor_update == false ) {
-                                                    var geometry = cb_data['geometry'];
-                                                    var x_pos = Math.floor(geometry.x);
-                                                    var y_pos = Math.floor(geometry.y);
-                                                    if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                        imageds._current_pos = [ x_pos, y_pos ]
+                                                    var geometry = cb_data['geometry']
+                                                    var x_pos = Math.floor(geometry.x)
+                                                    var y_pos = Math.floor(geometry.y)
+                                                    if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                        isource._current_pos = [ x_pos, y_pos ]
                                                         if ( ! pixlabel.disabled ) {
                                                             /* SEGV: cannot fetch pixels while tclean may be modifying the image */
-                                                            ctrl.send( ids['pixel-value'],
-                                                                       { action: 'pixel',
-                                                                         value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
-                                                                         update_pixel, true )
+                                                            update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                             ( spec ) => {
+                                                                                 refresh_pixel_display( spec.index,
+                                                                                                        spec.spectrum.y[spec.chan[1]],
+                                                                                                        'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                                        pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                             } )
                                                         }
                                                     }
                                                 }
                                             }'''
 
         if movement_code_spectrum_update or movement_code_pixel_update:
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
-                                                     imageds=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum, imagefig=self._image,
+                                                     isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
                                                      pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown ),
                                           code = movement_code_spectrum_update + movement_code_pixel_update )
 

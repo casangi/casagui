@@ -72,8 +72,8 @@ export class ImagePipe extends DataPipe {
     // fetch spectra
     //    index: [ RA index, DEC index, stokes index ]
     // RETURNED MESSAGE SHOULD HAVE { id: string, message: any }
-    spectra( index: [number, number, number], cb: (msg:{[key: string]: any}) => any, id: string, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ) {
-        let message = { action: 'spectra', index, id }
+    spectrum( index: [number, number, number], cb: (msg:{[key: string]: any}) => any, id: string, squash_queue: boolean | ((msg:{[key: string]: any}) => boolean) = false ) {
+        let message = { action: 'spectrum', index, id }
         super.send( this.dataid, message, cb, squash_queue )
     }
 
@@ -91,8 +91,8 @@ export class ImagePipe extends DataPipe {
             super.send( this.dataid, message, cb )
 
         } else if ( index.length === 3 ) {
-            // refreshing spectra
-            let message = { action: 'spectra', index, id }
+            // refreshing spectrum
+            let message = { action: 'spectrum', index, id }
             super.send( this.dataid, message, cb )
         }
     }

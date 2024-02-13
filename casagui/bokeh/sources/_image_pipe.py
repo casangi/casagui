@@ -61,7 +61,7 @@ class ImagePipe(DataPipe):
     the path to the image, and then it is used as the input to an
     `ImageDataSource` or a `SpectraDataSource`. This allows a single CASA
     or CNGI imge to be opened once and shared among multiple Bokeh plots,
-    for example ploting an image channel and a plot of a spectra from the
+    for example ploting an image channel and a plot of a spectrum from the
     image cube.
 
     Attributes
@@ -359,8 +359,8 @@ class ImagePipe(DataPipe):
         else:
             self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
 
-    def spectra( self, index ):
-        """Retrieve one spectra from the image cube. The `index` should be a
+    def spectrum( self, index, mask=False ):
+        """Retrieve one spectrum from the image cube. The `index` should be a
         three element list of integers. The first integer is the ''right
         ascension'' axis, the second integer is the ''declination'' axis,
         and the third integer is the ''stokes'' axis.
@@ -378,17 +378,25 @@ class ImagePipe(DataPipe):
             index[1] = self.shape[1] - 1
         if self.__img is None:
             raise RuntimeError('no image is available')
+        result_mask = np.squeeze( self.__msk.getchunk( blc=index + [0],
+                                                       trc=index + [self.shape[-1]] ) ) if self.__msk and mask else None
         result = np.squeeze( self.__img.getchunk( blc=index + [0],
                                                  trc=index + [self.shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
         try:
-            return { 'x': list(range(len(result))), 'y': list(result) }
-        except Exception:
+            if mask:
+                return { 'x': list(range(len(result))), 'y': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
+            else:
+                return { 'x': list(range(len(result))), 'y': list(result) }
+        except Exception as e:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
-            return { 'x': [0], 'y': [float(result)] }
+            if mask:
+                return { 'x': [0], 'y': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
+            else:
+                return { 'x': [0], 'y': [float(result)] }
 
     def histogram_source( self, data ):
         if not self._histogram_source:
@@ -418,8 +426,8 @@ class ImagePipe(DataPipe):
                          'hist': histogram,
                          'id': cmd['id'] }
 
-        elif cmd['action'] == 'spectra':
-            return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
+        elif cmd['action'] == 'spectrum':
+            return { 'spectrum': pack_arrays( self.spectrum(cmd['index']) ), 'id': cmd['id'] }
         elif cmd['action'] == 'adjust-colormap':
             if cmd['bounds'] == "reset":
                 self.__quant_adjustments = { 'bounds': [ [ ], [ ] ],

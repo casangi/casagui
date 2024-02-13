@@ -448,7 +448,7 @@ class InteractiveClean:
                                                image_fig.disabled = true
                                                stokes_dropdown.disabled = true
                                                if ( cursor_tracking_text) { cursor_tracking_text.disabled = true }
-                                               if ( spectra_fig ) spectra_fig.disabled = true
+                                               if ( spectrum_fig ) spectrum_fig.disabled = true
                                                if ( with_stop ) {
                                                    btns['stop'].disabled = true
                                                } else {
@@ -469,7 +469,7 @@ class InteractiveClean:
                                                image_fig.disabled = false
                                                stokes_dropdown.disabled = false
                                                if ( cursor_tracking_text) { cursor_tracking_text.disabled = false }
-                                               if ( spectra_fig ) spectra_fig.disabled = false
+                                               if ( spectrum_fig ) spectrum_fig.disabled = false
                                                if ( ! only_stop ) {
                                                    btns['continue'].disabled = false
                                                    btns['finish'].disabled = false
@@ -862,7 +862,7 @@ class InteractiveClean:
 
         if image_channels > 1:
             self._control['goto'] = self._cube.goto( )
-            self._fig['spectra'] = self._cube.spectra( width=450 )
+            self._fig['spectrum'] = self._cube.spectrum( width=450 )
             self._fig['slider'] = self._cube.slider( CustomJS( args=dict( flux_src=self._flux_data,
                                                                           residual_src=self._residual_data,
                                                                           threshold_src=self._cyclethreshold_data,
@@ -876,7 +876,7 @@ class InteractiveClean:
         else:
             self._control['goto'] = None
             self._fig['slider'] = None
-            self._fig['spectra'] = None
+            self._fig['spectrum'] = None
 
         self._channel_ctrl = self._cube.channel_ctrl( )
 
@@ -894,7 +894,6 @@ class InteractiveClean:
                                                  ctrl_pipe=self._pipe['control'], conv_pipe=self._pipe['converge'],
                                                  ids=self._ids['clean'],
                                                  img_src=self._fig['image-source'],
-                                                 #spec_src=self._image_spectra,
                                                  niter=self._control['niter'], cycleniter=self._control['cycleniter'],
                                                  nmajor=self._control['nmajor'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
@@ -906,7 +905,7 @@ class InteractiveClean:
                                                  logbutton=self.__log_button,
                                                  slider=self._fig['slider'],
                                                  image_fig=self._fig['image'],
-                                                 spectra_fig=self._fig['spectra'],
+                                                 spectrum_fig=self._fig['spectrum'],
                                                  stokes_dropdown = self._channel_ctrl[1].child,
                                                  cursor_tracking_text = self._fig['cursor_pixel_text'],
                                                  stopstatus=self._status['stopcode'],
@@ -988,9 +987,9 @@ class InteractiveClean:
         ### For cube imaging, tabify the spectrum and convergence plots
         ###
         self._spec_conv_tabs = None
-        if self._fig['spectra']:
+        if self._fig['spectrum']:
             self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
-                                                TabPanel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
+                                                TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
 
         self._fig['layout'] = column(
