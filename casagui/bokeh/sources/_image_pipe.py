@@ -239,7 +239,7 @@ class ImagePipe(DataPipe):
             min = scaled_plane.min( )
             max = scaled_plane.max( )
             max -= min
-            img = ((scaled_plane - min)/max) * (2**bits-1)
+            img = (((scaled_plane - min)/max) if max != 0 else (scaled_plane - min)) * (2**bits-1)
             result = img.astype(nptype)
             return result
 

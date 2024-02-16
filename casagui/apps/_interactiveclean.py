@@ -54,7 +54,7 @@ from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask, AppContext
-from casagui.bokeh.components import svg_icon
+from casagui.bokeh.utils import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
 
@@ -354,7 +354,10 @@ class InteractiveClean:
                                            }''',
 
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     ### -- flux_src._convergence_data is used to store the complete                       --
+                     ### -- flux_src._convergence_data is used to store the complete                              --
+                     ### --                                                                                       --
+                     ### -- The "Insert here ..." code seems to be called when when the stokes plane is changed   --
+                     ### -- but there have been no tclean iterations yet...                                       --
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'update-converge': '''function update_convergence( msg ) {
                                                let convdata
@@ -366,7 +369,7 @@ class InteractiveClean:
                                                        convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
                                                        //          chan-------------------------------^^^^^^      ^^^^^^----stokes
                                                    } else {
-                                                       console.log( 'Insert code here to get convergence data when no cache and no update (msg) is available...' )
+                                                       //console.log( 'Insert code here to get convergence data when no cache and no update (msg) is available...' )
                                                        return
                                                    }
                                                } else if ( 'result' in msg ) {
@@ -1010,7 +1013,7 @@ class InteractiveClean:
                                                   Tip( self._fig['slider'],
                                                        tooltip=Tooltip( content=HTML("slide control to the desired channel"),
                                                                         position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
-                                                  #self._fig['slider'],
+                                                  self._cube.tapedeck( ),
                                                   width_policy='max', height_policy='min',
                                               ),
                                               height_policy='max', width_policy='max',

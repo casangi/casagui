@@ -25,6 +25,8 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+from os import listdir
+from os.path import dirname, join, isfile, getsize
 from bokeh.core import properties
 from bokeh.models.ui.icons import SVGIcon
 from ...utils import static_vars
@@ -111,6 +113,24 @@ from ...utils import static_vars
 
 } )
 def svg_icon( icon_name, **kwargs ):
-    if icon_name not in svg_icon.values:
-        raise RuntimeError( f'''icon_name={icon_name} is not a known icon''' )
-    return SVGIcon( **kwargs, svg=svg_icon.values[icon_name] )
+    if type(icon_name) == str and icon_name in svg_icon.values:
+        return SVGIcon( **kwargs, svg=svg_icon.values[icon_name] )
+
+    elif type(icon_name) == str or type(icon_name) == list and len(icon_name) > 0:
+        if type(icon_name) == str: _icon_name = [ icon_name ]
+        else: _icon_name = icon_name
+        if type(_icon_name) == list:
+            icon_dir = join( dirname(dirname(dirname(__file__))),'__icons__', *_icon_name[:-1] )
+            icons = [f for f in listdir(icon_dir) if isfile(join(icon_dir, f)) and f.startswith(_icon_name[-1]) and f.endswith('.svg')]
+            if len(icons) > 1:
+                raise RuntimeError( f'''multiple icon files {icons} found in {icon_dir}''' )
+            elif len(icons) > 0:
+                path = join( icon_dir, icons[0] )
+                if isfile(path):
+                    if getsize(path) > 2 * 1024 * 1024:
+                        raise RuntimeError( f'''{path} seems too large to be an SVG file...''' )
+                    with open( path, "r" ) as f:
+                        svg_string = f.read( )
+                    return SVGIcon( **kwargs, svg=svg_string )
+
+    raise RuntimeError( f'''icon_name={icon_name} is not a known icon''' )

@@ -58,6 +58,7 @@ from bokeh.layouts import row, column
 from bokeh.models.dom import HTML
 from bokeh.models import Tooltip
 from ..bokeh.models import TipButton, Tip
+from casagui.bokeh.utils import svg_icon
 
 import numpy as np
 
@@ -93,6 +94,7 @@ class CubeMask:
         self._mask_id = None                               # id for each unique mask
         self._image = None                                 # figure displaying cube & mask planes
         self._channel_ctrl = None                          # display channel and stokes
+        self._stokes_labels = None                         # stokes labels for the image cube
         self._channel_ctrl_stokes_dropdown = None          # drop down for changing stokes when _channel_ctrl is used
         self._channel_ctrl_group = None                    # row for channel control group
         self._coord_ctrl_dropdown = None                   # select pixel or world
@@ -108,9 +110,12 @@ class CubeMask:
         self._bitmask_contour_maskmod = None               # display mask contour as a region MultiPolygon (for copy/paste)
         self._bitmask_contour_maskmod_ds = None            # display mask contour data source
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
-        self._goto = None                                  # goto channel
+        self._goto = None                                  # goto channel row (contains text input and dropdown)
+        self._goto_txt = None                              # goto channel text input
+        self._goto_stokes = None                           # goto channel stokes dropdown
         self._slider = None                                # slider to move from plane to plane
         self._slider_callback = None                       # called after the channel update for slider movement is complete
+        self._tapedeck = None                              # buttons to move the slider
         self._spectrum = None                              # figure displaying spectrum along the frequency axis
         self._statistics = None                            # statistics data table
         self._statistics_mask = None                       # button to switch from channel statistics to mask statistics
@@ -585,10 +590,11 @@ class CubeMask:
                                                               update_func( isource._update_spectrum )
                                                           } else console.log( 'Error: update of spectrum', msg )
                                                       }
-                                                      ctrl.send( ids['fetch-spectrum'],
-                                                                 { action: 'spectrum',
-                                                                   value: { chan: _chan, index: isource._current_pos } },
-                                                                 _update_spectrum, true )
+                                                      if ( isource._current_pos )
+                                                          ctrl.send( ids['fetch-spectrum'],
+                                                                     { action: 'spectrum',
+                                                                       value: { chan: _chan, index: isource._current_pos } },
+                                                                     _update_spectrum, true )
                                                   }
                                               }''',
                      'contour-maskmod': '''   function maskmod_region_clear( ) {
@@ -627,12 +633,13 @@ class CubeMask:
                                                                             %s
                                                                         }
                                                                         if ( cb ) cb.execute( this ) } )
-                                               update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
-                                                                ( spec ) => {
-                                                                    refresh_pixel_display( spec.index,
-                                                                                           spec.spectrum.y[spec.chan[1]],
-                                                                                           'mask' in spec && spec.mask[spec.chan[1]],
-                                                                                           pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                               if ( isource._current_pos )
+                                                   update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
+                                                                    ( spec ) => {
+                                                                        refresh_pixel_display( spec.index,
+                                                                                               spec.spectrum.y[spec.chan[1]],
+                                                                                               'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                               pix_wrld && pix_wrld.label == 'pixel' ? false : true )
                                                                 } )
                                                if ( go_to && ! go_to._has_focus ) {
                                                    go_to.value = String( slider.value )
@@ -651,6 +658,16 @@ class CubeMask:
                      ### mask breadcrumbs
                      ###
                      'mask-state-init': self._js_mode_code['no-bitmask-init'],
+                     ###
+                     ### code to update stokes after stokes selection from dropdown
+                     ###
+                     'stokes-change': '''if ( cb_obj.item != stokes.label ) {
+                                             source.channel( source.cur_chan[1], %s,
+                                                             msg => { stokes.label = cb_obj.item
+                                                                      if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
+                                                                      if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                             } )
+                                         }''',
                      ### function to return mask state for current channel, the 'source' (image_data_source) object
                      ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
                      ### point to our 'source' object
@@ -1275,6 +1292,8 @@ class CubeMask:
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
+            ### fetch stokes labels for all stokes drop
+            self._stokes_labels = self._image_source.stokes_labels( )
 
             self._image = set_attributes( figure( height=self._pipe['image'].shape[1], width=self._pipe['image'].shape[0],
                                                   output_backend="webgl", match_aspect=True,
@@ -1355,8 +1374,12 @@ class CubeMask:
     def goto( self, **kw ):
         if self._goto is None:
             self._init_pipes( )
-            self._goto = set_attributes( EvTextInput( value=self._slider.start if self._slider else '0',
-                                                      prefix="Channel", width=150 ), **kw )
+            self._goto_txt = set_attributes( EvTextInput( value=self._slider.start if self._slider else '0',
+                                                          stylesheets=[ InlineStyleSheet( css='''.bk-input { border-bottom-left-radius: 0; border-top-left-radius: 0; margin-left: -0.45em; }''' ) ],
+                                                          width=85 ), **kw )
+            self._goto_stokes = Dropdown( label="I Channel", menu=self._stokes_labels, stylesheets=[ InlineStyleSheet( css='''.bk-btn { background-color: rgb( 230, 230, 230 ); padding: 7px; padding-top: 8px; border-bottom-right-radius: 0; border-top-right-radius: 0; margin-right: -0.45em; }''' ) ], width=80 )
+            self._goto = row( self._goto_stokes, self._goto_txt, spacing=-1 )
+
         return self._goto
 
     def slider( self, callback=None, **kw ):
@@ -1380,6 +1403,42 @@ class CubeMask:
                 self._slider.disabled = True
 
         return self._slider
+
+    def tapedeck( self ):
+        if self._slider is None:
+            raise RuntimeError( "tapedeck can only be created after the slider has been created" )
+
+        stylesheets= [ InlineStyleSheet( css='''.bk-btn { padding-right: 0px; padding-left: 0px; }''' ) ]
+        callback=CustomJS( args=dict( slider=self._slider ),
+                           code='''if ( cb_obj.name == 'forw' )
+                                   if ( cb_obj.name == 'back' ) ''' )
+        srt = 0
+        end = 3
+        fwd = 2
+        bck = 1
+        self._tapedeck = [ TipButton( icon=svg_icon([ '20px', 'fast-backward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to first channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='tofront' ),
+                           TipButton( icon=svg_icon([ '20px', 'step-backward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to previous channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='back' ),
+                           TipButton( icon=svg_icon([ '20px', 'step-forward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to next channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='forw' ),
+                           TipButton( icon=svg_icon([ '20px', 'fast-forward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to last channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='toend' ) ]
+
+        self._tapedeck[fwd].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.value == slider.end ? slider.start : slider.value + 1''' ) )
+        self._tapedeck[bck].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.value == slider.start ? slider.end : slider.value - 1''' ) )
+        self._tapedeck[end].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.end''' ) )
+        self._tapedeck[srt].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.start''' ) )
+
+        return row( *self._tapedeck )
 
     def spectrum( self, **kw ):
         '''Return the line graph of spectrum from the image cube which is updated
@@ -1977,62 +2036,70 @@ class CubeMask:
             self._slider.js_on_change( 'value', self._cb['slider'] )
 
         if self._goto:
-            self._goto.js_on_event( 'mouseenter', CustomJS( args=dict( slider=self._slider ),
-                                                            code='''cb_obj.origin._has_focus = true
-                                                                    const view = Bokeh.find.view(cb_obj.origin)
-                                                                    view.input_el.focus( )
-                                                                    cb_obj.origin.value = ''
-                                                                    cb_obj.origin.prefix = "Go To"''' ) )
-            self._goto.js_on_event( 'mouseleave', CustomJS( args=dict( slider=self._slider ),
-                                                            code='''const view = Bokeh.find.view(slider)
-                                                                    cb_obj.origin.prefix = "Channel"
-                                                                    document.activeElement.blur( )
-                                                                    if ( slider ) cb_obj.origin.value = String(slider.value)
-                                                                    cb_obj.origin._has_focus = false
-                                                                    ''' ) )
+            self._goto_stokes.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                stokes=self._channel_ctrl_stokes_dropdown,
+                                                                goto_stokes=self._goto_stokes ),
+                                                     ### 'stokes.label' is updated after the channel has changed to allow for subsequent
+                                                     ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
+                                                     ###  convergence data is available...
+                                                     code= self._js['stokes-change'] % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
+                                                                                         zip(range(len(self._stokes_labels)),self._stokes_labels) ) ) + ' : 0' ) ) )
+            self._goto_txt.js_on_event( 'mouseenter', CustomJS( args=dict( slider=self._slider, dropdown=self._goto_stokes ),
+                                                                code='''cb_obj.origin._has_focus = true
+                                                                        const view = Bokeh.find.view(cb_obj.origin)
+                                                                        view.input_el.focus( )
+                                                                        cb_obj.origin.value = ''
+                                                                        dropdown.label = "Go To"''' ) )
+            self._goto_txt.js_on_event( 'mouseleave', CustomJS( args=dict( slider=self._slider, dropdown=self._goto_stokes,
+                                                                           stokes=self._channel_ctrl_stokes_dropdown ),
+                                                                code='''const view = Bokeh.find.view(slider)
+                                                                        dropdown.label = `${stokes.label} Channel`
+                                                                        document.activeElement.blur( )
+                                                                        if ( slider ) cb_obj.origin.value = String(slider.value)
+                                                                        cb_obj.origin._has_focus = false''' ) )
 
-            self._goto.js_on_event( ValueSubmit, CustomJS( args=dict( img=self._image_source,
-                                                                      slider=self._slider,
-                                                                      status=self._status_div ),
-                                                           code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
-                                                                   if ( values.length > 2 ) {
-                                                                       status._error_set = true
-                                                                       status.text = '<p>enter at most two indexes</p>'
-                                                                   } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
-                                                                       status._error_set = true
-                                                                       status.text = '<p>invalid channel entered</p>'
-                                                                   } else {
-                                                                       if ( status._error_set ) {
-                                                                           status._error_set = false
-                                                                           status.text = '<p/>'
-                                                                       }
-                                                                       if ( values.length == 1 ) {
-                                                                           if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
+            self._goto_txt.js_on_event( ValueSubmit, CustomJS( args=dict( img=self._image_source,
+                                                                          slider=self._slider,
+                                                                          status=self._status_div ),
+                                                               code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
+                                                                       if ( values.length > 2 ) {
+                                                                           status._error_set = true
+                                                                           status.text = '<p>enter at most two indexes</p>'
+                                                                       } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
+                                                                           status._error_set = true
+                                                                           status.text = '<p>invalid channel entered</p>'
+                                                                       } else {
+                                                                           if ( status._error_set ) {
                                                                                status._error_set = false
-                                                                               status.text= `<p>moving to channel ${values[0]}</p>`
-                                                                               slider.value = values[0]
-                                                                           } else {
-                                                                               status._error_set = true
-                                                                               status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                               status.text = '<p/>'
                                                                            }
-                                                                       } else if ( values.length == 2 ) {
-                                                                           if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
-                                                                               status._error_set = true
-                                                                               status.text = `<p>channel ${values[0]} out of range</p>`
-                                                                           } else {
-                                                                               if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
-                                                                                   status._error_set = true
-                                                                                   status.text = `<p>stokes ${values[1]} out of range</p>`
-                                                                               } else {
+                                                                           if ( values.length == 1 ) {
+                                                                               if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
                                                                                    status._error_set = false
-                                                                                   status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
+                                                                                   status.text= `<p>moving to channel ${values[0]}</p>`
                                                                                    slider.value = values[0]
-                                                                                   img.channel( values[0], values[1] )
+                                                                               } else {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                               }
+                                                                           } else if ( values.length == 2 ) {
+                                                                               if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                               } else {
+                                                                                   if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
+                                                                                       status._error_set = true
+                                                                                       status.text = `<p>stokes ${values[1]} out of range</p>`
+                                                                                   } else {
+                                                                                       status._error_set = false
+                                                                                       status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
+                                                                                       slider.value = values[0]
+                                                                                       img.channel( values[0], values[1] )
+                                                                                   }
                                                                                }
                                                                            }
                                                                        }
-                                                                   }
-                                                                   if ( ! status._error_set ) cb_obj.origin.value = "" ''' ) )
+                                                                       if ( ! status._error_set ) cb_obj.origin.value = "" ''' ) )
 
 
         if self._statistics_mask:
@@ -2066,7 +2133,6 @@ class CubeMask:
                                                                           if self._mask_path is None else "" ) +
                                                        '''casalib.hotkeys.setScope( )''' ) )
 
-        stokes_labels = self._image_source.stokes_labels( )
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_ctrl,
                                                                           stokes_label=self._channel_ctrl_stokes_dropdown ),
                                                                ### the label manipulation portion of 'code' is '' when self._channel_ctrl is None
@@ -2074,7 +2140,7 @@ class CubeMask:
                                                                code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
                                                                            stokes_label.label = ( %s );''' %
                                                                         ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
-                                                                                          zip( range(len(stokes_labels)), stokes_labels )) ) + " : ''" ) if
+                                                                                          zip( range(len(self._stokes_labels)), self._stokes_labels )) ) + " : ''" ) if
                                                                         self._channel_ctrl else '' ) +
                                                                       ( ( '''if ( casalib.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                           self._slider else '') +
@@ -2085,18 +2151,15 @@ class CubeMask:
             ###
             ### allow switching to stokes planes
             ###
-            self._channel_ctrl_stokes_dropdown.menu = stokes_labels
-            self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
+            self._channel_ctrl_stokes_dropdown.menu = self._stokes_labels
+            self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                                 stokes=self._channel_ctrl_stokes_dropdown,
+                                                                                 goto_stokes=self._goto_stokes ),
                                                                        ### 'label' is updated after the channel has changed to allow for subsequent
                                                                        ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
                                                                        ###  convergence data is available...
-                                                                       code='''if ( cb_obj.item != cb_obj.origin.label ) {
-                                                                                   source.channel( source.cur_chan[1], %s,
-                                                                                                   msg => { cb_obj.origin.label = cb_obj.item
-                                                                                                            if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
-                                                                                                          } )
-                                                                               }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
-                                                                                                         zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
+                                                                       code= self._js['stokes-change'] % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
+                                                                                                         zip(range(len(self._stokes_labels)),self._stokes_labels) ) ) + ' : 0' ) ) )
 
         ###
         ### cursor movement code snippets

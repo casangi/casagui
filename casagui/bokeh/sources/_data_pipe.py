@@ -220,6 +220,7 @@ class DataPipe(DataSource):
                         result = self.__incoming_callbacks[msg['id']](msg['message'])
                         if inspect.isawaitable(result):
                             try:
+                                return_message = "an exception occurred in creating the respone"
                                 return_message = await result
                                 await self.__websocket.send( serialize( { 'id': msg['id'],
                                                                           'message': return_message,

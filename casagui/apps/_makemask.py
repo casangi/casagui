@@ -33,7 +33,7 @@ from bokeh.layouts import row, column
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS
 from casagui.toolbox import CubeMask
-from casagui.bokeh.components import svg_icon
+from casagui.bokeh.utils import svg_icon
 from bokeh.io import reset_output as reset_bokeh_output
 from ..utils import resource_manager, reset_resource_manager
 
