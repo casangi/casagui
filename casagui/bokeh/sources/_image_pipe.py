@@ -191,7 +191,7 @@ class ImagePipe(DataPipe):
         def quantize( nptype, image_plane ):
             ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
             ### Note:
-            ###    (1) the histogram sent to GUI must ALWAYS be histogram based on the raw image (no cropping, no scaling)
+            ###    (1) the histogram sent to GUI is ALWAYS be histogram based on the raw image (THIS IS HANDLED ABOVE)
             ###    (2) the scaled portion of the matrix should be the non-cropped portion
             ###    (3) the lower cropped portion should be set to the min scaled value
             ###    (4) the upper cropped portion should be set to the max scaled value
