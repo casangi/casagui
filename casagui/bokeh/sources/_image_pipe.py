@@ -189,59 +189,71 @@ class ImagePipe(DataPipe):
             the numpy type for the pixel elements of the returned channel
         """
         def quantize( nptype, image_plane ):
-            lower_bin = np.array([],bool)
-            upper_bin = np.array([],bool)
-            mask = np.array([],bool)
-            bits = nptype(0).nbytes * 8
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Note:
+            ###    (1) the histogram sent to GUI must ALWAYS be histogram based on the raw image (no cropping, no scaling)
+            ###    (2) the scaled portion of the matrix should be the non-cropped portion
+            ###    (3) the lower cropped portion should be set to the min scaled value
+            ###    (4) the upper cropped portion should be set to the max scaled value
+            ###    (5) a histogram should be created with the resulting (completely filled) array
+            ###    (6) then this histogram should be used with the (completely filled) array with numpy.digitize( ) to create
+            ###        the uint8 array
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            exclude_below = None
+            exclude_above = None
+            included = None
 
-            if self.__quant_adjustments['transfer']['scaling'] != 'linear':
-                if self.__quant_adjustments['transfer']['scaling'] not in self.__quant_scaling:
-                    print( f'''error: ${self.__quant_adjustments['transfer']['scaling']} is not a known scaling...''', file=sys.stderr )
-                    scaled_plane = image_plane
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Sort out the relationship between channel min/max and user specified min/max
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            amin = image_plane.min( )           ## array min
+            amax = image_plane.max( )           ## array max
+            rg = [ amin if len(self.__quant_adjustments['bounds'][0]) == 0 else self.__quant_adjustments['bounds'][0][0],
+                   amax if len(self.__quant_adjustments['bounds'][1]) == 0 else self.__quant_adjustments['bounds'][1][0] ]
+            umin = min(rg)                      ## user specified min
+            umax = max(rg)                      ## user specified max
+            if umin > amin:
+                ## elements that are masked to the minumum color for the image
+                exclude_below = image_plane < umin
+            if umax < amax:
+                ## elements that are masked to the maximum color for the image
+                exclude_above = image_plane > umax
+
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Set up access masks
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            if exclude_below is not None and exclude_above is not None:
+                included = np.logical_not( np.logical_or( exclude_below, exclude_above ) )
+            elif exclude_below is not None:
+                included = np.logical_not( exclude_below )
+            elif exclude_above is not None:
+                included = np.logical_not( exclude_above )
+
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Apply the scaling function to the included pixels
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            selected_scaling = self.__quant_adjustments['transfer']['scaling']
+            if selected_scaling != 'linear':
+                if selected_scaling not in self.__quant_scaling:
+                    print( f'''error: ${selected_scaling} is not a known scaling...''', file=sys.stderr )
+                    result = image_plane
                 else:
-                    scaled_plane = self.__quant_scaling[self.__quant_adjustments['transfer']['scaling']](image_plane,**self.__quant_adjustments['transfer']['args'])
+                    result = np.ma.zeros(image_plane.shape,image_plane.dtype)
+                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included] if included is not None else image_plane,
+                                                                               **self.__quant_adjustments['transfer']['args'] )
+                    if exclude_below is not None:
+                        result[exclude_below] = result[included].min( )
+                    if exclude_above is not None:
+                        result[exclude_above] = result[included].max( )
             else:
-                scaled_plane = image_plane
+                result = image_plane
 
-            #####################################################################################
-            ### The assumption is that np.uint8 implies a pseudo color mapping. When this     ###
-            ### type is used the quantization tweaks provided via 'adjust-colormap' are used. ###
-            #####################################################################################
-            if nptype == np.uint8 and \
-               ( len(self.__quant_adjustments['bounds'][0]) > 0 or \
-                 len(self.__quant_adjustments['bounds'][1]) > 0 ):
-                ################################################################################
-                ### [ ] means that the user has not modified that boundary                   ###
-                ################################################################################
-                lower_bin = np.array([],bool) if len(self.__quant_adjustments['bounds'][0]) == 0 else image_plane <= self.__quant_adjustments['bounds'][0][0]
-                upper_bin = np.array([],bool) if len(self.__quant_adjustments['bounds'][1]) == 0 else image_plane >= self.__quant_adjustments['bounds'][1][0]
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Histogram of the scaled
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            hist, edges = np.histogram( result, density=False, bins=255, range=( umin, umax ) )
 
-                if lower_bin.any( ) and upper_bin.any( ):
-                    mask = ~( lower_bin | upper_bin )
-                elif lower_bin.any( ):
-                    mask = ~lower_bin
-                elif upper_bin.any( ):
-                    mask = ~upper_bin
-
-                if mask.any( ):
-                    min = scaled_plane[mask].min( )
-                    max = scaled_plane[mask].max( )
-                    max -= min
-                    result = np.ma.zeros(scaled_plane.shape,scaled_plane.dtype)
-                    if upper_bin.any( ):
-                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-3) + 1
-                        result[upper_bin] = 255
-                    else:
-                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-1)
-                    result = result.filled(0).astype(np.uint8)
-                    return result
-
-            min = scaled_plane.min( )
-            max = scaled_plane.max( )
-            max -= min
-            img = (((scaled_plane - min)/max) if max != 0 else (scaled_plane - min)) * (2**bits-1)
-            result = img.astype(nptype)
-            return result
+            return np.digitize( result, edges, right=True ).astype(nptype)
 
         if self.__img is None:
             raise RuntimeError('no image is available')
