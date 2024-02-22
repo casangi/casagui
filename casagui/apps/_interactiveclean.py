@@ -292,6 +292,8 @@ class InteractiveClean:
         self._params['cycleniter'] = cycleniter
         self._params['threshold'] = threshold
         self._params['cyclefactor'] = cyclefactor
+        self._params['gain'] = gain
+        self._params['nsigma'] = nsigma
         ###
         ### Polarity plane
         ###
@@ -444,6 +446,8 @@ class InteractiveClean:
                                                cycleniter.disabled = true
                                                threshold.disabled = true
                                                cyclefactor.disabled = true
+                                               nsigma.disabled = true
+                                               gain.disabled = true
                                                btns['continue'].disabled = true
                                                btns['finish'].disabled = true
                                                if ( slider ) slider.disabled = true
@@ -466,6 +470,8 @@ class InteractiveClean:
                                                cycleniter.disabled = false
                                                threshold.disabled = false
                                                cyclefactor.disabled = false
+                                               nsigma.disabled = false
+                                               gain.disabled = false
                                                btns['stop'].disabled = false
                                                if ( slider ) slider.disabled = false
                                                if ( go_to ) go_to.disabled = false
@@ -681,7 +687,9 @@ class InteractiveClean:
                                                        cycleniter=msg['value']['cycleniter'],
                                                        nmajor=msg['value']['nmajor'],
                                                        threshold=msg['value']['threshold'],
-                                                       cyclefactor=msg['value']['cyclefactor'] ) )
+                                                       cyclefactor=msg['value']['cyclefactor'],
+                                                       nsigma=msg['value']['nsigma'],
+                                                       gain=msg['value']['gain'] ) )
 
                 if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
 
@@ -858,6 +866,8 @@ class InteractiveClean:
         self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
         self._control['threshold'] = TextInput( title="threshold", value="%s" % self._params['threshold'], width=90 )
         self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
+        self._control['gain'] = TextInput( title='gain', value="%s" % self._params['gain'], width=90 )
+        self._control['nsigma'] = TextInput( title='nsigma', value="%s" % self._params['nsigma'], width=90 )
 
 
         self._fig['image'] = self._cube.image( height_policy='max', width_policy='max' )
@@ -900,6 +910,7 @@ class InteractiveClean:
                                                  niter=self._control['niter'], cycleniter=self._control['cycleniter'],
                                                  nmajor=self._control['nmajor'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
+                                                 nsigma=self._control['nsigma'], gain=self._control['gain'],
                                                  flux_src=self._flux_data,
                                                  residual_src=self._residual_data,
                                                  threshold_src=self._cyclethreshold_data,
@@ -937,6 +948,7 @@ class InteractiveClean:
                                                                       { action: 'finish',
                                                                         value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                                  threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                                 nsigma: nsigma.value, gain: gain.value,
                                                                                  mask: img_src.masks( ),
                                                                                  breadcrumbs: img_src.breadcrumbs( ) } },
                                                                       update_gui )
@@ -956,6 +968,7 @@ class InteractiveClean:
                                                                       { action: 'next',
                                                                         value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                                  threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                                 nsigma: nsigma.value, gain: gain.value,
                                                                                  mask: img_src.masks( ),
                                                                                  breadcrumbs: img_src.breadcrumbs( ) } },
                                                                       update_gui )
@@ -1029,6 +1042,12 @@ class InteractiveClean:
                                                                                                              position='bottom' ) ),
                                                                                        Tip( self._control['threshold'],
                                                                                             tooltip=Tooltip( content=HTML( 'stopping threshold' ),
+                                                                                                             position='bottom' ) ) ),
+                                                                                  row( Tip( self._control['nsigma'],
+                                                                                            tooltip=Tooltip( content=HTML( 'multiplicative factor for rms-based threshold stopping'),
+                                                                                                             position='bottom' ) ),
+                                                                                       Tip( self._control['gain'],
+                                                                                            tooltip=Tooltip( content=HTML( 'fraction of the source flux to subtract out of the residual image'),
                                                                                                              position='bottom' ) ) ),
                                                                                   row( Tip( self._control['cycleniter'],
                                                                                             tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
