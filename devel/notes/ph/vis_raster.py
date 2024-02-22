@@ -221,7 +221,7 @@ def main(argv):
     color_limits = calc_color_limits(plot_xds)
 
     # Select first channel and pol, get sorted visibilities
-    plot_xds = plot_xds.isel(frequency=124, polarization=0)
+    plot_xds = plot_xds.isel(frequency=0, polarization=0)
     plot_xds['frequency'] = plot_xds.frequency / 1.0e9;
     plot_xds['frequency'] = plot_xds.frequency.assign_attrs(units="GHz");
     # sort needed arrays only, not entire selected dataset
