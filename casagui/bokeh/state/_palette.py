@@ -30,7 +30,7 @@ import re
 from bokeh import palettes as __palettes
 from ...utils import static_vars
 
-__palette_list = [ p for p in dir(__palettes) if isinstance(getattr(__palettes,p), tuple) if len(getattr( __palettes, p )) == 256 ]
+__palette_list = sorted( [ p for p in dir(__palettes) if isinstance(getattr(__palettes,p), tuple) if len(getattr( __palettes, p )) == 256 ] )
 __palette_names = [ re.sub(r'\d+$', '', p) for p in __palette_list ]
 
 __palette_map = dict( zip( __palette_names, __palette_list ) )

@@ -43,3 +43,9 @@ and _Python_ files to be edited from the same directory and keeps the
    bash$
    ```
 3. `bokeh` uses a cache, so if you suspect you are not getting a clean rebuild, try `bokeh build --rebuild`
+
+4. When the build seems good, publish :code:`casaguijs.min.js` with
+   ```
+   bash$ cp dist/casaguijs.min.js ../casagui/__js__/casaguijs.min.js
+   bash$
+   ```

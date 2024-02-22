@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022
+# Copyright (C) 2022,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -32,9 +32,10 @@ from ._plotbandpass import plotbandpass
 from ._makemask import MakeMask
 from ._interactiveclean import InteractiveClean
 from ..bokeh.state import initialize_session
+from ..utils import copydoc
 initialize_session()
 
+@copydoc(InteractiveClean)
 def run_iclean( *args, **kwargs ):
-    '''convenience function for running interactive clean'''
     ic = InteractiveClean( *args, **kwargs )
     return ic( )

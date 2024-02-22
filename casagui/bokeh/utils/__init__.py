@@ -27,6 +27,8 @@
 ########################################################################
 '''Functions use in the implementation of casagui's Bokeh extensions.'''
 
+from ._svg_icon import svg_icon
+
 ###
 ### axes_labels has errors on import
 ###

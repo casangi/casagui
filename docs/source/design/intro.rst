@@ -139,6 +139,8 @@ of specific tools and applications.
    :caption: Applications:
 
    applications/interactive_clean
+   boundary
+   ../python/casagui
 
 .. toctree::
    :maxdepth: 3

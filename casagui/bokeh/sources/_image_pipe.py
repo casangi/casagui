@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022,2023
+# Copyright (C) 2021,2022,2023,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -39,8 +39,8 @@ from . import DataPipe
 from bokeh.util.compiler import TypeScript
 from bokeh.core.properties import Tuple, String, Int, Instance, Nullable
 from bokeh.models.callbacks import Callback
+from bokeh.plotting import ColumnDataSource
 from ..state import casalib_url, casaguijs_url
-from math import isnan
 
 import numpy as np
 try:
@@ -61,7 +61,7 @@ class ImagePipe(DataPipe):
     the path to the image, and then it is used as the input to an
     `ImageDataSource` or a `SpectraDataSource`. This allows a single CASA
     or CNGI imge to be opened once and shared among multiple Bokeh plots,
-    for example ploting an image channel and a plot of a spectra from the
+    for example ploting an image channel and a plot of a spectrum from the
     image cube.
 
     Attributes
@@ -81,6 +81,9 @@ class ImagePipe(DataPipe):
     shape = Tuple( Int, Int, Int, Int, help="shape: [ RA, DEC, Stokes, Spectral ]" )
     dataid = String( )
     fits_header_json = Nullable( String, help="""JSON representation of image FITS header for world coordinate labeling""" )
+    _histogram_source = Nullable(Instance(ColumnDataSource), help='''
+    data source for (raw) image channel histogram of intensities used with a "figure.quad(...)"
+    ''')
 
     __javascript__ = [ casalib_url( ), casaguijs_url( ) ]
 
@@ -186,59 +189,71 @@ class ImagePipe(DataPipe):
             the numpy type for the pixel elements of the returned channel
         """
         def quantize( nptype, image_plane ):
-            lower_bin = np.array([],bool)
-            upper_bin = np.array([],bool)
-            mask = np.array([],bool)
-            bits = nptype(0).nbytes * 8
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Note:
+            ###    (1) the histogram sent to GUI is ALWAYS be histogram based on the raw image (THIS IS HANDLED ABOVE)
+            ###    (2) the scaled portion of the matrix should be the non-cropped portion
+            ###    (3) the lower cropped portion should be set to the min scaled value
+            ###    (4) the upper cropped portion should be set to the max scaled value
+            ###    (5) a histogram should be created with the resulting (completely filled) array
+            ###    (6) then this histogram should be used with the (completely filled) array with numpy.digitize( ) to create
+            ###        the uint8 array
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            exclude_below = None
+            exclude_above = None
+            included = None
 
-            if self.__quant_adjustments['transfer']['scaling'] != 'linear':
-                if self.__quant_adjustments['transfer']['scaling'] not in self.__quant_scaling:
-                    print( f'''error: ${self.__quant_adjustments['transfer']['scaling']} is not a known scaling...''', file=sys.stderr )
-                    scaled_plane = image_plane
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Sort out the relationship between channel min/max and user specified min/max
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            amin = image_plane.min( )           ## array min
+            amax = image_plane.max( )           ## array max
+            rg = [ amin if len(self.__quant_adjustments['bounds'][0]) == 0 else self.__quant_adjustments['bounds'][0][0],
+                   amax if len(self.__quant_adjustments['bounds'][1]) == 0 else self.__quant_adjustments['bounds'][1][0] ]
+            umin = min(rg)                      ## user specified min
+            umax = max(rg)                      ## user specified max
+            if umin > amin:
+                ## elements that are masked to the minumum color for the image
+                exclude_below = image_plane < umin
+            if umax < amax:
+                ## elements that are masked to the maximum color for the image
+                exclude_above = image_plane > umax
+
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Set up access masks
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            if exclude_below is not None and exclude_above is not None:
+                included = np.logical_not( np.logical_or( exclude_below, exclude_above ) )
+            elif exclude_below is not None:
+                included = np.logical_not( exclude_below )
+            elif exclude_above is not None:
+                included = np.logical_not( exclude_above )
+
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Apply the scaling function to the included pixels
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            selected_scaling = self.__quant_adjustments['transfer']['scaling']
+            if selected_scaling != 'linear':
+                if selected_scaling not in self.__quant_scaling:
+                    print( f'''error: ${selected_scaling} is not a known scaling...''', file=sys.stderr )
+                    result = image_plane
                 else:
-                    scaled_plane = self.__quant_scaling[self.__quant_adjustments['transfer']['scaling']](image_plane,**self.__quant_adjustments['transfer']['args'])
+                    result = np.ma.zeros(image_plane.shape,image_plane.dtype)
+                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included] if included is not None else image_plane,
+                                                                               **self.__quant_adjustments['transfer']['args'] )
+                    if exclude_below is not None:
+                        result[exclude_below] = result[included].min( )
+                    if exclude_above is not None:
+                        result[exclude_above] = result[included].max( )
             else:
-                scaled_plane = image_plane
+                result = image_plane
 
-            #####################################################################################
-            ### The assumption is that np.uint8 implies a pseudo color mapping. When this     ###
-            ### type is used the quantization tweaks provided via 'adjust-colormap' are used. ###
-            #####################################################################################
-            if nptype == np.uint8 and \
-               ( not isnan(self.__quant_adjustments['bounds'][0]) or \
-                 not isnan(self.__quant_adjustments['bounds'][1]) ):
-                ################################################################################
-                ### NaN means that the user has not modified that boundary                   ###
-                ################################################################################
-                lower_bin = np.array([],bool) if isnan(self.__quant_adjustments['bounds'][0]) else image_plane <= self.__quant_adjustments['bounds'][0]
-                upper_bin = np.array([],bool) if isnan(self.__quant_adjustments['bounds'][1]) else image_plane >= self.__quant_adjustments['bounds'][1]
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            ### Histogram of the scaled
+            ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+            hist, edges = np.histogram( result, density=False, bins=255, range=( umin, umax ) )
 
-                if lower_bin.any( ) and upper_bin.any( ):
-                    mask = ~( lower_bin | upper_bin )
-                elif lower_bin.any( ):
-                    mask = ~lower_bin
-                elif upper_bin.any( ):
-                    mask = ~upper_bin
-
-                if mask.any( ):
-                    min = scaled_plane[mask].min( )
-                    max = scaled_plane[mask].max( )
-                    max -= min
-                    result = np.ma.zeros(scaled_plane.shape,scaled_plane.dtype)
-                    if upper_bin.any( ):
-                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-3) + 1
-                        result[upper_bin] = 255
-                    else:
-                        result[mask] = ((scaled_plane[mask] - min)/max) * (2**bits-1)
-                    result = result.filled(0).astype(np.uint8)
-                    return result
-
-            min = scaled_plane.min( )
-            max = scaled_plane.max( )
-            max -= min
-            img = ((scaled_plane - min)/max) * (2**bits-1)
-            result = img.astype(nptype)
-            return result
+            return np.digitize( result, edges, right=True ).astype(nptype)
 
         if self.__img is None:
             raise RuntimeError('no image is available')
@@ -350,10 +365,14 @@ class ImagePipe(DataPipe):
         """
         if self.__msk is None:
             raise RuntimeError(f'cannot replace mask at {repr(index)} because no mask cube exists')
-        self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
+        if mask.dtype == bool:
+            ### cannot put bools with putchunk
+            self.__msk.putchunk( blc=[0,0] + index, pixels=mask.astype(np.uint8) )
+        else:
+            self.__msk.putchunk( blc=[0,0] + index, pixels=mask )
 
-    def spectra( self, index ):
-        """Retrieve one spectra from the image cube. The `index` should be a
+    def spectrum( self, index, mask=False ):
+        """Retrieve one spectrum from the image cube. The `index` should be a
         three element list of integers. The first integer is the ''right
         ascension'' axis, the second integer is the ''declination'' axis,
         and the third integer is the ''stokes'' axis.
@@ -371,17 +390,30 @@ class ImagePipe(DataPipe):
             index[1] = self.shape[1] - 1
         if self.__img is None:
             raise RuntimeError('no image is available')
+        result_mask = np.squeeze( self.__msk.getchunk( blc=index + [0],
+                                                       trc=index + [self.shape[-1]] ) ) if self.__msk and mask else None
         result = np.squeeze( self.__img.getchunk( blc=index + [0],
                                                  trc=index + [self.shape[-1]] ) )
         ### should return spectral freq etc.
         ### here for X rather than just the index
         try:
-            return { 'x': list(range(len(result))), 'y': list(result) }
-        except Exception:
+            if mask:
+                return { 'x': list(range(len(result))), 'y': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
+            else:
+                return { 'x': list(range(len(result))), 'y': list(result) }
+        except Exception as e:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
-            return { 'x': [0], 'y': [float(result)] }
+            if mask:
+                return { 'x': [0], 'y': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
+            else:
+                return { 'x': [0], 'y': [float(result)] }
+
+    def histogram_source( self, data ):
+        if not self._histogram_source:
+            self._histogram_source = ColumnDataSource( data=data )
+        return self._histogram_source
 
     async def _image_message_handler( self, cmd ):
         if cmd['action'] == 'channel':
@@ -389,6 +421,7 @@ class ImagePipe(DataPipe):
             mask = { } if self.__msk is None else { 'msk': [ pack_arrays( self.mask(cmd['index']) ) ] }
             _mask0 = self.mask0(cmd['index'])
             mask0 = { } if _mask0 is None else { 'msk0': [ pack_arrays(_mask0) ] }
+            histogram = self.histogram( cmd['index'] ) if self._histogram_source else { }
             if self._stats:
                 #statistics for the displayed plane of the image cubea
                 statistics = self.statistics( cmd['index'] )
@@ -396,18 +429,20 @@ class ImagePipe(DataPipe):
                                    **mask0,
                                    **mask },
                          'stats': { 'labels': list(statistics.keys( )), 'values': pack_arrays(list(statistics.values( ))) },
+                         'hist': histogram,
                          'id': cmd['id'] }
             else:
                 return { 'chan': { 'img': [ pack_arrays(chan) ],
                                    **mask0,
                                    **mask },
+                         'hist': histogram,
                          'id': cmd['id'] }
 
-        elif cmd['action'] == 'spectra':
-            return { 'spectrum': pack_arrays( self.spectra(cmd['index']) ), 'id': cmd['id'] }
+        elif cmd['action'] == 'spectrum':
+            return { 'spectrum': pack_arrays( self.spectrum(cmd['index']) ), 'id': cmd['id'] }
         elif cmd['action'] == 'adjust-colormap':
             if cmd['bounds'] == "reset":
-                self.__quant_adjustments = { 'bounds': [ float('nan'), float('nan') ],
+                self.__quant_adjustments = { 'bounds': [ [ ], [ ] ],
                                              'transfer': {'scaling': 'linear'} }
             else:
                 ### later a function should be provided for setting the quantization transfer function
@@ -450,7 +485,7 @@ class ImagePipe(DataPipe):
         ###
         ### quantization controls to affect how pseudo colors are displayed
         ###
-        self.__quant_adjustments = { 'bounds': [ float('nan'), float('nan') ],
+        self.__quant_adjustments = { 'bounds': [ [ ], [ ] ],
                                      'transfer': {'scaling': 'linear'} }
         self.__quant_scaling = { 'log':    lambda chan,alpha: np.ma.log(alpha * chan + 1.0) / np.ma.log(alpha + 1.0),
                                  'sqrt':   lambda chan:       np.ma.sqrt(chan),
@@ -518,3 +553,20 @@ class ImagePipe(DataPipe):
             rawstats = ia.statistics( region=reg )
         ia.close( )
         return sort_result( { k: singleton([ x.item( ) for x in v ]) if isinstance(v,np.ndarray) else v for k,v in rawstats.items( ) } )
+
+    def histogram( self, index ):
+        """Calculate histogram (Bokeh Quad) extents for update of colormap adjuster (or anything
+        else that wants a histogram of image intensities.
+
+        Parameters
+        ----------
+        index: [ int, int ]
+            list containing first the ''stokes'' index and second the ''channel'' index
+        """
+        if not self._histogram_source:
+            return { }
+
+        chan = self.__get_chan(index)
+        bins = np.linspace( chan.min( ), chan.max( ), len(self._histogram_source.data['top'])+1 )
+        hist, edges = np.histogram( chan, density=False, bins=bins )
+        return dict( left=list(edges[:-1]), right=list(edges[1:]), top=list(hist), bottom=[0]*len(hist) )

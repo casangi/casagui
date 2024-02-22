@@ -53,7 +53,8 @@ class ImageDataSource(ColumnDataSource):
 
     image_source = Instance(ImagePipe)
     _mask_contour_source = Nullable(Instance(ColumnDataSource), help='''
-    data source for updating contour polygons
+    Data source for updating contour polygons. This data source is directly updated
+    inside JavaScript.
     ''')
     num_chans = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )
     cur_chan  = Tuple( Int, Int, help="[ num-stokes-planes, num-channels ]" )

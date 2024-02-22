@@ -1,8 +1,8 @@
 from bokeh.models import Tooltip
-from bokeh.models.layouts import UIElement
+from bokeh.models.layouts import LayoutDOM, UIElement
 from bokeh.core.properties import Instance, Required, Float, Int, Either
 
-class Tip(UIElement):
+class Tip(LayoutDOM):
     '''Display a tooltip for the child element
     '''
 

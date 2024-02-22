@@ -25,7 +25,11 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''Functions for coordinate conversion and axis labeling.'''
+'''THIS IS PROBABLY NOT CURRENTLY IN ACTIVE USE. Functions for coordinate conversion and axis labeling using
+the casacore coordsys object. This was added when regions were used for masking within interactive clean
+instead of each user-drawn region being used to immediately change the mask cube on disk. This code may have
+never actually been used in production. Note that coordtxl (https://www.npmjs.com/package/coordtxl) is used
+for world coordinate axis labeling in JavaScript for interactive clean.'''
 import numpy as np
 from astropy.wcs import WCS
 from casatools import image

@@ -40,24 +40,25 @@ from sys import platform
 from os.path import dirname, join
 import websockets
 from contextlib import asynccontextmanager
-from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, Pan, PanStart, PanEnd
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, LODStart, LODEnd, ValueSubmit
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
-                         LinearColorMapper, TextInput, Spacer
-from bokeh.models import WheelZoomTool, LassoSelectTool
+                         LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
+from bokeh.models import WheelZoomTool, PanTool, ResetTool, PolySelectTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
-from casagui.bokeh.sources import ImageDataSource, SpectraDataSource, ImagePipe, DataPipe
+from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
-from casagui.bokeh.components import svg_icon
+from casagui.bokeh.models import EditSpan
 from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
-
-from ..bokeh.tools import DragTool, CBResetTool
+from ..bokeh.models import EvTextInput
+from ..bokeh.tools import CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
 from bokeh.layouts import row, column
 from bokeh.models.dom import HTML
 from bokeh.models import Tooltip
 from ..bokeh.models import TipButton, Tip
+from casagui.bokeh.utils import svg_icon
 
 import numpy as np
 
@@ -70,7 +71,7 @@ class CubeMask:
         along with these optional components:
 
         *  slider to move through planes
-        *  spectra plot (in response to mouse movements in 2-D raster display)
+        *  spectrum plot (in response to mouse movements in 2-D raster display)
         *  statistics (table)
 
         Parameters
@@ -86,12 +87,14 @@ class CubeMask:
             If provided, the ``abort`` function will be called in the case of an error.
         '''
         self._is_notebook = is_notebook()
+        self._color = '#00FF00'                            # default color for mask, selection, etc.
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
         self._mask_id = None                               # id for each unique mask
         self._image = None                                 # figure displaying cube & mask planes
         self._channel_ctrl = None                          # display channel and stokes
+        self._stokes_labels = None                         # stokes labels for the image cube
         self._channel_ctrl_stokes_dropdown = None          # drop down for changing stokes when _channel_ctrl is used
         self._channel_ctrl_group = None                    # row for channel control group
         self._coord_ctrl_dropdown = None                   # select pixel or world
@@ -104,16 +107,23 @@ class CubeMask:
         self._bitmask_contour_ds = None                    # bitmask MultiPolygon contour data source
         self._bitmask_color_selector = None                # bitmask color selector
         self._bitmask_transparency_button = None           # select whether the 1s or 0s is transparent
+        self._bitmask_contour_maskmod = None               # display mask contour as a region MultiPolygon (for copy/paste)
+        self._bitmask_contour_maskmod_ds = None            # display mask contour data source
         self._mask0 = None                                 # INTERNAL systhesis imaging mask
+        self._goto = None                                  # goto channel row (contains text input and dropdown)
+        self._goto_txt = None                              # goto channel text input
+        self._goto_stokes = None                           # goto channel stokes dropdown
         self._slider = None                                # slider to move from plane to plane
-        self._spectra = None                               # figure displaying spectra along the frequency axis
+        self._slider_callback = None                       # called after the channel update for slider movement is complete
+        self._tapedeck = None                              # buttons to move the slider
+        self._spectrum = None                              # figure displaying spectrum along the frequency axis
         self._statistics = None                            # statistics data table
         self._statistics_mask = None                       # button to switch from channel statistics to mask statistics
         self._statistics_use_mask = False                  # whether statistics calculations will be based on the masked
                                                            # area or the whole channel
         self._palette = None                               # palette selection
         self._help_button = None                           # help button that creates a new tab/window (instead of hide/show Div)
-        self._image_spectra = None                         # spectra data source
+        self._image_spectrum = None                        # spectrum data source
         self._image_source = None                          # ImageDataSource
         self._statistics_source = None
         self._pipe = { 'image': None, 'control': None }    # data pipes
@@ -121,7 +131,7 @@ class CubeMask:
                       'mask-mod': str(uuid4( )),
                       'done': str(uuid4( )),
                       'config-statistics': str(uuid4( )),
-                      'pixel-value': str(uuid4( )),
+                      'fetch-spectrum': str(uuid4( )),
                       'colormap-adjust': str(uuid4( )) } # ids used for control messages
 
         ###########################################################################################################################
@@ -132,14 +142,18 @@ class CubeMask:
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
         _sub_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
                       cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
+        self._mask_icons_ = dict( on=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
+                                  off=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
         self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
                                                     description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
                                'sub': CustomAction( icon=_sub_['chan'],
                                                     description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
+                               'mask': CustomAction( icon=self._mask_icons_['off'],
+                                                     description="select the mask for the current channel" ),
                                'img': dict( add=_add_, sub=_sub_ ) }
 
         self._fig = { }
-        self._hover = { 'spectra': None, 'image': None }   # HoverTools which are used to synchronize image/spectra
+        self._hover = { 'spectrum': None, 'image': None }   # HoverTools which are used to synchronize image/spectrum
                                                            # movement/taps and and corresponding display
 
         self._result = None                                # result to be filled in from Bokeh
@@ -171,52 +185,84 @@ class CubeMask:
                    'bitmask-hotkey-setup-add-sub':    '''
                                               function mask_mod_result( msg ) {
                                                   if ( msg.result == 'success' ) {
+                                                      if ( 'update' in msg && 'clear_region' in msg.update && msg.update.clear_region ) {
+                                                          /* if the src mask on disk has changed the maskmod region is no longer valid */
+                                                          maskmod_region_clear( )
+                                                      }
                                                       source.refresh( msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
-                                                                   action: 'set',
+                                                                   action: 'addition',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_sub_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
-                                                                   action: 'clear',
+                                                                   action: 'subtract',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys.length) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_add_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
-                                                                   action: 'set',
+                                                                   action: 'addition',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }
                                               function mask_sub_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'cube',
-                                                                   action: 'clear',
+                                                                   action: 'subtract',
                                                                    value: { chan: source.cur_chan,
                                                                             xs: annotations[0].xs,
                                                                             ys: annotations[0].ys } },
                                                                  mask_mod_result )
-                                                  } else if ( status ) status.text = '<div>no region found</div>'
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
                                               }''',
                    'bitmask-hotkey-setup':    '''
                                               function state_translate_selection( dx, dy ) {
@@ -225,10 +271,14 @@ class CubeMask:
                                                   if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
                                                   if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
                                               }
+                                              function freeze_cursor_update( ) {
+                                                  ctrl._freeze_cursor_update = true
+                                              }
                                               casalib.hotkeys( 'escape', { scope: 'channel' },
                                                                (e) => { e.preventDefault( )
-                                                                        annotations[0].xs = [ ]
-                                                                        annotations[0].ys = [ ] } )
+                                                                        maskmod_region_clear( ) } )
+                                              casalib.hotkeys( 'f', { scope: 'channel' },
+                                                               (e) => freeze_cursor_update( ) )
                                               casalib.hotkeys( 'a', { scope: 'channel' },
                                                                (e) => mask_add_chan( ) )
                                               casalib.hotkeys( 's', { scope: 'channel' },
@@ -475,6 +525,21 @@ class CubeMask:
                                                                }
                                                            }'''
         }
+
+        def span_update( span1, span2 ):
+            return f'''if ( ! {span1}._edited ) {{
+                           {span1}._editing = true
+                           if ( {span1}.location <= {span2}.location ) {{
+                               {span1}.location = histogram.data_source.data.left[0]
+                               min.value = {span1}.location.toString( )
+                           }} else {{
+                               {span1}.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
+                               max.value = {span1}.location.toString( )
+                           }}
+                           {span1}._editing = false
+                       }}
+                       '''
+
         self._js = { ### update stats in response to channel changes
                      ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
                      ### The slider and the events from the update of the image source are
@@ -490,18 +555,119 @@ class CubeMask:
                      ### the cursor is inside, hotkeys are active (and slider is updated). When outside
                      ### and the scope is not equal to 'channel', the slider updates the channel.
                      ###
+                     'pixel-update-func': ''' function refresh_pixel_display( index, intensity, masked, world_coord=true ) {
+                                                  const digits = 5
+                                                  if ( world_coord ) {
+                                                      const pt = new casalib.coordtxl.Point2D( Number(index[0]), Number(index[1]) )
+                                                      isource.wcs( ).imageToWorldCoords(pt,false)
+                                                      let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  } else {
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + index[0] + ', ' + Number(index[1]) +
+                                                                      "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  }
+                                              }
+                                              function update_spectrum( _chan, _index, update_func ) {
+                                                  function array_equal( a1, a2 ) {
+                                                      return (a1.length == a2.length) && a1.every((element, index) => element === a2[index])
+                                                  }
+                                                  if ( isource._update_spectrum &&
+                                                       _chan[0] == isource._update_spectrum.chan[0] &&
+                                                       array_equal( _index, isource._update_spectrum.index ) ) {
+                                                      update_func( { ...isource._update_spectrum, chan: _chan } )
+                                                  } else {
+                                                      function _update_spectrum ( msg ) {
+                                                          if ( msg.update &&
+                                                               'spectrum' in msg.update &&
+                                                               'index' in msg.update &&
+                                                               'chan' in msg.update &&
+                                                               msg.update.index.length == 2 &&
+                                                               msg.update.index.length == 2 ) {
+                                                              const { spectrum, chan, index, mask } = msg.update
+                                                              isource._update_spectrum = { spectrum, mask, chan, index }
+                                                              update_func( isource._update_spectrum )
+                                                          } else console.log( 'Error: update of spectrum', msg )
+                                                      }
+                                                      if ( isource._current_pos )
+                                                          ctrl.send( ids['fetch-spectrum'],
+                                                                     { action: 'spectrum',
+                                                                       value: { chan: _chan, index: isource._current_pos } },
+                                                                     _update_spectrum, true )
+                                                  }
+                                              }''',
+                     'contour-maskmod': '''   function maskmod_region_clear( ) {
+                                                  annotations[0].xs = [ ]
+                                                  annotations[0].ys = [ ]
+                                                  mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                  mask_region_button.icon = mask_region_icons['off']
+                                              }
+                                              function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
+                                                  if ( xs.length > 0 && ys.length > 0 ) {
+                                                      annotations[0].xs = xs
+                                                      annotations[0].ys = ys
+                                                      mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                      mask_region_button.icon = mask_region_icons['off']
+                                                  } else if ( ! casalib.is_empty(contour_ds.data.xs) &&
+                                                              ! casalib.is_empty(contour_ds.data.ys) ) {
+                                                      annotations[0].xs = [ ]
+                                                      annotations[0].ys = [ ]
+                                                      mask_region_ds.data = contour_ds.data
+                                                      mask_region_ds._src_chan = source.cur_chan
+                                                      mask_region_button.icon = mask_region_icons['on']
+                                                  } else {
+                                                      if ( status ) status.text = '<p>no region found</p>'
+                                                      return
+                                                  }
+                                                  region.fill_color = 'rgba(0, 0, 0, 0)'
+                                                  region.line_width = 3
+                                                  region.line_dash = 'dashed'
+                                                  region.line_color = selector.color
+                                              }''',
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
-                                           }''',
+                                               isource.channel( slider.value, isource.cur_chan[0],
+                                                               msg => { if ( 'stats' in msg ) { isource.update_statistics( msg.stats ) }
+                                                                        if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        }
+                                                                        if ( cb ) cb.execute( this ) } )
+                                               if ( isource._current_pos )
+                                                   update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
+                                                                    ( spec ) => {
+                                                                        refresh_pixel_display( spec.index,
+                                                                                               spec.spectrum.y[spec.chan[1]],
+                                                                                               'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                               pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                } )
+                                               if ( go_to && ! go_to._has_focus ) {
+                                                   go_to.value = String( slider.value )
+                                               }
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0] )
-                                           }''',
+                                               source.channel( slider.value, source.cur_chan[0],
+                                                               msg => { if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        }
+                                                                        if ( cb ) cb.execute( this ) } )
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      ### initialize mask state
                      ###
                      ### mask breadcrumbs
                      ###
                      'mask-state-init': self._js_mode_code['no-bitmask-init'],
+                     ###
+                     ### code to update stokes after stokes selection from dropdown
+                     ###
+                     'stokes-change': '''if ( cb_obj.item != stokes.label ) {
+                                             source.channel( source.cur_chan[1], %s,
+                                                             msg => { stokes.label = cb_obj.item
+                                                                      if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
+                                                                      if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                             } )
+                                         }''',
                      ### function to return mask state for current channel, the 'source' (image_data_source) object
                      ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
                      ### point to our 'source' object
@@ -892,11 +1058,17 @@ class CubeMask:
             ### init_script code sets up Ctrl key handling for switching the add/subtract plot tool actions from single channel ###
             ### operation to all channel operation                                                                              ###
             #######################################################################################################################
+            ### It could be that 'casalib.is_empty' should move to the actual casalib instead of being wedged in here           ###
+            #######################################################################################################################
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
                                              stats=True, abort=self.__abort, address=find_ws_address( ),
                                              init_script=CustomJS( args=self._mask_add_sub,
                                                                    code='''add._mode = 'chan'
                                                                            sub._mode = 'chan'
+                                                                           function is_empty( array ) {
+                                                                               return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
+                                                                           }
+                                                                           casalib.is_empty = is_empty
                                                                            function cube_on( ) {
                                                                                add._mode = 'cube'
                                                                                add.icon = img['add']['cube']
@@ -928,7 +1100,12 @@ class CubeMask:
                                                                                                         cube_on( )
                                                                                                 } } )''' ) )
         if self._pipe['control'] is None:
-            self._pipe['control'] = DataPipe(address=find_ws_address( ), abort=self.__abort)
+            ### self._pipe['control']._freeze_cursor_update is used to keep track of whether pixel
+            ### update has been "frozen" (by typing 'f')... for "specmode='mfs'" _freeze_cursor_update
+            ### was undefined which resulted in failure to update pixel tracking... so it is now
+            ### initialized upon construction in JavaScript...
+            self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self.__abort,
+                                              init_script=CustomJS( code='''cb_obj._freeze_cursor_update = false''' ) )
 
     def path( self ):
         '''return path to CASA image
@@ -1003,25 +1180,83 @@ class CubeMask:
             else:
                 ### a bitmask cube is available and a single annotation is used to add or subtract from the bitmask cube
                 async def mod_mask( msg, self=self ):
+                    err = None
                     shape = self._pipe['image'].shape
-                    if msg['action'] == 'set' or msg['action'] == 'clear':
-                        indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
-                        if msg['scope'] == 'chan':
-                            ### modifying single channel
-                            mask = self._pipe['image'].mask( msg['value']['chan'], True )
-                            mask[indices] = 0 if msg['action'] == 'clear' else 1
-                            self._pipe['image'].put_mask( msg['value']['chan'], mask )
-                            self._mask_id = str(uuid4( ))                   ### new mask identifier
-                            return dict( result='success', update={ } )
-                        elif msg['scope'] == 'cube':
-                            ### modifying all channels
-                            stokes = msg['value']['chan'][0]
-                            for c in range(shape[3]):
-                                mask = self._pipe['image'].mask( [stokes,c], True )
-                                mask[indices] = 0 if msg['action'] == 'clear' else 1
-                                self._pipe['image'].put_mask( [stokes,c], mask )
-                            self._mask_id = str(uuid4( ))                   ### new mask identifier
-                            return dict( result='success', update={ } )
+                    if msg['action'] == 'addition' or msg['action'] == 'subtract':
+                        if 'xs' in msg['value'] and 'ys' in msg['value']:
+                            indices = tuple(np.array(list(polygon_indexes( msg['value']['xs'], msg['value']['ys'], shape[:2] ))).T)
+                            if len(indices) == 0 and len(msg['value']['xs']) > 0 and len(msg['value']['xs']) == len(msg['value']['ys']):
+                                ### this can happen if the entire region is within a single pixel
+                                xs = set(map(int,msg['value']['xs']))
+                                ys = set(map(int,msg['value']['ys']))
+                                if len(xs) == len(ys) and len(xs) == 1:
+                                    indices = ( np.array([xs.pop()]), np.array([ys.pop( )]) )
+                            if msg['scope'] == 'chan':
+                                ### modifying single channel with mouse selected region
+                                mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                mask[indices] = 0 if msg['action'] == 'subtract' else 1
+                                self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                            elif msg['scope'] == 'cube':
+                                ### modifying all channels with mouse selected region
+                                stokes = msg['value']['chan'][0]
+                                for c in range(shape[3]):
+                                    mask = self._pipe['image'].mask( [stokes,c], True )
+                                    mask[indices] = 0 if msg['action'] == 'subtract' else 1
+                                    self._pipe['image'].put_mask( [stokes,c], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                        elif 'src' in msg['value']:
+                            if msg['scope'] == 'chan':
+                                ### modifying single channel with mask from another channel
+                                update={ }
+                                if msg['value']['chan'] == msg['value']['src']:
+                                    if msg['action'] == 'subtract':
+                                        mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                        mask[:,:] = False
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                        update['clear_region'] = True
+                                else:
+                                    modifier = self._pipe['image'].mask( msg['value']['src'], True )
+                                    mask = self._pipe['image'].mask( msg['value']['chan'], True )
+                                    if msg['action'] == 'addition':
+                                        mask = np.logical_or( mask, modifier )
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+                                    else:
+                                        mask = np.logical_and( mask, np.logical_not(modifier) )
+                                        self._pipe['image'].put_mask( msg['value']['chan'], mask )
+
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update=update )
+
+                            elif msg['scope'] == 'cube':
+                                ### modifying all channels with mask from another channel
+                                modifier_index = msg['value']['src']
+                                modifier = self._pipe['image'].mask( modifier_index, True )
+                                stokes = msg['value']['chan'][0]
+                                if msg['action'] == 'addition':
+                                    ### addition
+                                    for c in range(shape[3]):
+                                        ### do not add/subtract the modifier mask with itself
+                                        if stokes != modifier_index[0] or c != modifier_index[1]:
+                                            mask = self._pipe['image'].mask( [stokes,c], True )
+                                            mask = np.logical_or( mask, modifier )
+                                            self._pipe['image'].put_mask( [stokes,c], mask )
+                                else:
+                                    ### subtraction
+                                    for c in range(shape[3]):
+                                        ### do not add/subtract the modifier mask with itself
+                                        if stokes != modifier_index[0] or c != modifier_index[1]:
+                                            mask = self._pipe['image'].mask( [stokes,c], True )
+                                            mask = np.logical_and( mask, np.logical_not(modifier) )
+                                            self._pipe['image'].put_mask( [stokes,c], mask )
+                                self._mask_id = str(uuid4( ))                   ### new mask identifier
+                                return dict( result='success', update={ } )
+                            else:
+                                err = "internal error: bad add/subtract scope"
+                        else:
+                            err = "internal error: bad add/subtract message"
                     elif msg['action'] == 'not':
                         notf = np.vectorize(lambda x: 0.0 if x != 0 else 1.0)
                         if msg['scope'] == 'chan':
@@ -1044,7 +1279,12 @@ class CubeMask:
                                 self._pipe['image'].put_mask( [stokes,c], notf(mask) )
                             self._mask_id = str(uuid4( ))                   ### new mask identifier
                             return dict( result='success', update={ } )
-                    return dict( result='failure', update={ } )
+                        else:
+                            err = "internal error: bad invert scope"
+                    else:
+                        err = "internal error: bad message action"
+
+                    return dict( result='failure', update={ }, error=err )
 
                 self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=1.0, line_color=None, fill_color='black', visible=True ) ]
                 self._pipe['control'].register( self._ids['mask-mod'], mod_mask )
@@ -1052,6 +1292,8 @@ class CubeMask:
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
+            ### fetch stokes labels for all stokes drop
+            self._stokes_labels = self._image_source.stokes_labels( )
 
             self._image = set_attributes( figure( height=self._pipe['image'].shape[1], width=self._pipe['image'].shape[0],
                                                   output_backend="webgl", match_aspect=True,
@@ -1059,13 +1301,16 @@ class CubeMask:
                                                           'pan', 'wheel_zoom', 'save',
                                                           'reset', 'poly_select',
                                                           self._mask_add_sub['add'],
-                                                          self._mask_add_sub['sub'] ],
+                                                          self._mask_add_sub['sub'],
+                                                          self._mask_add_sub['mask'] ],
                                                   tooltips=None ), **kw )
+
             ###
             ### set tools that are active by default
             ###
             self._image.toolbar.active_scroll = self._image.select_one(WheelZoomTool)
-            self._image.toolbar.active_drag = self._image.select_one(LassoSelectTool)
+            self._image.toolbar.active_drag = self._image.select_one(PanTool)
+            self._image.toolbar.active_tap = self._image.select_one(PolySelectTool)
 
             ###
             ### set tick formatting
@@ -1084,18 +1329,34 @@ class CubeMask:
             if self._mask_path is not None and path.isdir(self._mask_path):
                 ##
                 ## LinearColorMapper must be used because otherwise a bitmask that is
-                ## all true or all false is colored with '#FFFF00' by default because
+                ## all true or all false is colored with self._color by default because
                 ## the "image" range drops to a single value, i.e. the maximum value
                 ##
                 self._bitmask = self._image.image( image='msk', x=0, y=0, dw=shape[0], dh=shape[1],
                                                    color_mapper=LinearColorMapper( low=0, high=1,
-                                                                                   palette=['rgba(0, 0, 0, 0)','#FFFF00'] ),
+                                                                                   palette=['rgba(0, 0, 0, 0)',self._color] ),
                                                    alpha=0.6, source=self._image_source )
                 self._bitmask.visible = False
+                ###
+                ### _bitmask_contour is the contour that is drawn to show the
+                ### mask/non-masked boundary of one channel
+                ###
                 self._bitmask_contour_ds = self._image_source.mask_contour_source( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
-                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color='#FFFF00',
+                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color=self._color,
                                                                     source=self._bitmask_contour_ds )
                 self._bitmask_contour.visible = True
+
+                ###
+                ### _bitmask_contour_maskmod is the contour that is drawn to represent
+                ### the mask/non-masked boundary of one channel for the purpose of
+                ### adding or subtracting it from another channel or cube stokes plane
+                ###
+                self._bitmask_contour_maskmod_ds = ColumnDataSource( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
+                self._bitmask_contour_maskmod = self._image.multi_polygons( xs="xs", ys="ys", line_width = 3, fill_color=None, line_alpha=0.3,
+                                                                            line_color=self._color, line_dash = 'dashed', fill_alpha=0.3,
+                                                                            source=self._bitmask_contour_maskmod_ds )
+                self._bitmask_contour_maskmod.visible = True
+
 
             if self._pipe['image'].have_mask0( ):
                 self._mask0 = self._image.image( image='msk0', x=0, y=0, dw=shape[0], dh=shape[1],
@@ -1110,7 +1371,18 @@ class CubeMask:
 
         return self._image
 
-    def slider( self, **kw ):
+    def goto( self, **kw ):
+        if self._goto is None:
+            self._init_pipes( )
+            self._goto_txt = set_attributes( EvTextInput( value=self._slider.start if self._slider else '0',
+                                                          stylesheets=[ InlineStyleSheet( css='''.bk-input { border-bottom-left-radius: 0; border-top-left-radius: 0; margin-left: -0.45em; }''' ) ],
+                                                          width=85 ), **kw )
+            self._goto_stokes = Dropdown( label="I Channel", menu=self._stokes_labels, stylesheets=[ InlineStyleSheet( css='''.bk-btn { background-color: rgb( 230, 230, 230 ); padding: 7px; padding-top: 8px; border-bottom-right-radius: 0; border-top-right-radius: 0; margin-right: -0.45em; }''' ) ], width=80 )
+            self._goto = row( self._goto_stokes, self._goto_txt, spacing=-1 )
+
+        return self._goto
+
+    def slider( self, callback=None, **kw ):
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
 
@@ -1125,14 +1397,51 @@ class CubeMask:
             slider_end = shape[-1]-1
             self._slider = set_attributes( Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
                                                    title="Channel" ), **kw )
+            self._slider_callback = callback
             if slider_end == 0:
                 # for a cube with one channel, a slider is of no use
                 self._slider.disabled = True
 
         return self._slider
 
-    def spectra( self, **kw ):
-        '''Return the line graph of spectra from the image cube which is updated
+    def tapedeck( self ):
+        if self._slider is None:
+            raise RuntimeError( "tapedeck can only be created after the slider has been created" )
+
+        stylesheets= [ InlineStyleSheet( css='''.bk-btn { padding-right: 0px; padding-left: 0px; }''' ) ]
+        callback=CustomJS( args=dict( slider=self._slider ),
+                           code='''if ( cb_obj.name == 'forw' )
+                                   if ( cb_obj.name == 'back' ) ''' )
+        srt = 0
+        end = 3
+        fwd = 2
+        bck = 1
+        self._tapedeck = [ TipButton( icon=svg_icon([ '20px', 'fast-backward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to first channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='tofront' ),
+                           TipButton( icon=svg_icon([ '20px', 'step-backward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to previous channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='back' ),
+                           TipButton( icon=svg_icon([ '20px', 'step-forward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to next channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='forw' ),
+                           TipButton( icon=svg_icon([ '20px', 'fast-forward']), button_type='light',
+                                      tooltip=Tooltip( content=HTML( 'move to last channel' ), position='bottom' ),
+                                      stylesheets=stylesheets, name='toend' ) ]
+
+        self._tapedeck[fwd].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.value == slider.end ? slider.start : slider.value + 1''' ) )
+        self._tapedeck[bck].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.value == slider.start ? slider.end : slider.value - 1''' ) )
+        self._tapedeck[end].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.end''' ) )
+        self._tapedeck[srt].js_on_click( CustomJS( args=dict( slider=self._slider ),
+                                                   code='''slider.value = slider.start''' ) )
+
+        return row( *self._tapedeck )
+
+    def spectrum( self, **kw ):
+        '''Return the line graph of spectrum from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
 
         Parameters
@@ -1140,16 +1449,17 @@ class CubeMask:
         kw: keyword and value
             extra keyword/value paramaters passed on to ``figure``
         '''
-        if self._spectra is None:
+        if self._spectrum is None:
             if self._image is None:
                 ###
                 ### an exception is raised instead of just creating the image display because if we create
                 ### it here [by calling self.image( )], the user will silently lose the ability to set the
                 ### maximum number of annotations per channel (along with other future parameters)
                 ###
-                raise RuntimeError('spectra( ) requires an image cube display, but one has not yet been created')
+                raise RuntimeError('spectrum( ) requires an image cube display, but one has not yet been created')
 
-            self._image_spectra = SpectraDataSource(image_source=self._pipe['image'])
+            nelem = self._pipe['image'].shape[-1]
+            self._image_spectrum = ColumnDataSource( data={ 'x': list(range(nelem)), 'y': [0] * nelem } )
 
             self._sp_span = Span( location=-1,
                                   dimension='height',
@@ -1169,17 +1479,17 @@ class CubeMask:
                                                                 span.location = -1
                                                             }""" )
 
-            self._hover['spectra'] = HoverTool( callback=self._cb['sppos'] )
+            self._hover['spectrum'] = HoverTool( callback=self._cb['sppos'] )
 
-            self._spectra = set_attributes( figure( height=180, width=800,
-                                                    title="Spectrum", tools=[ self._hover['spectra'] ] ), **kw )
-            self._spectra.add_layout(self._sp_span)
+            self._spectrum = set_attributes( figure( height=180, width=800,
+                                                    tools=[ self._hover['spectrum'] ] ), **kw )
+            self._spectrum.add_layout(self._sp_span)
 
-            self._spectra.x_range.range_padding = self._spectra.y_range.range_padding = 0
-            self._spectra.line( x='x', y='y', source=self._image_spectra )
-            self._spectra.grid.grid_line_width = 0.5
+            self._spectrum.x_range.range_padding = self._spectrum.y_range.range_padding = 0
+            self._spectrum.line( x='x', y='y', source=self._image_spectrum )
+            self._spectrum.grid.grid_line_width = 0.5
 
-        return self._spectra
+        return self._spectrum
 
     def coorddesc( self ):
         return self._pipe['image'].coorddesc( )
@@ -1273,31 +1583,64 @@ class CubeMask:
         bins = np.linspace( chan.min( ), chan.max( ), self._cm_adjust['bins'] )
         hist, edges = np.histogram( chan, density=False, bins=bins )
 
-        self._cm_adjust['left span'] = Span(location=edges[0], dimension='height', line_color='red', line_width=1)
-        self._cm_adjust['right span'] = Span(location=edges[-1], dimension='height', line_color='red', line_width=1)
+        span_edited_funcs = '''function set_edited( span ) {
+                                   if (typeof span._original_dash == 'undefined')
+                                       span._original_dash = span.line_dash
+                                   span.line_dash = [ ]
+                                   span._edited = true
+                               }
+                               function clear_edited( span ) {
+                                   if (typeof span._original_dash != 'undefined')
+                                       span.line_dash = span._original_dash
+                                   span._edited = false
+                               }
+                               '''
 
-        self._cm_adjust['left input'] =  TextInput( value=repr(edges[0]), prefix="min", max_width=140 )
-        self._cm_adjust['right input'] = TextInput( value=repr(edges[-1]), prefix="max", max_width=140 )
-        self._cm_adjust['right input tt'] = Tooltip(content=HTML("<b>HTML</b> tooltip"), position="right",target=self._cm_adjust['right input'], visible=True)
+        self._cm_adjust['span one'] = EditSpan( location=edges[0], dimension='height', line_color='red', line_width=1,
+                                                 editable=True, line_dash='dashed' )
+        self._cm_adjust['span two'] = EditSpan( location=edges[-1], dimension='height', line_color='red', line_width=1,
+                                                  editable=True, line_dash='dashed' )
 
-        self._cm_adjust['hover'] = HoverTool( )
-        self._cm_adjust['drag'] = DragTool( )
-        self._cm_adjust['left tri'] = PolyAnnotation( xs=[ 100, 100, 120 ], ys=[ 100, 140, 120 ], fill_color=self._cm_adjust['left span'].line_color,
-                                                      visible=False, xs_units='screen', ys_units='screen' )
-        self._cm_adjust['right tri'] = PolyAnnotation( xs=[ 140, 140, 120 ], ys=[ 100, 140, 120 ], fill_color=self._cm_adjust['left span'].line_color,
-                                                       visible=False, xs_units='screen', ys_units='screen' )
+        ###
+        ### Bokeh supports 'description=Tooltip( content=HTML("..."), position="..." )'. However,
+        ### The Tooltip(...) works by creating an "i" in a circle with the label that can be clicked.
+        ### With "prefix=..." and no label, no button is displayed.
+        ###
+        self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min" )
+        self._cm_adjust['min input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                    span2=self._cm_adjust['span two'] ),
+                                                                         code=span_edited_funcs +
+                                                                              '''if ( span1.location <= span2.location ) {
+                                                                                     span1._refresh_colormap = true
+                                                                                     span1.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span1)
+                                                                                 } else {
+                                                                                     span2._refresh_colormap = true
+                                                                                     span2.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span2)
+                                                                                 }''' ) )
 
-        self._cm_adjust['reset'] = CBResetTool( )
+        self._cm_adjust['max input'] = TextInput( value=repr(edges[-1]), prefix="max" )
+        self._cm_adjust['max input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                    span2=self._cm_adjust['span two'] ),
+                                                                         code=span_edited_funcs +
+                                                                              '''if ( span1.location >= span2.location ) {
+                                                                                     span1._refresh_colormap = true
+                                                                                     span1.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span1)
+                                                                                 } else {
+                                                                                     span2._refresh_colormap = true
+                                                                                     span2.location = Number(cb_obj.origin.value)
+                                                                                     set_edited(span2)
+                                                                                 }''' ) )
+
+        self._cm_adjust['reset'] = CBResetTool( description="Reset pan/zoom and extents" )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
-                                         tools=[ self._cm_adjust['drag'],
-                                                 self._cm_adjust['hover'],
-                                                 self._cm_adjust['reset'] ] )
+                                         tools=[ self._cm_adjust['reset'],
+                                                 'wheel_zoom', 'pan',
+                                                 ResetTool( description="Reset pan/zoom but preserve extents" ) ] )
 
         self._cm_adjust['fig'].toolbar.active_scroll = self._cm_adjust['fig'].select_one(WheelZoomTool)
-        self._cm_adjust['fig'].toolbar.active_drag = self._cm_adjust['fig'].select_one(DragTool)
-
-        self._cm_adjust['fig'].add_layout( self._cm_adjust['left tri'] )
-        self._cm_adjust['fig'].add_layout( self._cm_adjust['right tri'] )
 
         # Create a new BasicTickFormatter
         formatter = BasicTickFormatter()
@@ -1306,11 +1649,11 @@ class CubeMask:
         formatter.precision = 1
 
         self._cm_adjust['fig'].yaxis.formatter = formatter
-        self._cm_adjust['fig'].renderers.extend([self._cm_adjust['left span'], self._cm_adjust['right span']])
-        #self._cm_adjust['fig'].yaxis.visible = False
+        self._cm_adjust['fig'].renderers.extend([self._cm_adjust['span one'], self._cm_adjust['span two']])
 
-        self._cm_adjust['histogram'] = self._cm_adjust['fig'].quad( top=hist, bottom=0, left=edges[:-1], right=edges[1:],
-                                                                    fill_color="blue", line_color="blue" )
+        self._cm_adjust['hist-ds'] = self._pipe['image'].histogram_source( data=dict( left=list(edges[:-1]), right=list(edges[1:]), top=list(hist), bottom=[0]*len(hist) ) )
+        self._cm_adjust['hist-glyph'] = Quad( left="left", right="right", top="top", bottom=0, fill_color="blue", line_color="blue" )
+        self._cm_adjust['histogram'] = self._cm_adjust['fig'].add_glyph( self._cm_adjust['hist-ds'], self._cm_adjust['hist-glyph'] )
 
         ### linear: 𝑦=𝑥
         ### log: 𝑦=log𝛼𝑥+1(𝛼𝑥+1)  == Math.log(alpha * x + 1.0) / Math.log(alpha + 1.0)
@@ -1326,29 +1669,81 @@ class CubeMask:
                                                       ('square', 'square'), ('gamma', 'gamma'), ('power', 'power') ],
                                                button_type='light' )
 
-        movement_state = dict( fig=self._cm_adjust['fig'],
-                               ht=self._cm_adjust['hover'],
-                               dt=self._cm_adjust['drag'],
-                               lspan=self._cm_adjust['left span'],rspan=self._cm_adjust['right span'],
-                               ltri=self._cm_adjust['left tri'],
-                               ltxt=self._cm_adjust['left input'],
-                               rtri=self._cm_adjust['right tri'],
-                               rtxt=self._cm_adjust['right input'],
-                               source=self._image_source,
-                               id=self._ids['colormap-adjust'],
-                               ctrl=self._pipe['control'],
-                               histogram=self._cm_adjust['histogram'],
-                               scaling=self._cm_adjust['scaling'],
-                               alpha=self._cm_adjust['alpha-value'],
-                               gamma=self._cm_adjust['gamma-value'],
-                               equation=self._cm_adjust['equation'] )
-
         colormap_refresh_code = '''let args = { }
                                    if ( alpha.visible ) args = { alpha: parseFloat(alpha.value), ...args }
                                    if ( gamma.visible ) args = { gamma: parseFloat(gamma.value), ...args }
-                                   source.adjust_colormap( [ lspan._modified ? lspan.location : NaN,
-                                                             rspan._modified ? rspan.location : NaN ],
+                                   const [ minspan, maxspan ] = span1.location <= span2.location ? [ span1, span2 ] : [ span2, span1 ]
+                                   source.adjust_colormap( [ minspan._edited ? [ minspan.location ] : [ ],
+                                                             maxspan._edited ? [ maxspan.location ] : [ ] ],
                                                            { scaling: scaling.label, args }, msg => { source.refresh( ) } )'''
+
+        ###
+        ###  "( span1._editing && span2._editing )" update happens when the
+        ###  one of the spans is being dragged. Image is updated here when
+        ###  the LODEnd event is received
+        ###
+        ###  Otherwise the only time this should be called is in responce to
+        ###  either the min or max text input being changed directly. In this
+        ###  case the image is updated as a result of the text input change.
+        ###
+        span_cb = '''if ( span1._editing || span2._editing ) {
+                         min.value = (Math.min(span1.location,span2.location)).toString( )
+                         max.value = (Math.max(span1.location,span2.location)).toString( )
+                     }
+                     if ( cb_obj._refresh_colormap ) {
+                         cb_obj._refresh_colormap = false
+                         %s
+                     }'''
+
+        self._cm_adjust['span one'].js_on_change( 'location', CustomJS( args=dict( source=self._image_source,
+                                                                                   min=self._cm_adjust['min input'],
+                                                                                   max=self._cm_adjust['max input'],
+                                                                                   span1=self._cm_adjust['span one'],
+                                                                                   span2=self._cm_adjust['span two'],
+                                                                                   scaling=self._cm_adjust['scaling'],
+                                                                                   alpha=self._cm_adjust['alpha-value'],
+                                                                                   gamma=self._cm_adjust['gamma-value'],
+                                                                                   equation=self._cm_adjust['equation'] ),
+                                                                        code=span_cb % colormap_refresh_code ) )
+        self._cm_adjust['span two'].js_on_change( 'location', CustomJS( args=dict( source=self._image_source,
+                                                                                   min=self._cm_adjust['min input'],
+                                                                                   max=self._cm_adjust['max input'],
+                                                                                   span1=self._cm_adjust['span one'],
+                                                                                   span2=self._cm_adjust['span two'],
+                                                                                   scaling=self._cm_adjust['scaling'],
+                                                                                   alpha=self._cm_adjust['alpha-value'],
+                                                                                   gamma=self._cm_adjust['gamma-value'],
+                                                                                   equation=self._cm_adjust['equation'] ),
+                                                                        code=span_cb % colormap_refresh_code ) )
+
+        self._cm_adjust['span one'].js_on_event( LODStart, CustomJS( code= span_edited_funcs +
+                                                                           '''cb_obj.origin._editing = true
+                                                                              set_edited( cb_obj.origin )''' ) )
+        self._cm_adjust['span one'].js_on_event( LODEnd, CustomJS( args=dict( source=self._image_source,
+                                                                              min=self._cm_adjust['min input'],
+                                                                              max=self._cm_adjust['max input'],
+                                                                              span1=self._cm_adjust['span one'],
+                                                                              span2=self._cm_adjust['span two'],
+                                                                              scaling=self._cm_adjust['scaling'],
+                                                                              alpha=self._cm_adjust['alpha-value'],
+                                                                              gamma=self._cm_adjust['gamma-value'],
+                                                                              equation=self._cm_adjust['equation'] ),
+                                                                   code='''cb_obj.origin._editing = false;'''+colormap_refresh_code ) )
+        self._cm_adjust['span two'].js_on_event( LODStart, CustomJS( code= span_edited_funcs +
+                                                                           '''cb_obj.origin._editing = true
+                                                                              set_edited( cb_obj.origin )''' ) )
+        self._cm_adjust['span two'].js_on_event( LODEnd, CustomJS( args=dict( source=self._image_source,
+                                                                              min=self._cm_adjust['min input'],
+                                                                              max=self._cm_adjust['max input'],
+                                                                              span1=self._cm_adjust['span one'],
+                                                                              span2=self._cm_adjust['span two'],
+                                                                              scaling=self._cm_adjust['scaling'],
+                                                                              alpha=self._cm_adjust['alpha-value'],
+                                                                              gamma=self._cm_adjust['gamma-value'],
+                                                                              equation=self._cm_adjust['equation'] ),
+                                                                   code='''cb_obj.origin._editing = false;'''+colormap_refresh_code ) )
+
+
         update_scaling_state = '''alpha.visible = false
                                   gamma.visible = false
                                   if ( scaling.label == 'linear' ) {
@@ -1373,181 +1768,58 @@ class CubeMask:
                                       equation.text = scaling.label
                                   }'''
 
-
-        self._cm_adjust['reset'].postcallback = CustomJS( args=movement_state,
-                                                          code='''scaling.label = scaling.menu[0][0]
+        self._cm_adjust['reset'].postcallback = CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                     span2=self._cm_adjust['span two'],
+                                                                     mintxt=self._cm_adjust['min input'],
+                                                                     maxtxt=self._cm_adjust['max input'],
+                                                                     source=self._image_source,
+                                                                     histogram=self._cm_adjust['histogram'],
+                                                                     scaling=self._cm_adjust['scaling'],
+                                                                     alpha=self._cm_adjust['alpha-value'],
+                                                                     gamma=self._cm_adjust['gamma-value'],
+                                                                     equation=self._cm_adjust['equation'] ),
+                                                          code=span_edited_funcs +
+                                                               '''scaling.label = scaling.menu[0][0]
                                                                   %s
                                                                   scaling.change.emit( )
-                                                                  lspan.location = histogram.data_source.data.left[0]
-                                                                  rspan.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
-                                                                  ltxt.value = lspan.location.toString( )
-                                                                  rtxt.value = rspan.location.toString( )
+                                                                  span1.location = histogram.data_source.data.left[0]
+                                                                  clear_edited(span1)
+                                                                  span2.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
+                                                                  clear_edited(span2)
+                                                                  mintxt.value = span1.location.toString( )
+                                                                  maxtxt.value = span2.location.toString( )
                                                                   %s''' % ( update_scaling_state, colormap_refresh_code ) )
 
-        self._cm_adjust['scaling'].js_on_event( "menu_item_click", CustomJS( args=movement_state,
+        self._cm_adjust['scaling'].js_on_event( "menu_item_click", CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                                                        span2=self._cm_adjust['span two'],
+                                                                                        mintxt=self._cm_adjust['min input'],
+                                                                                        maxtxt=self._cm_adjust['max input'],
+                                                                                        source=self._image_source,
+                                                                                        histogram=self._cm_adjust['histogram'],
+                                                                                        scaling=self._cm_adjust['scaling'],
+                                                                                        alpha=self._cm_adjust['alpha-value'],
+                                                                                        gamma=self._cm_adjust['gamma-value'],
+                                                                                        equation=self._cm_adjust['equation'] ),
                                                                              code='''if ( cb_obj.item != cb_obj.origin.label ) {
                                                                                          scaling.label = cb_obj.item
                                                                                          %s
                                                                                          %s
                                                                                      }''' % ( update_scaling_state, colormap_refresh_code )) )
 
-        ##############################################################################################
-        ###  Set up span state when entering because things like displaying the "developer tools"  ###
-        ###  changes where the spans are displayed and can leave the triangles dangling...         ###
-        ##############################################################################################
-        self._cm_adjust['fig'].js_on_event( MouseLeave, CustomJS( args=movement_state,
-                                                                  code='''ltri.visible = false
-                                                                          rtri.visible = false''' ) )
-        tri_resync_code = '''function resync_tri( span, tri ) {
-                                 span._view = Bokeh.find.view( span )
-                                 span._coord = Bokeh.find.span_coords(span._view)
-                                 span._plot_view = span._view.plot_view
-                                 const x_delta = Bokeh.find.px_from_sx( span._plot_view, span._coord.sleft ) - tri.xs[0]
-                                 tri.xs = tri.xs.map(x => x + x_delta)
-                             }'''
-
-        self._cm_adjust['fig'].js_on_event( MouseEnter, CustomJS( args=movement_state,
-                                                                  ##########################################################################
-                                                                  ### The view must be discoved each time because resizes of the figure  ###
-                                                                  ### cause a new view to be created... holding onto the old view just   ###
-                                                                  ### results in the offsets not being updated because the old, adjusted ###
-                                                                  ### screen coordinates are returned again                              ###
-                                                                  ##########################################################################
-                                                                  code=tri_resync_code +
-                                                                       '''function initialize_tri( span, tri, span_offset_direction ) {
-                                                                              resync_tri( span, tri )
-                                                                              span._modified = false
-                                                                              const y_delta = span._coord.height / 2 - tri.ys[2]
-                                                                              tri.ys = tri.ys.map(y => y + y_delta)
-                                                                              span._span_offset_direction = span_offset_direction
-                                                                          }
-                                                                          if ( typeof fig._plot_view == 'undefined' ) {
-                                                                              fig._plot_view = Bokeh.find.view( fig )
-                                                                              initialize_tri( lspan, ltri, -1 )
-                                                                              initialize_tri( rspan, rtri,  1 )
-                                                                          } else {
-                                                                              resync_tri( lspan, ltri )
-                                                                              resync_tri( rspan, rtri )
-                                                                          }''' ) )
-
-        ##############################################################################################
-        ###  Hover tool handles making one triangle visible when the mouse is close to a span, and ###
-        ###  making it active when the mouse is within the triangle.                               ###
-        ##############################################################################################
-        self._cm_adjust['hover'].callback = CustomJS( args=movement_state,
-                                                      code=tri_resync_code +
-                                                           '''function check_span( sx, sy, span, tri, other_tri ) {
-                                                                  if ( sx > span._coord.sleft - 20 && sx < span._coord.sleft + 20 && ! other_tri.visible ) {
-                                                                      resync_tri( span, tri )
-                                                                      tri.visible = true
-                                                                  } else {
-                                                                      tri.visible = false
-                                                                  }
-                                                              }
-                                                              if ( cb_obj.event_type === 'move' ) {
-                                                                  const { sx, sy } = cb_data.geometry
-                                                                  if ( isFinite( sx ) && isFinite( sy ) ) {
-                                                                      check_span( sx, sy, lspan, ltri, rtri )
-                                                                      check_span( sx, sy, rspan, rtri, ltri )
-                                                                  }
-                                                              }''' )
-
-
-        self._cm_adjust['drag'].start = CustomJS( args=movement_state,
-                                                  code=tri_resync_code +
-                                                       '''const { sx, sy, x, y } = cb_data
-                                                          const px = Bokeh.find.px_from_sx(fig._plot_view,sx)
-                                                          const py = Bokeh.find.py_from_sy(fig._plot_view,sy)
-                                                          function start_check( tri, span ) {
-                                                              if ( tri.visible && casalib.d3.polygonContains(casalib.zip( tri.xs, tri.ys ),[sx,sy]) ) {
-                                                                  tri._dragging = true
-                                                                  tri._last_point = { sx, sy, x, y }
-                                                                  tri._span_delta = Math.abs(Bokeh.find.dx_from_px(fig._plot_view, sx) - span.location) * span._span_offset_direction
-                                                              }
-                                                          }
-                                                          resync_tri( lspan, ltri )
-                                                          resync_tri( rspan, rtri )
-                                                          start_check(ltri,lspan)
-                                                          start_check(rtri,rspan)''' )
-
-        self._cm_adjust['drag'].move = CustomJS( args=movement_state,
-                                                 code='''function move_is_ok( x_delta, span, other_span ) {
-                                                             const sx = Bokeh.find.sx_from_dx(fig._plot_view,span.location)
-                                                             const osx = Bokeh.find.sx_from_dx(fig._plot_view,other_span.location)
-                                                             return (Math.abs(sx + x_delta * span._span_offset_direction - osx) ) > 30
-                                                         }
-                                                         function move_check( tri, span, text, other_span ) {
-                                                             if ( tri._dragging ) {
-                                                                 const { sx, sy, x, y } = cb_data
-                                                                 const x_delta = sx - tri._last_point.sx
-                                                                 const y_delta = sy - tri._last_point.sy
-                                                                 if ( move_is_ok( x_delta, span, other_span ) ) {
-                                                                     if ( y_delta != 0 )
-                                                                         tri.ys = tri.ys.map(y => y + y_delta)
-                                                                     if ( x_delta != 0 ) {
-                                                                         const dx_delta = x - tri._last_point.x + tri._span_delta
-                                                                         span.location = x + dx_delta
-                                                                         span._coord = Bokeh.find.span_coords(span._view)
-                                                                         tri.xs = tri.xs.map(x => x + x_delta)
-                                                                         span._modified = true
-                                                                         text.value = span.location.toString( )
-                                                                     }
-                                                                     tri._last_point = { sx, sy, x, y }
-                                                                 }
-                                                             }
-                                                         }
-                                                         move_check( ltri, lspan, ltxt, rspan )
-                                                         move_check( rtri, rspan, rtxt, lspan )''' )
-
-        self._cm_adjust['drag'].end = CustomJS( args=movement_state,
-                                                code=tri_resync_code +
-                                                     '''function end_check( tri ) {
-                                                            if ( tri._dragging ) {
-                                                                tri._dragging = false
-                                                            }
-                                                        }
-                                                        if ( ltri._dragging || rtri._dragging ) {
-                                                            const lsx = Bokeh.find.sx_from_dx( fig._plot_view, lspan.location )
-                                                            const rsx = Bokeh.find.sx_from_dx( fig._plot_view, rspan.location )
-                                                            if ( lsx + 30 >= rsx || rsx - 30 <= lsx ) {
-                                                                if ( ltri._dragging ) {
-                                                                    const x = Bokeh.find.dx_from_px( fig._plot_view, Bokeh.find.px_from_sx(fig._plot_view, rsx - 40) )
-                                                                    lspan._modified = true
-                                                                    lspan.location = x
-                                                                    ltxt.value = x.toString( )
-                                                                } else {
-                                                                    const x = Bokeh.find.dx_from_px( fig._plot_view, Bokeh.find.px_from_sx(fig._plot_view, lsx + 40) )
-                                                                    rspan._modified = true
-                                                                    rspan.location = x
-                                                                    rtxt.value = x.toString( )
-                                                                }
-                                                            }
-                                                        }
-                                                        end_check(ltri)
-                                                        end_check(rtri)
-                                                        resync_tri( lspan, ltri )
-                                                        resync_tri( rspan, rtri )
-                                                        ''' + colormap_refresh_code )
-
-        scaling_parameter_callback = CustomJS( args=movement_state,
+        scaling_parameter_callback = CustomJS( args=dict( span1=self._cm_adjust['span one'],
+                                                          span2=self._cm_adjust['span two'],
+                                                          mintxt=self._cm_adjust['min input'],
+                                                          maxtxt=self._cm_adjust['max input'],
+                                                          source=self._image_source,
+                                                          histogram=self._cm_adjust['histogram'],
+                                                          scaling=self._cm_adjust['scaling'],
+                                                          alpha=self._cm_adjust['alpha-value'],
+                                                          gamma=self._cm_adjust['gamma-value'],
+                                                          equation=self._cm_adjust['equation'] ),
                                                code=colormap_refresh_code )
 
         self._cm_adjust['alpha-value'].js_on_change( 'value', scaling_parameter_callback )
         self._cm_adjust['gamma-value'].js_on_change( 'value', scaling_parameter_callback )
-        self._cm_adjust['left input'].js_on_change( 'value', CustomJS( args=movement_state,
-                                                                       code='''const newval = parseFloat(cb_obj.value)
-                                                                               if ( newval != lspan.location ) {
-                                                                                   lspan.location = newval
-                                                                                   lspan._modified = true
-                                                                                   %s
-                                                                               }''' % ( colormap_refresh_code ) ) )
-        self._cm_adjust['right input'].js_on_change( 'value', CustomJS( args=movement_state,
-                                                                        code='''const newval = parseFloat(cb_obj.value)
-                                                                                if ( newval != rspan.location ) {
-                                                                                   rspan.location = newval
-                                                                                   rspan._modified = true
-                                                                                   %s
-                                                                               }''' % ( colormap_refresh_code ) ) )
 
         async def colormap_adjust_update( msg, self=self ):
             if 'action' in msg and msg['action'] == 'fetch':
@@ -1558,30 +1830,13 @@ class CubeMask:
 
             return dict( result='failure', update={ } )
 
-        self._pipe['control'].register( self._ids['colormap-adjust'], colormap_adjust_update )
-        self._image_source.js_on_change( 'data', CustomJS( args=movement_state,
-                                                           code='''function adjust_update( msg ) {
-                                                                       histogram.data_source.data.top = msg.hist
-                                                                       histogram.data_source.data.left = msg.edges.slice(0,msg.edges.length-1)
-                                                                       histogram.data_source.data.right = msg.edges.slice(1,msg.edges.length)
-                                                                       if ( ! lspan._modified ) {
-                                                                           lspan.location = msg.edges[0]
-                                                                           ltxt.value = lspan.location.toString( )
-                                                                       }
-                                                                       if ( ! rspan._modified ) {
-                                                                           rspan.location = msg.edges[msg.edges.length-1]
-                                                                           rtxt.value = rspan.location.toString( )
-                                                                       }
-                                                                   }
-                                                                   ctrl.send( id, { action: 'fetch' }, adjust_update )''' ) )
-
         return column( self._cm_adjust['fig'],
-                       row( Tip( self._cm_adjust['left input'],
+                       row( Tip( self._cm_adjust['min input'],
                                   tooltip=Tooltip( content=HTML("set minimum clip here or drag the left red line above"),
                                                    position="top" ) ),
-                            Tip( self._cm_adjust['right input'],
+                            Tip( self._cm_adjust['max input'],
                                   tooltip=Tooltip( content=HTML("set maximum clip here or drag the right red line above"),
-                                                   position="top_left" ) ) ),
+                                                   position="top_left" ) ), width_policy='min' ),
                        row( Tip( self._cm_adjust['scaling'],
                                   tooltip=Tooltip( content=HTML('scaling function applied to image intensities'),
                                                    position="top" ) ),
@@ -1604,7 +1859,9 @@ class CubeMask:
         ###    NOTE: the self._bitmask_color_selector change function is setup
         ###          in the "connect" member function
         ###
-        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color='#FFFF00', margin=(-1, 0, 0, 0) )
+        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
+                                                    stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                       padding: 0 var(--padding-vertical); }''' ) ] )
 
         mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
@@ -1662,10 +1919,10 @@ class CubeMask:
             raise RuntimeError('cube image not in use')
         self._channel_ctrl = PreText( text='Channel 0', min_width=100 )
         self._channel_ctrl_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
-        self._channel_ctrl_group = row( self._channel_ctrl,
-                                        Tip( self._channel_ctrl_stokes_dropdown,
-                                             tooltip=Tooltip( content=HTML('Select which of the <b>image</b> or <b>stokes</b> planes to display'),
-                                                              position='right' ) ) )
+        self._channel_ctrl_group = ( self._channel_ctrl,
+                                     Tip( self._channel_ctrl_stokes_dropdown,
+                                          tooltip=Tooltip( content=HTML('Select which of the <b>image</b> or <b>stokes</b> planes to display'),
+                                                           position='right' ) ) )
         return self._channel_ctrl_group
 
     def coord_ctrl( self ):
@@ -1690,23 +1947,24 @@ class CubeMask:
 
         return self._coord_ctrl_group
 
-    def status_text( self, text='' ):
-        self._status_div =  Div( text=text )
+    def status_text( self, text='', **kw ):
+        self._status_div =  set_attributes( Div( text=text ), **kw )
         return self._status_div
 
     def pixel_tracking_text( self ):
 
-        self._pixel_tracking_text = PreText( text='', min_width=300 )
+        self._pixel_tracking_text = Div( text='', min_width=200 )
 
-        async def pixel_value( msg, self=self ):
-            if msg['action'] == 'pixel':
+        async def fetch_spectrum( msg, self=self ):
+            if msg['action'] == 'spectrum':
                 chan = msg['value']['chan']
                 index = msg['value']['index']
-                return dict( result='success', update=dict(pixel=self._image_source.pixel_value( chan, index ),
-                                                           mask=self._pipe['image'].mask_value( chan, index ),
-                                                           index=index, chan=chan) )
+                spectrum, mask = self._pipe['image'].spectrum( index + [chan[0]], True )
+                return dict( result='success', update=dict( spectrum=spectrum,
+                                                            mask=mask,
+                                                            index=index, chan=chan ) )
 
-        self._pipe['control'].register( self._ids['pixel-value'], pixel_value )
+        self._pipe['control'].register( self._ids['fetch-spectrum'], fetch_spectrum )
         return self._pixel_tracking_text
 
     def connect( self ):
@@ -1719,8 +1977,12 @@ class CubeMask:
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
                                                                   stats_source=self._statistics_source,
+                                                                  mask_region_icons=self._mask_icons_,
+                                                                  mask_region_button=self._mask_add_sub['mask'],
+                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                  contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
                                                                else mask_add_chan( )''' )
         self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
@@ -1728,10 +1990,28 @@ class CubeMask:
                                                                   ctrl=self._pipe['control'],
                                                                   ids=self._ids,
                                                                   stats_source=self._statistics_source,
+                                                                  mask_region_icons=self._mask_icons_,
+                                                                  mask_region_button=self._mask_add_sub['mask'],
+                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                  contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
                                                                else mask_sub_chan( )''' )
+
+        self._mask_add_sub['mask'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                   contour_ds=self._bitmask_contour_ds,
+                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                   region=self._bitmask_contour_maskmod,
+                                                                   selector=self._bitmask_color_selector,
+                                                                   mask_region_button=self._mask_add_sub['mask'],
+                                                                   mask_region_icons=self._mask_icons_,
+                                                                   source=self._image_source,
+                                                                   status=self._status_div ),
+                                                        code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                             '''if ( mask_region_button.icon == mask_region_icons['on'] ) maskmod_region_clear( )
+                                                                else maskmod_region_set( region )''' )
+
 
         if self._slider:
             ###
@@ -1741,10 +2021,86 @@ class CubeMask:
             ### ... NEED TO switch statistics updates to use _image_source.cur_chan instead...
             ### ... ALSO statistics would be based upon the SELECTION SET...
             ###
-            self._cb['slider'] = CustomJS( args=dict( source=self._image_source, slider=self._slider,
-                                                      stats_source=self._statistics_source ),
-                                           code=self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats'] )
+            self._cb['slider'] = CustomJS( args=dict( isource=self._image_source, slider=self._slider,
+                                                      stats_source=self._statistics_source,
+                                                      pixlabel = self._pixel_tracking_text,
+                                                      min=self._cm_adjust['min input'],
+                                                      max=self._cm_adjust['max input'],
+                                                      span1=self._cm_adjust['span one'],
+                                                      span2=self._cm_adjust['span two'],
+                                                      histogram=self._cm_adjust['histogram'],
+                                                      go_to=self._goto, cb=self._slider_callback,
+                                                      ids=self._ids, ctrl=self._pipe['control'], pix_wrld=self._coord_ctrl_dropdown ),
+                                           code=self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
+
             self._slider.js_on_change( 'value', self._cb['slider'] )
+
+        if self._goto:
+            self._goto_stokes.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                stokes=self._channel_ctrl_stokes_dropdown,
+                                                                goto_stokes=self._goto_stokes ),
+                                                     ### 'stokes.label' is updated after the channel has changed to allow for subsequent
+                                                     ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
+                                                     ###  convergence data is available...
+                                                     code= self._js['stokes-change'] % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
+                                                                                         zip(range(len(self._stokes_labels)),self._stokes_labels) ) ) + ' : 0' ) ) )
+            self._goto_txt.js_on_event( 'mouseenter', CustomJS( args=dict( slider=self._slider, dropdown=self._goto_stokes ),
+                                                                code='''cb_obj.origin._has_focus = true
+                                                                        const view = Bokeh.find.view(cb_obj.origin)
+                                                                        view.input_el.focus( )
+                                                                        cb_obj.origin.value = ''
+                                                                        dropdown.label = "Go To"''' ) )
+            self._goto_txt.js_on_event( 'mouseleave', CustomJS( args=dict( slider=self._slider, dropdown=self._goto_stokes,
+                                                                           stokes=self._channel_ctrl_stokes_dropdown ),
+                                                                code='''const view = Bokeh.find.view(slider)
+                                                                        dropdown.label = `${stokes.label} Channel`
+                                                                        document.activeElement.blur( )
+                                                                        if ( slider ) cb_obj.origin.value = String(slider.value)
+                                                                        cb_obj.origin._has_focus = false''' ) )
+
+            self._goto_txt.js_on_event( ValueSubmit, CustomJS( args=dict( img=self._image_source,
+                                                                          slider=self._slider,
+                                                                          status=self._status_div ),
+                                                               code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
+                                                                       if ( values.length > 2 ) {
+                                                                           status._error_set = true
+                                                                           status.text = '<p>enter at most two indexes</p>'
+                                                                       } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
+                                                                           status._error_set = true
+                                                                           status.text = '<p>invalid channel entered</p>'
+                                                                       } else {
+                                                                           if ( status._error_set ) {
+                                                                               status._error_set = false
+                                                                               status.text = '<p/>'
+                                                                           }
+                                                                           if ( values.length == 1 ) {
+                                                                               if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
+                                                                                   status._error_set = false
+                                                                                   status.text= `<p>moving to channel ${values[0]}</p>`
+                                                                                   slider.value = values[0]
+                                                                               } else {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                               }
+                                                                           } else if ( values.length == 2 ) {
+                                                                               if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
+                                                                                   status._error_set = true
+                                                                                   status.text = `<p>channel ${values[0]} out of range</p>`
+                                                                               } else {
+                                                                                   if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
+                                                                                       status._error_set = true
+                                                                                       status.text = `<p>stokes ${values[1]} out of range</p>`
+                                                                                   } else {
+                                                                                       status._error_set = false
+                                                                                       status.text= `<p>moving to channel ${values[0]}/${values[1]}</p>`
+                                                                                       slider.value = values[0]
+                                                                                       img.channel( values[0], values[1] )
+                                                                                   }
+                                                                               }
+                                                                           }
+                                                                       }
+                                                                       if ( ! status._error_set ) cb_obj.origin.value = "" ''' ) )
+
 
         if self._statistics_mask:
             self._statistics_mask.js_on_click( CustomJS( args=dict( source=self._image_source,
@@ -1777,7 +2133,6 @@ class CubeMask:
                                                                           if self._mask_path is None else "" ) +
                                                        '''casalib.hotkeys.setScope( )''' ) )
 
-        stokes_labels = self._image_source.stokes_labels( )
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_ctrl,
                                                                           stokes_label=self._channel_ctrl_stokes_dropdown ),
                                                                ### the label manipulation portion of 'code' is '' when self._channel_ctrl is None
@@ -1785,7 +2140,7 @@ class CubeMask:
                                                                code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
                                                                            stokes_label.label = ( %s );''' %
                                                                         ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
-                                                                                          zip( range(len(stokes_labels)), stokes_labels )) ) + " : ''" ) if
+                                                                                          zip( range(len(self._stokes_labels)), self._stokes_labels )) ) + " : ''" ) if
                                                                         self._channel_ctrl else '' ) +
                                                                       ( ( '''if ( casalib.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                           self._slider else '') +
@@ -1796,19 +2151,21 @@ class CubeMask:
             ###
             ### allow switching to stokes planes
             ###
-            self._channel_ctrl_stokes_dropdown.menu = stokes_labels
-            self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source ),
-                                                                       code='''if ( cb_obj.item != cb_obj.origin.label ) {
-                                                                                   cb_obj.origin.label = cb_obj.item
-                                                                                   source.channel( source.cur_chan[1], %s )
-                                                                               }''' % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
-                                                                                                         zip(range(len(stokes_labels)),stokes_labels) ) ) + ' : 0' ) ) )
+            self._channel_ctrl_stokes_dropdown.menu = self._stokes_labels
+            self._channel_ctrl_stokes_dropdown.js_on_click( CustomJS( args=dict( source=self._image_source,
+                                                                                 stokes=self._channel_ctrl_stokes_dropdown,
+                                                                                 goto_stokes=self._goto_stokes ),
+                                                                       ### 'label' is updated after the channel has changed to allow for subsequent
+                                                                       ###  updates (e.g. convergence plot) to update based upon 'label' after fresh
+                                                                       ###  convergence data is available...
+                                                                       code= self._js['stokes-change'] % ( ' : '.join( map( lambda x: f'''cb_obj.item == '{x[1]}' ? {x[0]}''',
+                                                                                                         zip(range(len(self._stokes_labels)),self._stokes_labels) ) ) + ' : 0' ) ) )
 
         ###
         ### cursor movement code snippets
         movement_code_spectrum_update = ''
         movement_code_pixel_update = ''
-        if self._spectra:
+        if self._spectrum:
             ###
             ### this is set up in connect( ) because slider must be updated if it is used othersize
             ### channel should be directly set (previously the slider was implicitly set when a new
@@ -1822,90 +2179,80 @@ class CubeMask:
                                                              //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
                                                     }''' )
 
-            self._spectra.js_on_event('tap', self._cb['sptap'])
+            self._spectrum.js_on_event('tap', self._cb['sptap'])
 
             ###
             ### code for spectrum update due to cursor movement
             ###
-            movement_code_spectrum_update = """if ( ! specfig.disabled && ! imagefig.disabled ) {
-                                                   if ( cb_obj.event_type === 'move' && state.frozen !== true ) {
-                                                       var geometry = cb_data['geometry'];
-                                                       var x_pos = Math.floor(geometry.x);
-                                                       var y_pos = Math.floor(geometry.y);
-                                                       specds.spectra( x_pos, y_pos, 0, true )
-                                                       if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                           specfig.title.text = `Spectrum (${x_pos},${y_pos})`
-                                                       } else {
-                                                           specfig.title.text = 'Spectrum'
+            movement_code_spectrum_update = """if ( cb_obj.event_type === 'move' ) {
+                                                   if ( ctrl._freeze_cursor_update == false ) {
+                                                       var geometry = cb_data['geometry']
+                                                       var x_pos = Math.floor(geometry.x)
+                                                       var y_pos = Math.floor(geometry.y)
+                                                       if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                           isource._current_pos = [ x_pos, y_pos ]
+                                                           if ( ! specfig.disabled && ! imagefig.disabled ) {
+                                                               /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                               update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                                ( spec ) => specds.data = spec.spectrum )
+                                                           }
                                                        }
-                                                   } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                       state.frozen = false
-                                                   } else if ( cb_obj.event_name === 'tap' ) {
-                                                       state.frozen = true
                                                    }
+                                               } else if ( cb_obj.event_name === 'mouseenter' ) {
+                                                   ctrl._freeze_cursor_update = false
                                                }"""
-
 
         if self._pixel_tracking_text:
             ###
             ### code for updating pixel value due to cursor movements
             ###
-            movement_code_pixel_update = '''if ( cb_obj.event_type === 'move' ) {
-                                                function update_pixel( msg ) {
-                                                    if ( msg.update &&
-                                                         msg.update.pixel &&
-                                                         msg.update.index &&
-                                                         msg.update.index.length == 2 ) {
-                                                        const digits = 5
-                                                        if ( pix_wrld && pix_wrld.label == 'pixel' ) {
-                                                            pixlabel.text = '' + msg.update.index[0] + ', ' + Number(msg.update.index[1]) +
-                                                                            " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
-                                                        } else {
-                                                            const pt = new casalib.coordtxl.Point2D( Number(msg.update.index[0]),
-                                                                                                    Number(msg.update.index[1]) )
-                                                            imageds.wcs( ).imageToWorldCoords(pt,false)
-                                                            let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                            pixlabel.text = wcstr + " \u2192 " + msg.update.pixel.toExponential(digits) +
-                                                                            ('mask' in msg.update ? ` m=${msg.update.mask}` : '')
+            movement_code_pixel_update = self._js['pixel-update-func'] + '''
+                                            if ( cb_obj.event_type === 'move' ) {
+                                                if ( ctrl._freeze_cursor_update == false ) {
+                                                    var geometry = cb_data['geometry']
+                                                    var x_pos = Math.floor(geometry.x)
+                                                    var y_pos = Math.floor(geometry.y)
+                                                    if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                        isource._current_pos = [ x_pos, y_pos ]
+                                                        if ( ! pixlabel.disabled ) {
+                                                            /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                            update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                             ( spec ) => {
+                                                                                 refresh_pixel_display( spec.index,
+                                                                                                        spec.spectrum.y[spec.chan[1]],
+                                                                                                        'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                                        pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                             } )
                                                         }
-                                                    }
-                                                }
-                                                if ( state.frozen == false ) {
-                                                    var geometry = cb_data['geometry'];
-                                                    var x_pos = Math.floor(geometry.x);
-                                                    var y_pos = Math.floor(geometry.y);
-                                                    if ( isFinite(x_pos) && isFinite(y_pos) ) {
-                                                        ctrl.send( ids['pixel-value'],
-                                                                   { action: 'pixel',
-                                                                     value: { chan: imageds.cur_chan, index: [ x_pos, y_pos ] } },
-                                                                     update_pixel, true )
                                                     }
                                                 }
                                             }'''
 
         if movement_code_spectrum_update or movement_code_pixel_update:
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectra, specfig=self._spectra, imagefig=self._image,
-                                                     imageds=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
-                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
-                                                     state=dict(frozen=False) ),
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum, imagefig=self._image,
+                                                     isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
+                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown ),
                                           code = movement_code_spectrum_update + movement_code_pixel_update )
 
             self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
 
             self._image.js_on_event('mouseenter',self._cb['impos'])
-            self._image.js_on_event('tap',self._cb['impos'])
             self._image.add_tools(self._hover['image'])
 
 
         ## this is in the connect function to allow for access to self._statistics_source
         self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
                                                               stats_source=self._statistics_source, chan_slider=self._slider,
+                                                              mask_region_button=self._mask_add_sub['mask'],
+                                                              mask_region_icons=self._mask_icons_,
+                                                              mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                              contour_ds=self._bitmask_contour_ds,
                                                               status=self._status_div, statprec=7 ),
-                                                              code='let source = cb_obj;' +
+                                                              code='''let source = cb_obj;''' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
+                                                                     self._js['contour-maskmod'] +
                                                                      self._js['key-state-funcs'] + self._js['setup-key-mgmt']
-                                                                     if self._mask_path is None else self._js['setup-key-mgmt'] ) +
+                                                                     if self._mask_path is None else self._js['contour-maskmod'] + self._js['setup-key-mgmt'] ) +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
                                                                       source.done = ( ) => {
@@ -1949,6 +2296,7 @@ class CubeMask:
         if self._bitmask_color_selector:
             self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
                                                                                      contour=self._bitmask_contour,
+                                                                                     region=self._bitmask_contour_maskmod,
                                                                                      bitrep=self._bitmask_transparency_button,
                                                                                      annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
@@ -1963,34 +2311,33 @@ class CubeMask:
                                                                         cm.palette[0] = cb_obj.color
                                                                     }
                                                                     cm.change.emit( )
-                                                                    contour.glyph.line_color = cb_obj.color''' ) )
+                                                                    contour.glyph.line_color = cb_obj.color
+                                                                    region.glyph.line_color = cb_obj.color''' ) )
 
         self._image.js_on_event( SelectionGeometry,
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
-                                                      selector=self._bitmask_color_selector ),
-                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
+                                                      selector=self._bitmask_color_selector,
+                                                      mask_region_button=self._mask_add_sub['mask'],
+                                                      mask_region_icons=self._mask_icons_,
+                                                      contour_ds=self._bitmask_contour_ds,
+                                                      mask_region_ds=self._bitmask_contour_maskmod_ds ),
+                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
                                                    self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
-                                                   if self._mask_path is None else (
+                                                   if self._mask_path is None else  self._js['contour-maskmod'] + (
                                                    ### selector indicates if a on-disk mask is being used
                                                    '''if ( source._masking_enabled ) {
                                                           const geometry = cb_obj['geometry']
                                                           if ( geometry.type === 'rect' ) {
                                                               // rectangle drawing complete
-                                                              annotations[0].xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
-                                                              annotations[0].ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
-                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
-                                                              annotations[0].line_width = 3
-                                                              annotations[0].line_dash = 'dashed'
-                                                              annotations[0].line_color = selector.color
+                                                              maskmod_region_set( annotations[0],
+                                                                                  [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
+                                                                                  [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
                                                           } else if ( geometry.type === 'poly' && cb_obj.final ) {
                                                               // polygon drawing complete
-                                                              annotations[0].xs = [ ].slice.call(geometry.x)
-                                                              annotations[0].ys = [ ].slice.call(geometry.y)
-                                                              annotations[0].fill_color = 'rgba(0, 0, 0, 0)'
-                                                              annotations[0].line_width = 3
-                                                              annotations[0].line_dash = 'dashed'
-                                                              annotations[0].line_color = selector.color
+                                                              maskmod_region_set( annotations[0],
+                                                                                  [ ].slice.call(geometry.x),
+                                                                                  [ ].slice.call(geometry.y) )
                                                           }
                                                       }''' ) ) )
 
@@ -2075,13 +2422,14 @@ class CubeMask:
                              <tr><td><b>option</b>-<b>shift</b>-<b>v</b></td><td>paste selection set into all channels along the current stokes axis</td></tr>
                              <tr><td><b>option</b>-<b>delete</b></td><td>delete polygon indicated by the cursor</td></tr>''',
                          'mask': '''
+                             <tr><td><b>f</b></td><td>freeze cursor tracking updates until the mouse <b>re-enters</b> the channel plot</td></tr>
                              <tr><td><b>a</b></td><td>add region to the mask for the current channel</td></tr>
                              <tr><td><b>s</b></td><td>subtract region from the mask for the current channel</td></tr>
-                             <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
                              <tr><td><b>shift</b>-<b>a</b></td><td>add region to the mask for all channels</td></tr>
                              <tr><td><b>shift</b>-<b>s</b></td><td>subtract region from the mask for all channels</td></tr>
+                             <tr><td><b>~</b></td><td>invert mask values for the current channel</td></tr>
                              <tr><td><b>!</b></td><td>invert mask values for all channels</td></tr>
-                             <tr><td><b>escape</b></td><td>remove displayed region</td></tr>
+                             <tr><td><b>escape</b></td><td>unselect the selected region</td></tr>
                              <tr><td><b>down</b></td><td>move selected region down one pixel</td></tr>
                              <tr><td><b>up</b></td><td>move selected region up one pixel</td></tr>
                              <tr><td><b>left</b></td><td>move selected region one pixel to the left</td></tr>

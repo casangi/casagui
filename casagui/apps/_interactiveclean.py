@@ -33,8 +33,9 @@ import asyncio
 import shutil
 import websockets
 from uuid import uuid4
+from html import escape as html_escape
 from contextlib import asynccontextmanager
-from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step
+from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step, InlineStyleSheet
 from bokeh.events import ModelEvent, MouseEnter
 from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
@@ -43,32 +44,17 @@ from bokeh.io import reset_output as reset_bokeh_output, output_notebook
 from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
-from ..bokeh.models import TipButton, Tip
-from ..utils import resource_manager, reset_resource_manager, is_notebook, is_intstr
-from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
+from ..bokeh.models import TipButton, Tip, EvTextInput
+from ..utils import resource_manager, reset_resource_manager, is_notebook
 
-try:
-    ## gclean version number needed for proper interactive clean behavior
-    # pylint: disable=no-name-in-module
-    from casatasks.private.imagerhelpers._gclean import _GCV004
-    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-    # pylint: enable=no-name-in-module
-except:
-    try:
-        ###
-        ### enable this warning when casa6 a usable _gclean.py (i.e. compatibility is not the default)
-        ###
-        #print('warning: using tclean compatibility layer...')
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import _GCV004
-        from ..private.compatibility.casatasks.private.imagerhelpers._gclean import gclean as _gclean
-    except:
-        _gclean = None
-        from casagui.utils import warn_import
-        warn_import('casatasks')
+# pylint: disable=no-name-in-module
+from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
+from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+# pylint: enable=no-name-in-module
 
 from casagui.utils import find_ws_address, convert_masks
 from casagui.toolbox import CubeMask, AppContext
-from casagui.bokeh.components import svg_icon
+from casagui.bokeh.utils import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
 
@@ -267,39 +253,6 @@ class InteractiveClean:
                         'flux':     'forestgreen' }
 
         ###
-        ### Auto Masking et al.
-        self._usemask = 'user'
-
-        ###
-        ### If the user has supplied a mask, do NOT modify it after initial tclean/deconvolve call...
-        ### otherwise if the 'initial_mask_pixel' is a boolean then initialize the mask pixels
-        ### to 'initial_mask_pixel' before loading the GUI...
-        ###
-        if type(initial_mask_pixel) is bool:
-            self._reset_mask_pixels = True
-            self._reset_mask_pixels_value = initial_mask_pixel
-        else:
-            self._reset_mask_pixels = False
-            self._reset_mask_pixels_value = None
-
-        ###
-        ### set up masking mode based on 'usemask' and 'mask'
-        ###
-        if usemask == 'auto-multithresh':
-            self._usemask = 'auto-multithresh'
-        elif usemask == 'pb':
-            self._usemask = 'pb'
-        elif usemask == 'user':
-            if mask != '':
-                if isinstance( mask, str ) and os.path.isdir( mask ):
-                    ### user has supplied a mask on disk
-                    self._reset_mask_pixels = False
-                else:
-                    raise RuntimeError( f'''user supplied mask does not exist or is not a directory: {mask}''' )
-        else:
-            raise RuntimeError( f'''unrecognized mask type: {usemask}''' )
-
-        ###
         ### clean generator
         ###
         if _gclean is None:
@@ -317,7 +270,7 @@ class InteractiveClean:
                                noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold,
                                minbeamfrac=minbeamfrac, growiterations=growiterations, dogrowprune=dogrowprune,
                                minpercentchange=minpercentchange, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel, nmajor=nmajor,
-                               usemask=self._usemask, mask=mask
+                               usemask=usemask, mask=mask
                       )
         ###
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
@@ -354,7 +307,10 @@ class InteractiveClean:
 #       if not os.path.isdir(webpage_dirname):
 #          os.makedirs(webpage_dirname)
         self._webpage_path = os.path.abspath(webpage_dirname)
-        self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        if deconvolver == 'mtmfs':
+            self._residual_path = ("%s.residual.tt0" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
+        else:
+            self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
         self._cb = { }
@@ -398,16 +354,24 @@ class InteractiveClean:
                                            }''',
 
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     ### -- flux_src._convergence_data is used to store the complete                       --
+                     ### -- flux_src._convergence_data is used to store the complete                              --
+                     ### --                                                                                       --
+                     ### -- The "Insert here ..." code seems to be called when when the stokes plane is changed   --
+                     ### -- but there have been no tclean iterations yet...                                       --
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'update-converge': '''function update_convergence( msg ) {
                                                let convdata
-                                               if ( typeof msg === 'undefined' && '_convergence_data' in flux_src ) {
-                                                   // use complete convergence cache attached to flux_src...
-                                                   // get the convergence data for channel and stokes
-                                                   const pos = img_src.cur_chan
-                                                   convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
-                                                   //          chan-------------------------------^^^^^^      ^^^^^^----stokes
+                                               if ( typeof msg === 'undefined' ) {
+                                                   if ( '_convergence_data' in flux_src ) {
+                                                       // use complete convergence cache attached to flux_src...
+                                                       // get the convergence data for channel and stokes
+                                                       const pos = img_src.cur_chan
+                                                       convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
+                                                       //          chan-------------------------------^^^^^^      ^^^^^^----stokes
+                                                   } else {
+                                                       //console.log( 'Insert code here to get convergence data when no cache and no update (msg) is available...' )
+                                                       return
+                                                   }
                                                } else if ( 'result' in msg ) {
                                                    // update based on msg received from convergence update message
                                                    convdata = msg.result.converge
@@ -485,7 +449,9 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = true
                                                if ( go_to ) go_to.disabled = true
                                                image_fig.disabled = true
-                                               if ( spectra_fig ) spectra_fig.disabled = true
+                                               stokes_dropdown.disabled = true
+                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = true }
+                                               if ( spectrum_fig ) spectrum_fig.disabled = true
                                                if ( with_stop ) {
                                                    btns['stop'].disabled = true
                                                } else {
@@ -504,7 +470,9 @@ class InteractiveClean:
                                                if ( slider ) slider.disabled = false
                                                if ( go_to ) go_to.disabled = false
                                                image_fig.disabled = false
-                                               if ( spectra_fig ) spectra_fig.disabled = false
+                                               stokes_dropdown.disabled = false
+                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = false }
+                                               if ( spectrum_fig ) spectrum_fig.disabled = false
                                                if ( ! only_stop ) {
                                                    btns['continue'].disabled = false
                                                    btns['finish'].disabled = false
@@ -518,6 +486,7 @@ class InteractiveClean:
                                                update_convergence( )
                                            } else {
                                                // update convergence plot with a request to python
+                                               const pos = img_src.cur_chan
                                                conv_pipe.send( convergence_id,
                                                                { action: 'update', value: [ pos[0], cb_obj.value ] },
                                                                  //      stokes-------------^^^^^^  ^^^^^^^^^^^^^^--------chan
@@ -537,12 +506,12 @@ class InteractiveClean:
                                                                  'Stopping criteria encountered',
                                                                  'Unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
-                                                   stopstatus.text = '<div>' +
+                                                   stopstatus.text = '<p>' +
                                                                      stopstr[ status < 0 || status >= stopstr.length ?
                                                                               stopstr.length - 1 : status ] +
-                                                                     '</div>'
+                                                                     '</p>'
                                                } else {
-                                                   stopstatus.text = `<div>${status}</div>`
+                                                   stopstatus.text = `<p>${status}</p>`
                                                }
                                            }''',
 
@@ -576,6 +545,16 @@ class InteractiveClean:
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
                                                    }
+                                               } else if ( msg.result == 'converged' ) {
+                                                   state.mode = 'interactive'
+                                                   btns['stop'].button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                                   refresh( msg )
                                                } else if ( msg.result === 'update' ) {
                                                    if ( 'cmd' in msg ) {
                                                        update_log( msg.cmd )
@@ -671,22 +650,13 @@ class InteractiveClean:
         self._init_pipes( )
 
         self._status['log'] = self._clean.cmds( )
-        self._status['stopcode']= self._cube.status_text( "<div>initial residual image</div>" if image_channels > 1 else "<div>initial <b>single-channel</b> residual image</div>" )
+        self._status['stopcode']= self._cube.status_text( "<p>initial residual image</p>" if image_channels > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230 )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
         ###
         async def clean_handler( msg, self=self ):
             if msg['action'] == 'next' or msg['action'] == 'finish':
-
-                if 'nmajor' in msg['value']:
-                    if is_intstr(msg['value']['nmajor']):
-                        nm = int(msg['value']['nmajor'])
-                        if nm == 0 or nm < -1:
-                            ### nm == -1 means do not consider nmajor as part of the stopping decision
-                            return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit must be >= -1" )
-                    else:
-                        return dict( result='error', stopcode=1, iterdone=0, majordone=0, stopdesc="major cycle limit is not an integer" )
 
                 if 'mask' in msg['value']:
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] is not None and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
@@ -707,39 +677,30 @@ class InteractiveClean:
                     #msg['value']['mask'] = self._mask_path
                     pass
 
-                iteration_limit = int(msg['value']['niter'])
-                self._clean.update( dict( niter=msg['value']['niter'],
-                                          cycleniter=msg['value']['cycleniter'],
-                                          nmajor=msg['value']['nmajor'],
-                                          threshold=msg['value']['threshold'],
-                                          cyclefactor=msg['value']['cyclefactor'] ) )
+                err,errmsg = self._clean.update( dict( niter=msg['value']['niter'],
+                                                       cycleniter=msg['value']['cycleniter'],
+                                                       nmajor=msg['value']['nmajor'],
+                                                       threshold=msg['value']['threshold'],
+                                                       cyclefactor=msg['value']['cyclefactor'] ) )
 
+                if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
+
+                iteration_limit = int(msg['value']['niter'])
                 stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
 
-                if len(self._convergence_data['chan']) == 0 and stopcode == 7 or stopcode == -1:
+                if len(self._convergence_data['chan']) == 0 or stopcode == -1:
                     ### stopcode == -1 indicates an error condition within gclean
                     return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
-                if len(self._convergence_data['chan']) == 0:
-                    return dict( result='no-action', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=None, iterdone=0, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
-                if len(self._convergence_data['chan']) * len(self._convergence_data['chan'][0]) > self._threshold_chan or \
-                   len(self._convergence_data['chan'][0][0]['iterations']) > self._threshold_iterations:
-                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ), convergence=None,
-                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, stopdesc=stopdesc )
-                else:
-                    return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                                 convergence=self._convergence_data['chan'],
-                                 iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                                 majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
-
-                return dict( result='update', stopcode=stopcode, cmd=self._clean.cmds( ),
+                ### stopcode != 0 indicates that some stopping criteria has been reached
+                ###               this will also catch errors as well as convergence
+                ###               (so 'converged' isn't quite right...)
+                return dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=self._clean.cmds( ),
                              convergence=self._convergence_data['chan'],
                              iterdone=iteration_limit - iterleft, iterleft=iterleft,
                              majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
+
             elif msg['action'] == 'stop':
                 self.__stop( )
                 return dict( result='stopped', update=dict( ) )
@@ -790,15 +751,16 @@ class InteractiveClean:
         ### help page for cube interactions
         ###
         help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orang) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
+                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orange) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
 
         ###
         ### button to display the tclean log
         ###
         self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
-                                       icon=svg_icon(icon_name="iclean-log", size=25),
+                                       icon=svg_icon(icon_name="bp-application-sm", size=25),
                                        tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="bottom" ),
-                                       margin=(-1, 0, -10, 0), button_type='light' )
+                                       margin=(-1, 0, -10, 0), button_type='light',
+                                       stylesheets=[ InlineStyleSheet( css='''.bk-btn { border: 0px solid #ccc;  padding: 0 var(--padding-vertical) var(--padding-horizontal); margin-top: 3px; }''' ) ] )
         self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
                                                  code='''function format_log( elem ) {
                                                              return `<html>
@@ -857,7 +819,7 @@ class InteractiveClean:
                     </div>'''
 
         hover = HoverTool( tooltips=TOOLTIPS )
-        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ], title='Convergence',
+        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ],
                                            x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual',
                                            sizing_mode='stretch_width' )
 
@@ -902,72 +864,39 @@ class InteractiveClean:
         self._fig['image-source'] = self._cube.js_obj( )
 
         if image_channels > 1:
-            self._control['goto'] = TextInput( title="goto channel", value="", width=90 )
-            self._fig['slider'] = self._cube.slider( )
-            self._fig['spectra'] = self._cube.spectra( width=450 )
-
-            self._fig['slider'].js_on_change( 'value',
-                                              CustomJS( args=dict( flux_src=self._flux_data,
-                                                                   residual_src=self._residual_data,
-                                                                   threshold_src=self._cyclethreshold_data,
-                                                                   convergence_fig=self._fig['convergence'],
-                                                                   conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                                   img_src=self._fig['image-source'],
-                                                                   stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                        code='''const pos = img_src.cur_chan;''' +
-                                                                self._js['update-converge'] + self._js['slider-update'] ) )
-
-            self._control['goto'].js_on_change( 'value', CustomJS( args=dict( img=self._cube.js_obj( ),
-                                                                              slider=self._fig['slider'],
-                                                                              status=self._status['stopcode'] ),
-                                                                   code='''let values = cb_obj.value.split(/[ ,]+/).map((v,) => parseInt(v))
-                                                                           if ( values.length > 2 ) {
-                                                                             status._error_set = true
-                                                                             status.text = '<div>enter at most two indexes</div>'
-                                                                           } else if ( values.filter((x) => x < 0 || isNaN(x)).length > 0 ) {
-                                                                             status._error_set = true
-                                                                             status.text = '<div>invalid channel entered</div>'
-                                                                           } else {
-                                                                             if ( status._error_set ) {
-                                                                               status._error_set = false
-                                                                               status.text = '<div/>'
-                                                                             }
-                                                                             if ( values.length == 1 ) {
-                                                                               if ( values[0] >= 0 && values[0] < img.num_chans[1] ) {
-                                                                                 status.text= `<div>moving to channel ${values[0]}</div>`
-                                                                                 slider.value = values[0]
-                                                                               } else {
-                                                                                 status._error_set = true
-                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
-                                                                               }
-                                                                             } else if ( values.length == 2 ) {
-                                                                               if ( values[0] < 0 || values[0] >= img.num_chans[1] ) {
-                                                                                 status._error_set = true
-                                                                                 status.text = `<div>channel ${values[0]} out of range</div>`
-                                                                               } else {
-                                                                                 if ( values[1] < 0 || values[1] >= img.num_chans[0] ) {
-                                                                                   status._error_set = true
-                                                                                   status.text = `<div>stokes ${values[1]} out of range</div>`
-                                                                                 } else {
-                                                                                   status.text= `<div>moving to channel ${values[0]}/${values[1]}</div>`
-                                                                                   slider.value = values[0]
-                                                                                   img.channel( values[0], values[1] )
-                                                                                 }
-                                                                               }
-                                                                             }
-                                                                           }''' ) )
+            self._control['goto'] = self._cube.goto( )
+            self._fig['spectrum'] = self._cube.spectrum( width=450 )
+            self._fig['slider'] = self._cube.slider( CustomJS( args=dict( flux_src=self._flux_data,
+                                                                          residual_src=self._residual_data,
+                                                                          threshold_src=self._cyclethreshold_data,
+                                                                          convergence_fig=self._fig['convergence'],
+                                                                          conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
+                                                                          img_src=self._fig['image-source'],
+                                                                          stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                               code=self._js['update-converge'] + self._js['slider-update'] ),
+                                                     show_value=False, title='', margin=(14,5,5,5), width=None, width_policy='max'
+                                                   )
         else:
             self._control['goto'] = None
             self._fig['slider'] = None
-            self._fig['spectra'] = None
+            self._fig['spectrum'] = None
 
+        self._channel_ctrl = self._cube.channel_ctrl( )
 
+        ### Stokes 'label' should be updated AFTER the channel update has happened
+        self._channel_ctrl[1].child.js_on_change( 'label',
+                                                  CustomJS( args=dict( img_src=self._fig['image-source'],
+                                                                       flux_src=self._flux_data,
+                                                                       residual_src=self._residual_data,
+                                                                       threshold_src=self._cyclethreshold_data,
+                                                                       stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                            code=self._js['update-converge'] + '''update_convergence( )''' ) )
+        self._fig['cursor_pixel_text'] = self._cube.pixel_tracking_text( )
         self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
                                                  state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
                                                  ctrl_pipe=self._pipe['control'], conv_pipe=self._pipe['converge'],
                                                  ids=self._ids['clean'],
                                                  img_src=self._fig['image-source'],
-                                                 #spec_src=self._image_spectra,
                                                  niter=self._control['niter'], cycleniter=self._control['cycleniter'],
                                                  nmajor=self._control['nmajor'],
                                                  threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
@@ -979,7 +908,9 @@ class InteractiveClean:
                                                  logbutton=self.__log_button,
                                                  slider=self._fig['slider'],
                                                  image_fig=self._fig['image'],
-                                                 spectra_fig=self._fig['spectra'],
+                                                 spectrum_fig=self._fig['spectrum'],
+                                                 stokes_dropdown = self._channel_ctrl[1].child,
+                                                 cursor_tracking_text = self._fig['cursor_pixel_text'],
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
                                                  go_to = self._control['goto'],
@@ -1059,14 +990,14 @@ class InteractiveClean:
         ### For cube imaging, tabify the spectrum and convergence plots
         ###
         self._spec_conv_tabs = None
-        if self._fig['spectra']:
+        if self._fig['spectrum']:
             self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
-                                                TabPanel(child=layout([self._fig['spectra']], sizing_mode='stretch_width'), title='Spectrum') ],
+                                                TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
 
         self._fig['layout'] = column(
                                   row(
-                                      column( row( self._cube.channel_ctrl( ), self._cube.coord_ctrl( ),
+                                      column( row( *self._channel_ctrl, self._cube.coord_ctrl( ),
                                                    Spacer(height=help_button.height, sizing_mode="scale_width"),
                                                    self._cube.palette( ),
                                                    mask_clean_notclean_pick,
@@ -1076,7 +1007,15 @@ class InteractiveClean:
                                                    help_button,
                                                   ),
                                               self._fig['image'],
-                                              self._cube.pixel_tracking_text( ),
+                                              row(
+                                                  self._fig['cursor_pixel_text'],
+                                                  self._control['goto'] if self._control['goto'] else Div( ),
+                                                  Tip( self._fig['slider'],
+                                                       tooltip=Tooltip( content=HTML("slide control to the desired channel"),
+                                                                        position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
+                                                  self._cube.tapedeck( ),
+                                                  width_policy='max', height_policy='min',
+                                              ),
                                               height_policy='max', width_policy='max',
                                       ),
                                       column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],
@@ -1091,26 +1030,20 @@ class InteractiveClean:
                                                                                        Tip( self._control['threshold'],
                                                                                             tooltip=Tooltip( content=HTML( 'stopping threshold' ),
                                                                                                              position='bottom' ) ) ),
-                                                                                  row( Tip( self._control['goto'],
-                                                                                            tooltip=Tooltip( content=HTML( 'to go to a specific channel, <b>enter</b> the channel number and press <b>return</b>' ),
-                                                                                                             position='bottom' ) ) if self._fig['slider'] else Div( ),
-                                                                                       row( Tip( self._control['cycleniter'],
-                                                                                                 tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
-                                                                                                                  position='bottom' ) ),
-                                                                                            Tip( self._control['cycle_factor'],
-                                                                                                 tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
-                                                                                                                  position='bottom_left' ) ), background="lightgray" ) ),
+                                                                                  row( Tip( self._control['cycleniter'],
+                                                                                            tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
+                                                                                                             position='bottom' ) ),
+                                                                                       Tip( self._control['cycle_factor'],
+                                                                                            tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
+                                                                                                             position='bottom_left' ) ), background="lightgray" ),
                                                                                   row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
                                                                     title='Iteration' ),
                                                            TabPanel( child=self._cube.colormap_adjust( ),
                                                                      title='Colormap' ),
-                                                           TabPanel( child=self._cube.statistics( width=280 ),
+                                                           TabPanel( child=self._cube.statistics( width=340 ),
                                                                      title='Statistics' ) ],
                                                     sizing_mode='stretch_width' ),
-                                              Tip( self._fig['slider'],
-                                                   tooltip=Tooltip( content=HTML("slide control to the desired channel"),
-                                                                    position="top" ) ) if self._fig['slider'] else Div( ),
-                                              height_policy='max', max_width=320
+                                              height_policy='max', width=340
                                       ),
                                       width_policy='max', height_policy='max' ),
                                   row(
@@ -1174,13 +1107,6 @@ class InteractiveClean:
         self.__reset( )
         self._init_pipes()
         self._cube._init_pipes()
-        ###
-        ### The first time through, reinitialize the mask pixel values if the
-        ### user has not supplied a mask...
-        ###
-        if self._reset_mask_pixels:
-            self._reset_mask_pixels = False
-            self._cube.set_all_mask_pixels(self._reset_mask_pixels_value)
 
     @asynccontextmanager
     async def serve( self ):

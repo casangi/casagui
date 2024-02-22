@@ -21,7 +21,7 @@ sys.path.insert(0, abspath(join(dirname(__file__),'..','..')))         # For aut
 # -- Project information -----------------------------------------------------
 
 project = 'casagui'
-copyright = '2021,2022, Associated Universities, Inc. Washington DC, USA.'
+copyright = '2021,2022,2023,2024 Associated Universities, Inc. Washington DC, USA.'
 author = 'CASA visualization team'
 
 # The full version, including alpha/beta/rc tags
@@ -34,6 +34,15 @@ release = '0.0.1'
 #
 from links.link import *
 from links import *
+
+###
+### add color...
+###     https://stackoverflow.com/questions/3702865/sphinx-restructuredtext-set-color-for-a-single-word/60991308#60991308
+###
+rst_prolog = """
+ .. include:: <s5defs.txt>
+
+ """
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -75,6 +84,10 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# These paths are either relative to html_static_path
+# or fully qualified paths (eg. https://...)
+html_css_files = ['css/s4defs-roles.css']
 
 ###
 ### cause documentation for class.__call__ to be generated

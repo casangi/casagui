@@ -26,4 +26,3 @@
 #
 ########################################################################
 '''Custom Bokeh GUI Components'''
-from ._svg_icon import svg_icon

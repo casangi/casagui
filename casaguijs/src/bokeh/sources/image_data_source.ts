@@ -22,7 +22,7 @@ export namespace ImageDataSource {
   export type Props = ColumnDataSource.Props & {
       init_script: p.Property<CallbackLike0<ImageDataSource> | null>;
       image_source: p.Property<ImagePipe>
-      _mask_contour_source: p.Property<ColumnDataSource | null>   // source for multi_polygon contours
+      _mask_contour_source: p.Property<ColumnDataSource | null>  // source for multi_polygon contours
       num_chans: p.Property<[Number,Number]>                     // [ stokes, spectral ]
       cur_chan:  p.Property<[Number,Number]>                     // [ stokes, spectral ]
   }
@@ -40,13 +40,6 @@ export class ImageDataSource extends ColumnDataSource {
     constructor(attrs?: Partial<ImageDataSource.Attrs>) {
         super(attrs);
         this.imid = uuid4( )
-    }
-    initialize(): void {
-        super.initialize();
-        const execute = () => {
-            if ( this.init_script != null ) this.init_script!.execute( this )
-        }
-        execute( )
     }
 
     _mask_contour( mask: any[] ): {[key: string]: any} {
@@ -67,6 +60,25 @@ export class ImageDataSource extends ColumnDataSource {
                               ys: [ split_tuples.map( ps => ps.map(  y => y[1] ) ) ]  }
         return reformatted
     }
+
+    initialize(): void {
+        super.initialize();
+        // when an initial mask is supplied by the user, it is included
+        // in the data object. In case there is a non-zero mask, we must
+        // search for a contour upon initialization...
+        if ( this._mask_contour_source != null &&
+             'msk' in this.data &&
+             this.data.msk.length > 0 &&
+             this.data.msk[0].length > 0 ) {
+            const mask = <Array<any>>this.data.msk
+            this._mask_contour_source.data = this._mask_contour( mask )
+        }
+        const execute = () => {
+            if ( this.init_script != null ) this.init_script!.execute( this )
+        }
+        execute( )
+    }
+
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
         this.image_source.channel( [s, c],
                                    (data: any) => {
@@ -83,7 +95,7 @@ export class ImageDataSource extends ColumnDataSource {
                                    }, this.imid )
     }
 
-    adjust_colormap( bounds: [ number, number ] | string,
+    adjust_colormap( bounds: [ number[], number[] ] | string,
                      transfer: {[key: string]: any},
                      cb: (msg:{[key: string]: any}) => any ) {
         this.image_source.adjust_colormap( bounds, transfer, cb, this.imid, true )
