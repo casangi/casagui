@@ -9,4 +9,4 @@ Creating a Conda Environment
 
 This is an example of how to create an Anaconda environment for doing :code:`casagui` development::
 
-  :code:`bash$ conda create -n 'bokeh-32' python=3.10 ipython websockets bokeh=3.2 regions scipy --channel=conda-forge`
+  bash$ conda create -n 'bokeh-32' python=3.10 ipython websockets bokeh=3.2 regions scipy --channel=conda-forge
