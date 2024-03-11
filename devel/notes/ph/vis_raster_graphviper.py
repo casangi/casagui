@@ -6,6 +6,9 @@ import time
 
 from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
 from xradio.vis.read_processing_set import read_processing_set
+from graphviper.graph_tools.map import map
+from graphviper.graph_tools.reduce import reduce
+from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
 
 import dask
 #from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, visualize
@@ -68,25 +71,6 @@ def set_baseline_ids(xds, baselines):
         new_baseline_ids.append(new_id)
     xds["baseline_id"] = np.array(new_baseline_ids)
 
-def partition_xds(xds):
-    xds_partitions = []
-    n_rows = xds.dims['time'] * xds.dims['baseline_id']
-    n_corr = xds.dims['polarization']
-
-    # All times in 1 partition
-    n_times = xds.dims['time']
-    n_partitions = 1
-
-    if n_rows > 5000:
-        # Determine n_partitions of n_times each
-        n_partitions = math.ceil(n_rows / 5000);
-        n_times = math.ceil(n_times / n_partitions)
-
-    for i in range(0, xds.dims['time'], n_times):
-        xds_slice = xds.isel(time=slice(i, i + n_times))
-        xds_partitions.append(xds_slice)
-    return xds_partitions
-
 def get_time_ticks(time_xda):
     ''' Return list of (index, time string) '''
     date = to_datetime(time_xda.values[0], unit='s').strftime("%d-%b-%Y")
@@ -116,36 +100,92 @@ def get_baseline_ticks(xda, baselines, ant_names):
                     tick_idx = idx
     return baseline_ticks
 
-def calc_color_limits(xds):
-    ''' Clip data color scaling ranges to 3-sigma limits as in msview '''
-    # Use cross correlation data for limits (unless all auto-corr)
-    xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG), drop=True)
-    #xda = xds.VISIBILITY_CORRECTED.where(np.logical_not(xds.FLAG), drop=True)
-    if xda.size == 0:
-        print("using flagged data for colorbar limits")
+def map_stats(input_params):
+    ''' Return min, max, sum, and count of data chunk '''
+    #print("map_stats input params", input_params)
+    min_val = max_val = sum_val = 0.0
+    count = 0
+
+    for key in input_params['data_selection']:
+        xds = input_params['vis'][key].isel(input_params['data_selection'][key])
         xda = xds.VISIBILITY
-        #xda = xds.VISIBILITY_CORRECTED
+        min_val = min(min_val, np.nanmin(xda))
+        max_val = max(max_val, np.nanmax(xda))
+        sum_val += np.nansum(xda)
+        count += xda.count().values
+    return (min_val, max_val, sum_val, count)
 
-    # Use unflagged cross correlation data for limits (unless all flagged)
-    xda_cross = xda.where(xds.baseline_antenna1_id != xds.baseline_antenna2_id, drop=True)
-    if xda_cross.size == 0:
-        print("using auto correlation baselines for colorbar limits")
-        xda_cross = xda
+def reduce_stats(graph_inputs, input_params):
+    ''' Compute min, max, sum, and count of all data'''
+    data_min = min(0.0, min([input[0] for input in graph_inputs]))
+    data_max = max(0.0, max([input[1] for input in graph_inputs]))
+    data_sum = sum([input[2] for input in graph_inputs])
+    data_count = sum([input[3] for input in graph_inputs])
+    return (data_min, data_max, data_sum, data_count)
+   
+def map_sq_diff(input_params):
+    ''' Return sum, count, of (xda-mean) squared '''
+    #print("map_sq_diff input params", input_params)
+    sq_diff_sum = 0.0
+    sq_diff_count = 0
+    mean = input_params['mean']
 
-    #with Profiler() as prof, ResourceProfiler() as rprof, CacheProfiler() as cprof:
-    minval, maxval, mean, std = dask.compute(
-        xda_cross.min(),
-        xda_cross.max(),
-        xda_cross.mean(),
-        xda_cross.std()
+    for key in input_params['data_selection']:
+        xds = input_params['vis'][key].isel(input_params['data_selection'][key])
+        xda = xds.VISIBILITY
+
+        sq_diff = (xda - mean) ** 2
+        sq_diff_sum += np.sum(sq_diff).values
+        sq_diff_count += sq_diff.count().values
+    return (sq_diff_sum, sq_diff_count)
+ 
+def reduce_sq_diff(graph_inputs, input_params):
+    ''' Compute sum and count of all (xda-mean) squared data'''
+    sq_diff_sum = sum([input[0] for input in graph_inputs])
+    sq_diff_count = sum([input[1] for input in graph_inputs])
+    return (sq_diff_sum, sq_diff_count)
+
+def calc_color_limits(ps):
+    ''' Clip data color scaling ranges to 3-sigma limits as in msview '''
+    data_min = data_max = data_sum = 0.0
+    data_count = 0
+
+    first_key = list(ps.keys())[0]
+    frequencies = ps[first_key].frequency.to_dict()
+    parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=8)}
+    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, input_data=ps)
+
+    input_params = {'vis': ps}
+    graph = map(
+        input_data=ps,
+        node_task_data_mapping=node_task_data_mapping,
+        node_task=map_stats,
+        input_params=input_params
     )
-    #visualize([prof, rprof, cprof])
+    graph_reduce = reduce(
+        graph, reduce_stats, input_params, mode='single_node'
+    )
+    stats = dask.compute(graph_reduce)
+    data_min, data_max, data_sum, data_count = stats[0][0]
 
-    datamin = min(0.0, minval.values)
-    clipmin = max(datamin, mean.values - (3.0 * std.values))
-    datamax = max(0.0, maxval.values)
-    clipmax = min(datamax, mean.values + (3.0 * std.values))
-    print(f"Using colorbar limits ({clipmin}, {clipmax})")
+    mean = data_sum / data_count
+    input_params['mean'] = mean
+    graph = map(
+        input_data=ps,
+        node_task_data_mapping=node_task_data_mapping,
+        node_task=map_sq_diff,
+        input_params=input_params
+    )
+    graph_reduce = reduce(
+         graph, reduce_sq_diff, input_params, mode='single_node'
+    )
+    stats = dask.compute(graph_reduce)
+    sq_diff_sum, sq_diff_count = stats[0][0]
+
+    variance = sq_diff_sum / sq_diff_count
+    stddev = variance ** 0.5
+    clipmin = max(data_min, mean - (3.0 * stddev))
+    clipmax = min(data_max, mean + (3.0 * stddev))
     return (clipmin, clipmax)
 
 def create_plot(xda, vis_name, ddi, date, color_limits, x_ticks, y_ticks, is_flagged = False):
@@ -199,7 +239,7 @@ def main(argv):
 
     # Read ms->zarr file into xradio processing set
     start = time.time()
-    ps, vis_name = vis_to_ps(vis_path)
+    ps, vis_basename = vis_to_ps(vis_path)
     print(f"Processing {len(ps.keys())} msv4 datasets")
 
     ddi_list = sorted(set(ps.summary()['ddi']))
@@ -208,36 +248,49 @@ def main(argv):
         print(f"No ddi selected, using first ddi {ddi}")
     elif ddi not in ddi_list:
         raise ValueError(f"Invalid ddi selection {ddi}. Please select from {ddi_list}")
-    
+
     # Antenna names (name@station) and baseline pairs [(ant1, ant2)]
     antenna_names, baselines = get_antenna_info(ps[list(ps.keys())[0]].antenna_xds)
 
     xds_list = []
+    limits_ps = {}
     for key in ps.keys():
         xds = ps[key]
         if xds.ddi != ddi:
             continue
         print(f"Reading dataset {key}")
+        print("vis shape", xds.VISIBILITY.shape)
         # set consistent baseline ids across xds for concat
         set_baseline_ids(xds, baselines)
         # get amplitude of visibilities
-        xds['VISIBILITY'] = np.absolute(xds.VISIBILITY)
+        xds["VISIBILITY"] = np.absolute(xds.VISIBILITY)
         xds_list.append(xds)
+
+        # use only unflagged cross-corr visibility data
+        limits_xds = xds
+        unflagged_xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG), drop=True)
+        xda = unflagged_xda.where(
+            unflagged_xda.baseline_antenna1_id != unflagged_xda.baseline_antenna2_id,
+            drop=True
+        )
+        if xda.size == 0: # no cross-corr baselines
+            xda = unflagged_xda
+        limits_xds['VISIBILITY'] = xda
+        limits_ps[key] = limits_xds
+
+    # Find colorbar limits across all ddi data
+    color_limits = calc_color_limits(limits_ps)
+    print(f"Clipping unflagged data colorbar at ({color_limits[0]}, {color_limits[1]})")
 
     # Concat xds and set amp, freq
     plot_xds = xr.concat(xds_list, dim='time')
-    print('vis shape', plot_xds['VISIBILITY'].shape)
 
-    # Find colorbar limits across all channels and pols
-    print("***** calc color limits")
-    start1 = time.time()
-    color_limits = calc_color_limits(plot_xds)
-    print(f"color limits {(time.time() - start1):.3f}s")
-
-    # Select first channel and pol, sort by time to assign time index and labels
+    # Select first channel and pol
     plot_xds = plot_xds.isel(frequency=0, polarization=0)
     plot_xds['frequency'] = plot_xds.frequency / 1.0e9;
     plot_xds['frequency'] = plot_xds.frequency.assign_attrs(units="GHz");
+
+    # Sort by time to assign time index and labels in order
     plot_xds.sortby('time')
 
     # Data arrays needed for plot
@@ -257,22 +310,22 @@ def main(argv):
 
     # Plot unflagged data
     amp_unflagged = amp_xda.where(flag_xda == False).rename('amp').assign_attrs(units="Jy")
-    plot1 = create_plot(amp_unflagged, vis_name, ddi, date, color_limits, baseline_ticks, time_ticks)
+    plot1 = create_plot(amp_unflagged, vis_basename, ddi, date, color_limits, baseline_ticks, time_ticks)
     layout = plot1
 
     # Plot flagged data with different colormap
     amp_flagged = amp_xda.where(flag_xda == True).rename('amp').assign_attrs(units="Jy")
-    plot2 = create_plot(amp_flagged, vis_name, ddi, date, color_limits, baseline_ticks, time_ticks, True)
+    plot2 = create_plot(amp_flagged, vis_basename, ddi, date, color_limits, baseline_ticks, time_ticks, True)
     layout = layout * plot2 if layout is not None else plot2
 
     # Combine plots and save in current directory
     if layout is None:
         print(f"Plot failed")
     else:
-        filename = f"{vis_name}_ddi_{ddi}_raster.png"
+        filename = f"{vis_basename}_ddi_{ddi}_raster.png"
         print(f"Saving plot to {filename}")
         hvplot.save(layout, filename)
-    print(f"total time {(time.time() - start):.3f}s")
+    print(f"Elapsed time {(time.time() - start):.3f}s")
 
 if __name__ == "__main__":
     main(sys.argv[1:])
