@@ -58,7 +58,7 @@ class _{{name}}:
     _info_group_ = """{{group}}"""
     _info_desc_ = """{{desc}}"""
 
-    __schema = { {{# paramList}}'{{name}}': {{schema}}, {{/ paramList}} }
+    __schema = { {{# paramListNKW}}'{{name}}': {{schema}}, {{/ paramListNKW}} }
 
     def __init__(self):
         self.__stdout = None
