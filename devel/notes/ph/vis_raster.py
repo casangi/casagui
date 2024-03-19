@@ -226,10 +226,9 @@ def main(argv):
 
     # Concat xds and set amp, freq
     plot_xds = xr.concat(xds_list, dim='time')
-    print('vis shape', plot_xds['VISIBILITY'].shape)
+    print('combined vis shape', plot_xds['VISIBILITY'].shape)
 
     # Find colorbar limits across all channels and pols
-    print("***** calc color limits")
     start1 = time.time()
     color_limits = calc_color_limits(plot_xds)
     print(f"color limits {(time.time() - start1):.3f}s")
@@ -261,9 +260,10 @@ def main(argv):
     layout = plot1
 
     # Plot flagged data with different colormap
-    amp_flagged = amp_xda.where(flag_xda == True).rename('amp').assign_attrs(units="Jy")
-    plot2 = create_plot(amp_flagged, vis_name, ddi, date, color_limits, baseline_ticks, time_ticks, True)
-    layout = layout * plot2 if layout is not None else plot2
+    amp_flagged = amp_xda.where(flag_xda == True, drop=True).rename('amp').assign_attrs(units="Jy")
+    if np.isfinite(amp_flagged.values).any():
+        plot2 = create_plot(amp_flagged, vis_name, ddi, date, color_limits, baseline_ticks, time_ticks, True)
+        layout = layout * plot2 if layout is not None else plot2
 
     # Combine plots and save in current directory
     if layout is None:
