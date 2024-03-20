@@ -302,7 +302,7 @@ Form images from visibilities and reconstruct a sky model.
 
 
 
-}
+
 
 vis
 ---------------------------------------
@@ -312,14 +312,16 @@ Name(s) of input visibility file(s)
                default: none;
                example: vis='ngc5921.ms'
                         vis=['ngc5921a.ms','ngc5921b.ms']; multiple MSes
-}
+
+
 
 selectdata
 ---------------------------------------
 :code:`selectdata=True`
 
 Enable data selection parameters.
-}
+
+
 
 field
 ---------------------------------------
@@ -340,7 +342,8 @@ field
                          for the second
                  field = '0~2'; field ids 0-2 for all input MSes
 
-}
+
+
 
 spw
 ---------------------------------------
@@ -365,7 +368,8 @@ spw
                       spw 1, channels 20-30, and spw 2, channels, 1,2 and 3
                  spw='1~4;6:15~48' for channels 15 through 48 for spw ids 1,2,3,4 and 6
 
-}
+
+
 
 timerange
 ---------------------------------------
@@ -389,7 +393,8 @@ Range of time to select from data
                    timerange='09:14:0~09:54:0''; apply the same timerange for
                                                  all input MSes
 
-}
+
+
 
 uvrange
 ---------------------------------------
@@ -404,7 +409,8 @@ Select data within uvrange (default unit is meters)
                    uvrange=['0~1000klambda','100~1000klamda']
                    uvrange='0~1000klambda'; apply 0-1000 kilo-lambda for all
                                             input MSes
- }
+ 
+
 
 antenna
 ---------------------------------------
@@ -432,7 +438,8 @@ Select data based on antenna/baseline
                    antenna='5'; antenna index 5 for all input MSes
                    antenna='!DV14'; use all antennas except DV14
 
-}
+
+
 
 scan
 ---------------------------------------
@@ -446,7 +453,8 @@ Scan number range
                    scan=['0~100','10~200']
                    scan='0~100; scan ids 0-100 for all input MSes
 
-}
+
+
 
 observation
 ---------------------------------------
@@ -455,7 +463,8 @@ observation
 Observation ID range
                    default: '' (all)
                    example: observation='1~5'
-}
+
+
 
 intent
 ---------------------------------------
@@ -467,7 +476,8 @@ Scan Intent(s)
                    example: intent='TARGET_SOURCE'
                    example: intent='TARGET_SOURCE1,TARGET_SOURCE2'
                    example: intent='TARGET_POINTING\*'
-}
+
+
 
 datacolumn
 ---------------------------------------
@@ -477,7 +487,8 @@ Data column to image (data or observed, corrected)
                      default:'corrected'
                      ( If 'corrected' does not exist, it will use 'data' instead )
 
-}
+
+
 
 imagename
 ---------------------------------------
@@ -529,7 +540,8 @@ Pre-name of output images
                                   For a niter=0 run, this will be redundant and can optionally
                                   be turned off via the 'restoration=T/F' parameter.
 
-}
+
+
 
 imsize
 ---------------------------------------
@@ -549,7 +561,8 @@ To find the nearest optimal imsize to that desired by the user, please use the f
     su = synthesisutils()
     su.getOptimumSize(345) 
     Output :  360
-}
+
+
 
 cell
 ---------------------------------------
@@ -559,7 +572,8 @@ Cell size
                example: cell=['0.5arcsec,'0.5arcsec'] or
                cell=['1arcmin', '1arcmin']
                cell = '1arcsec' is equivalent to ['1arcsec','1arcsec']
-}
+
+
 
 phasecenter
 ---------------------------------------
@@ -574,7 +588,8 @@ Phase center of the image (string or field id); if the phasecenter is the name k
                         phasecenter='myComet_ephem.tab'
                         phasecenter='MOON'
                         phasecenter='TRACKFIELD'
-}
+
+
 
 stokes
 ---------------------------------------
@@ -596,7 +611,8 @@ Stokes Planes to make
 
                              The remaining constraints shall be removed (where logical) in a future release.
 
-}
+
+
 
 projection
 ---------------------------------------
@@ -609,7 +625,8 @@ Coordinate projection
 
 
 
-}
+
+
 
 startmodel
 ---------------------------------------
@@ -642,7 +659,8 @@ Name of starting model image
                                    image onto a CASA image with the target shape and
                                    coordinate system before supplying it via startmodel ]
 
- }
+ 
+
 
 specmode
 ---------------------------------------
@@ -698,7 +716,8 @@ Spectral definition mode (mfs,cube,cubedata, cubesource)
                                                         velocity frame of the source)
 
 
-}
+
+
 
 reffreq
 ---------------------------------------
@@ -713,7 +732,8 @@ Reference frequency of the output image coordinate system
                        For deconvolver='mtmfs' the Taylor expansion is also done about
                        this specified reference frequency.
 
-}
+
+
 
 nchan
 ---------------------------------------
@@ -725,7 +745,8 @@ Number of channels in the output image
                        It is often easiest to leave nchan at the default value.
                        example: nchan=100
 
-}
+
+
 
 start
 ---------------------------------------
@@ -750,7 +771,8 @@ First channel (e.g. start=3,start=\'1.1GHz\',start=\'15343km/s\')
                        functionality of 'plotms']
                        examples: start='5.0km/s'; 1st channel, 5.0km/s in outframe
                                  start='22.3GHz'; 1st channel, 22.3GHz in outframe
-}
+
+
 
 width
 ---------------------------------------
@@ -771,7 +793,8 @@ Channel width (e.g. width=2,width=\'0.1MHz\',width=\'10km/s\') of output cube im
                                 width=-2; results in channels averaged of 2 data channels incremented from
                                           high to low channel numbers
 
-}
+
+
 
 outframe
 ---------------------------------------
@@ -794,7 +817,8 @@ Spectral reference frame in which to interpret \'start\' and \'width\'
                      CMB -- CMB velocity -- 369.5km/s towards l,b = [264.4, 48.4] deg (F. Ghigo)
                      DEFAULT = LSRK
 
-}
+
+
 
 veltype
 ---------------------------------------
@@ -819,7 +843,8 @@ Velocity type (radio, z, ratio, beta, gamma, optical)
                       Note that the ones with an '\*' have no real interpretation
                       (although the calculation will proceed) if given as a velocity.
 
-}
+
+
 
 restfreq
 ---------------------------------------
@@ -834,7 +859,8 @@ List of rest frequencies or a rest frequency in a string.
                       examples: restfreq=['1.42GHz']
                                 restfreq='1.42GHz'
 
-}
+
+
 
 interpolation
 ---------------------------------------
@@ -852,7 +878,8 @@ Spectral interpolation (nearest,linear,cubic)
                         not worth the extra computation involved.
 
 
-}
+
+
 
 perchanweightdensity
 ---------------------------------------
@@ -908,7 +935,8 @@ perchanweightdensity
                          surprisingly varying sensitivity and psfs
                          across the concatenated cube.
              
-}
+
+
 
 gridder
 ---------------------------------------
@@ -1045,7 +1073,8 @@ Gridding options (standard, wproject, widefield, mosaic, awproject)
                       models used in gridder='mosaic' but just evaluated in the image
                       domain without consideration to weights.
 
-}
+
+
 
 facets
 ---------------------------------------
@@ -1061,7 +1090,8 @@ Number of facets on a side
 		       In our current version of tclean, facets>1 may be used only
 		       with parallel=False. 
 
-}
+
+
 
 psfphasecenter
 ---------------------------------------
@@ -1083,7 +1113,8 @@ For mosaic use psf centered on this
                                 psfphasecenter='J2000 292.5deg -40.0deg'
                                 psfphasecenter='J2000 5.105rad -0.698rad'
                                 psfphasecenter='ICRS 13:05:27.2780 -049.28.04.458'
-}
+
+
 
 wprojplanes
 ---------------------------------------
@@ -1114,7 +1145,8 @@ Number of distinct w-values at which to compute and use different
                        wprojplanes=-1 is an option for gridder='widefield' or 'wproject'
                        in which the number of planes is automatically computed.
 
-}
+
+
 
 vptable
 ---------------------------------------
@@ -1146,14 +1178,16 @@ vptable
                                  parameterized aperture illumination functions, which are not
                                  available via the vpmanager. So, gridder='awproject' does not allow
                                  the user to set this parameter.
-}
+
+
 
 mosweight
 ---------------------------------------
 :code:`mosweight=True`
 
 When doing Brigg's style weighting (including uniform) to perform the weight density calculation for each field indepedently if True. If False the weight density is calculated from the average uv distribution of all the fields.
-}
+
+
 
 aterm
 ---------------------------------------
@@ -1165,7 +1199,8 @@ Use aperture illumination functions during gridding
                        Gridding convolution functions are constructed from aperture illumination
                        function models of each antenna.
 
-}
+
+
 
 psterm
 ---------------------------------------
@@ -1196,7 +1231,8 @@ Include the Prolate Spheroidal (PS) funtion as the anti-aliasing
 
                         Standard         False   True       1                FT(PS)
 
-}
+
+
 
 wbawp
 ---------------------------------------
@@ -1205,7 +1241,8 @@ wbawp
 Use frequency dependent A-terms
                        Scale aperture illumination functions appropriately with frequency
                        when gridding and combining data from multiple channels.
- }
+ 
+
 
 conjbeams
 ---------------------------------------
@@ -1228,7 +1265,8 @@ Use conjugate frequency for wideband A-terms
                        (of a few hundred for a 2:1 bandwidth).
                        This works for specmode='mfs' and its value is ignored for cubes
 
-}
+
+
 
 cfcache
 ---------------------------------------
@@ -1253,14 +1291,16 @@ Convolution function cache directory name
 
                        By default, cfcache = imagename + '.cf'
 
-}
+
+
 
 usepointing
 ---------------------------------------
 :code:`usepointing=False`
 
 The usepointing flag informs the gridder that it should utilize the pointing table
-to use the correct direction in which the antenna is pointing with respect to the pointing phasecenter. }
+to use the correct direction in which the antenna is pointing with respect to the pointing phasecenter. 
+
 
 computepastep
 ---------------------------------------
@@ -1277,7 +1317,8 @@ Parallactic angle interval after the AIFs are recomputed (deg)
                        AIFs are computed for the PA value of the first valid data received and used for 
                        all of the data.
 
-}
+
+
 
 rotatepastep
 ---------------------------------------
@@ -1295,7 +1336,8 @@ Parallactic angle interval after which the nearest AIF is rotated (deg)
                        the AIFs at only the starting parallactic angle and all other timesteps will
                        use a rotated version of that AIF at the nearest 5.0 degree point.
 
-}
+
+
 
 pointingoffsetsigdev
 ---------------------------------------
@@ -1358,7 +1400,8 @@ pointingoffsetsigdev
 
 
 
-}
+
+
 
 pblimit
 ---------------------------------------
@@ -1390,7 +1433,8 @@ PB gain level at which to cut off normalizations
                                        ia.maskhandler(op='set', name='');
                                        ia.done()
 
-  }
+  
+
 
 normtype
 ---------------------------------------
@@ -1420,7 +1464,8 @@ Normalization type (flatnoise, flatsky, pbsquare)
                                                             The minor cycle sees the sky times pb square
 
 
-}
+
+
 
 deconvolver
 ---------------------------------------
@@ -1507,7 +1552,8 @@ Name of minor cycle algorithm (hogbom,clark,multiscale,mtmfs,mem,clarkstokes,asp
 
 
 
-}
+
+
 
 scales
 ---------------------------------------
@@ -1530,7 +1576,8 @@ List of scale sizes (in pixels) for multi-scale and mtmfs algorithms.
                                   spatial frequency (as a scale size much larger than what the
                                   instrument is sensitive to is unconstrained by the data making
                                   it harder to recovery from errors during the minor cycle).
-     }
+     
+
 
 nterms
 ---------------------------------------
@@ -1579,7 +1626,8 @@ Number of Taylor coefficients in the spectral model
                                      the errors across the image only in a relative sense.)
 
 
-}
+
+
 
 smallscalebias
 ---------------------------------------
@@ -1595,7 +1643,8 @@ A numerical control to bias the scales when using multi-scale or mtmfs algorithm
 		      A score larger than 0.0 will bias the solution towards smaller scales. 
 		      A score smaller than 0.0 will bias the solution towards larger scales.
 		      The effect of smallscalebias is more pronounced when using multi-scale relative to mtmfs. 
-}
+
+
 
 fusedthreshold
 ---------------------------------------
@@ -1620,7 +1669,8 @@ fusedthreshold
                      Set 'fusedthreshold = -1' to make the Asp Clean deconvolver never "switch" to Hogbom Clean.
 
 
-      }
+      
+
 
 largestscale
 ---------------------------------------
@@ -1640,7 +1690,8 @@ largestscale
 		     scale that has no constraints from the data (the UV hole issue). 
 
 
-      }
+      
+
 
 restoration
 ---------------------------------------
@@ -1658,7 +1709,8 @@ restoration
                        With algorithm='mtmfs', this will construct Taylor coefficient maps from
                        the residuals and compute .alpha and .alpha.error.
 
-}
+
+
 
 restoringbeam
 ---------------------------------------
@@ -1683,7 +1735,8 @@ restoringbeam
                                   the model image is convolved with the beam and added to
                                   residuals that have been convolved to the same target resolution.
 
-}
+
+
 
 pbcor
 ---------------------------------------
@@ -1709,7 +1762,8 @@ pbcor
                                     end of the band at its location. As a guideline, the artificial spectral
                                     index due to the PB is -1.4 at the 0.5 gain level and less than -0.2
                                     at the 0.9 gain level at the middle frequency )
-}
+
+
 
 outlierfile
 ---------------------------------------
@@ -1764,7 +1818,8 @@ Name of outlier-field image definitions
                                     to be allowed in the outlier file (and it is logical to do so), please
                                     send us feedback. The above is an initial list.
 
-}
+
+
 
 weighting
 ---------------------------------------
@@ -1844,7 +1899,8 @@ Weighting scheme (natural,uniform,briggs,superuniform,radial, briggsabs, briggsb
                For more details on weighting please see Chapter3
                of Dan Briggs' thesis (http://www.aoc.nrao.edu/dissertations/dbriggs)
 
-}
+
+
 
 robust
 ---------------------------------------
@@ -1856,13 +1912,15 @@ Robustness parameter for Briggs weighting.
                             robust = +2.0 maps to natural weighting.
                             (robust=0.5 is equivalent to robust=0.0 in AIPS IMAGR.)
 
-}
+
+
 
 noise
 ---------------------------------------
 :code:`noise='1.0Jy'`
 
-noise parameter for briggs abs mode weighting}
+noise parameter for briggs abs mode weighting
+
 
 npixels
 ---------------------------------------
@@ -1882,7 +1940,8 @@ Number of pixels to determine uv-cell size for super-uniform weighting
 				     weighting, if npixels=0 it will be forced to 6 (or a box 
 				     of -3pixels to +3pixels) to cover 7 pixels on a side.
 
-}
+
+
 
 uvtaper
 ---------------------------------------
@@ -1912,7 +1971,8 @@ uv-taper on outer baselines in uv-plane
                             uvtaper=['10arcsec'] : image domain FWHM 
                             uvtaper=['300.0'] default units are lambda in aperture plane
 
-}
+
+
 
 niter
 ---------------------------------------
@@ -1963,7 +2023,8 @@ Maximum number of iterations
                                   - a 50% or more increase in peak residual across one major cycle
 
 
-}
+
+
 
 gain
 ---------------------------------------
@@ -1984,7 +2045,8 @@ Loop gain
 
                        
 
-}
+
+
 
 threshold
 ---------------------------------------
@@ -2021,7 +2083,8 @@ Stopping threshold (number in units of Jy, or string)
 
                                 'cyclethreshold' is made visible and editable only in the
                                 interactive GUI when tclean is run with interactive=True.
-}
+
+
 
 nsigma
 ---------------------------------------
@@ -2039,7 +2102,8 @@ Multiplicative factor for rms-based threshold stopping
 
 		       The parameter 'nsigma' may be an int, float, or a double.
 
-}
+
+
 
 cycleniter
 ---------------------------------------
@@ -2059,7 +2123,8 @@ Maximum number of minor-cycle iterations (per plane) before triggering
                                   preserve consistency across image planes within one set of minor
                                   cycle iterations.
 
-}
+
+
 
 cyclefactor
 ---------------------------------------
@@ -2076,7 +2141,8 @@ Scaling on PSF sidelobe level to compute the minor-cycle stopping threshold.
                        cyclefactor=0.5 allows the minor cycle to go deeper.
                        cyclefactor=2.0 triggers a major cycle sooner.
 
-}
+
+
 
 minpsffraction
 ---------------------------------------
@@ -2090,7 +2156,8 @@ PSF fraction that marks the max depth of cleaning in the minor cycle
                        For example, minpsffraction=0.5 will stop cleaning at half the height of
                        the peak residual and trigger a major cycle earlier.
 
-}
+
+
 
 maxpsffraction
 ---------------------------------------
@@ -2106,7 +2173,8 @@ PSF fraction that marks the minimum depth of cleaning in the minor cycle
                        the first PSF sidelobe is at the 0.9 level (an extreme example), or if the
                        cyclefactor is set too high for anything to get cleaned.
 
-}
+
+
 
 interactive
 ---------------------------------------
@@ -2158,7 +2226,8 @@ Modify masks and parameters at runtime
                                                     All edits will be reflected in the log messages that appear
                                                     once minor cycles begin.
 
-}
+
+
 
 nmajor
 ---------------------------------------
@@ -2195,7 +2264,8 @@ The nmajor parameter limits the number of minor and major cycle sets
                                         of the residual, and no minor cycles are executed.
                             Case 2; nmajor=1, calcres=False: The major cycle is done as part of the
                                         major/minor cycle loop, and 1 minor cycle will be executed.
-      }
+      
+
 
 fullsummary
 ---------------------------------------
@@ -2224,7 +2294,8 @@ Return dictionary with complete convergence history
                          CASA to crash (with fullsummary=True). The limit has been estimated to be reached
                          only when nchan_per_chunk x iterdone_per_minorcycleset > 8e+6. The option to set
                          fullsummary=False should be used to guard against this.
-       }
+       
+
 
 usemask
 ---------------------------------------
@@ -2261,7 +2332,8 @@ Type of mask(s) to be used for deconvolution
                              The saved CASA mask image name will be imagename.mask.autothresh#, where
                              # is the iteration cycle number.
 
-}
+
+
 
 mask
 ---------------------------------------
@@ -2317,7 +2389,8 @@ Mask (a list of image name(s) or region file(s) or region string(s)
                        Note : Work is in progress to generate more flexible masking options and
                                   enable more controls.
 
-}
+
+
 
 pbmask
 ---------------------------------------
@@ -2328,7 +2401,8 @@ Sub-parameter for usemask: primary beam mask
                        Examples : pbmask=0.0 (default, no pb mask)
                                   pbmask=0.2 (construct a mask at the 0.2 pb gain level)
 
-}
+
+
 
 sidelobethreshold
 ---------------------------------------
@@ -2336,7 +2410,8 @@ sidelobethreshold
 
 Sub-parameter for "auto-multithresh":  mask threshold based on sidelobe levels:  sidelobethreshold \* max_sidelobe_level \* peak residual
 
-}
+
+
 
 noisethreshold
 ---------------------------------------
@@ -2345,7 +2420,8 @@ noisethreshold
 Sub-parameter for "auto-multithresh":  mask threshold based on the noise level: noisethreshold \* rms + location (=median)
 
               The rms is calculated from MAD with rms = 1.4826\*MAD.
-}
+
+
 
 lownoisethreshold
 ---------------------------------------
@@ -2354,7 +2430,8 @@ lownoisethreshold
 Sub-parameter for "auto-multithresh":  mask threshold to grow previously masked regions via binary dilation:   lownoisethreshold \* rms in residual image + location (=median)
 
               The rms is calculated from MAD with rms = 1.4826\*MAD.
-}
+
+
 
 negativethreshold
 ---------------------------------------
@@ -2363,14 +2440,16 @@ negativethreshold
 Sub-parameter for "auto-multithresh": mask threshold  for negative features: -1.0* negativethreshold \* rms + location(=median)
 
               The rms is calculated from MAD with rms = 1.4826\*MAD.
-}
+
+
 
 smoothfactor
 ---------------------------------------
 :code:`smoothfactor=float(1.0)`
 
 Sub-parameter for "auto-multithresh":  smoothing factor in a unit of the beam
-}
+
+
 
 minbeamfrac
 ---------------------------------------
@@ -2378,35 +2457,40 @@ minbeamfrac
 
 Sub-parameter for "auto-multithresh":  minimum beam fraction in size to prune masks smaller than mimbeamfrac \* beam
                        <=0.0 : No pruning
-}
+
+
 
 cutthreshold
 ---------------------------------------
 :code:`cutthreshold=float(0.01)`
 
 Sub-parameter for "auto-multithresh": threshold to cut the smoothed mask to create a final mask: cutthreshold \* peak of the smoothed mask
-}
+
+
 
 growiterations
 ---------------------------------------
 :code:`growiterations=int(75)`
 
 Sub-parameter for "auto-multithresh": Maximum number of iterations to perform using binary dilation for growing the mask
-}
+
+
 
 dogrowprune
 ---------------------------------------
 :code:`dogrowprune=True`
 
 Experimental sub-parameter for "auto-multithresh": Do pruning on the grow mask
-}
+
+
 
 minpercentchange
 ---------------------------------------
 :code:`minpercentchange=float(-1.0)`
 
 If the change in the mask size in a particular channel is less than minpercentchange, stop masking that channel in subsequent cycles. This check is only applied when noise based threshold is used and when the previous clean major cycle had a cyclethreshold value equal to the clean threshold. Values equal to -1.0 (or any value less than 0.0) will turn off this check (the default). Automask will still stop masking if the current channel mask is an empty mask and the noise threshold was used to determine the mask.
-}
+
+
 
 verbose
 ---------------------------------------
@@ -2428,7 +2512,8 @@ verbose
                         N_neg_pix: number of pixels for negative mask regions
 
                         Note that for a large cube, extra logging may slow down the process.
-}
+
+
 
 fastnoise
 ---------------------------------------
@@ -2449,7 +2534,8 @@ fastnoise
                         outside the mask and inside the primary beam mask.
 
                         In all cases above RMS noise is calculated from MAD. 
-}
+
+
 
 restart
 ---------------------------------------
@@ -2504,7 +2590,8 @@ restart
                                    'outry' and 'outtry_2' have not been used.
 
 
-}
+
+
 
 savemodel
 ---------------------------------------
@@ -2556,7 +2643,8 @@ Options to save model visibilities (none, virtual, modelcolumn)
                                   for use in parallel. If model visibilities need to be saved (virtual or modelcolumn):
                                   please run tclean in serial mode with niter=0; after the parallel run
 
-}
+
+
 
 calcres
 ---------------------------------------
@@ -2582,7 +2670,8 @@ Calculate initial residual image
                                                   a custom mask for. Imaging can be resumed
                                                   without recomputing it.
 
-}
+
+
 
 calcpsf
 ---------------------------------------
@@ -2594,7 +2683,8 @@ Calculate PSF
 
                         calcpsf=False will assume that a .psf image already exists
                         and that the minor cycle can begin without recomputing it.
-      }
+      
+
 
 psfcutoff
 ---------------------------------------
@@ -2621,7 +2711,8 @@ psfcutoff
             This parameter should rarely be changed.
             
             (This is not the support size for clark clean.)
-        }
+        
+
 
 parallel
 ---------------------------------------
@@ -2653,5 +2744,6 @@ Run major cycles in parallel (this feature is experimental)
                                        information such as peak residual and cyclethreshold. Therefore,
                                        different chunks may trigger major cycles at different levels.
                                    (Proper synchronization of iteration control is work in progress.)
+
 
 
