@@ -119,18 +119,19 @@ def get_baseline_ticks(xda, baselines, ant_names):
 def calc_color_limits(xds):
     ''' Clip data color scaling ranges to 3-sigma limits as in msview '''
     # Use cross correlation data for limits (unless all auto-corr)
-    xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG), drop=True)
-    #xda = xds.VISIBILITY_CORRECTED.where(np.logical_not(xds.FLAG), drop=True)
+    xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG).compute(), drop=True)
     if xda.size == 0:
-        print("using flagged data for colorbar limits")
-        xda = xds.VISIBILITY
-        #xda = xds.VISIBILITY_CORRECTED
+        print("no unflagged data for colorbar limits")
+        return (None, None)
+    print("Using unflagged data for colorbar limits")
 
     # Use unflagged cross correlation data for limits (unless all flagged)
-    xda_cross = xda.where(xds.baseline_antenna1_id != xds.baseline_antenna2_id, drop=True)
+    xda_cross = xda.where((xds.baseline_antenna1_id != xds.baseline_antenna2_id).compute(), drop=True)
     if xda_cross.size == 0:
-        print("using auto correlation baselines for colorbar limits")
+        print("Using auto correlation baselines for colorbar limits")
         xda_cross = xda
+    else:
+        print("Using cross correlation baselines for colorbar limits")
 
     #with Profiler() as prof, ResourceProfiler() as rprof, CacheProfiler() as cprof:
     minval, maxval, mean, std = dask.compute(
@@ -222,6 +223,7 @@ def main(argv):
         set_baseline_ids(xds, baselines)
         # get amplitude of visibilities
         xds['VISIBILITY'] = np.absolute(xds.VISIBILITY)
+        print("dataset shape:", xds.VISIBILITY.shape)
         xds_list.append(xds)
 
     # Concat xds and set amp, freq
@@ -260,7 +262,7 @@ def main(argv):
     layout = plot1
 
     # Plot flagged data with different colormap
-    amp_flagged = amp_xda.where(flag_xda == True, drop=True).rename('amp').assign_attrs(units="Jy")
+    amp_flagged = amp_xda.where((flag_xda == True).compute(), drop=True).rename('amp').assign_attrs(units="Jy")
     if np.isfinite(amp_flagged.values).any():
         plot2 = create_plot(amp_flagged, vis_name, ddi, date, color_limits, baseline_ticks, time_ticks, True)
         layout = layout * plot2 if layout is not None else plot2
