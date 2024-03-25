@@ -125,25 +125,25 @@ class _iclean:
         out.write('\n'.join(output) + '\n')
 
     #--------- go functions -----------------------------------------------------------
-{{# goparams}}{{default}}
+{{# paramList}}{{goDefault}}
 
-{{value}}
+{{goValue}}
 
-{{inp}}
+{{goInp}}
 
-{{/ goparams}}
+{{/ paramList}}
     #--------- global default implementation-------------------------------------------
     @static_var('state', __sf__('casa_inp_go_state'))
     def set_global_defaults(self):
         self.set_global_defaults.state['last'] = self
-        glb = self.__globals_( ){{# goparams}}
-        if '{{name}}' in glb: del glb['{{name}}']{{/ goparams}}
+        glb = self.__globals_( ){{# paramList}}
+        if '{{name}}' in glb: del glb['{{name}}']{{/ paramList}}
 
     #--------- inp function -----------------------------------------------------------
     def inp(self):
         print("# iclean -- %s" % self._info_desc_)
-        self.term_width, self.term_height = shutil.get_terminal_size(fallback=(80, 24)){{# goparams}}
-        self.__{{name}}_inp( ){{/ goparams}}
+        self.term_width, self.term_height = shutil.get_terminal_size(fallback=(80, 24)){{# paramList}}
+        self.__{{name}}_inp( ){{/ paramList}}
 
     #--------- tget function ----------------------------------------------------------
     @static_var('state', __sf__('casa_inp_go_state'))
@@ -173,8 +173,8 @@ class _iclean:
 
         _postfile = outfile if outfile is not None else os.path.realpath('iclean.last')
 
-        _invocation_parameters = OrderedDict( ){{# goparams}}
-        _invocation_parameters['{{name}}'] = self.__{{name}}( self.__globals_( ) ){{/ goparams}}
+        _invocation_parameters = OrderedDict( ){{# paramList}}
+        _invocation_parameters['{{name}}'] = self.__{{name}}( self.__globals_( ) ){{/ paramList}}
 
         try:
             with open(_postfile,'w') as _f:
@@ -190,7 +190,7 @@ class _iclean:
         except: return False
         return True
 
-    def __call__( self{{# goparams}}, {{name}}=None{{/ goparams}} ):
+    def __call__( self{{# paramList}}, {{name}}=None{{/ paramList}} ):
         def noobj(s):
            if s.startswith('<') and s.endswith('>'):
                return "None"
@@ -199,23 +199,23 @@ class _iclean:
         _prefile = os.path.realpath('iclean.pre')
         _postfile = os.path.realpath('iclean.last')
         task_result = None
-        _arguments = [{{# goparams}}{{name}},{{/ goparams}}]
+        _arguments = [{{# paramList}}{{name}},{{/ paramList}}]
         _invocation_parameters = OrderedDict( )
         if any(map(lambda x: x is not None,_arguments)):
             # invoke python style
             # set the non sub-parameters that are not None
-            local_global = { }{{# goparamsNonSub}}
-            if {{name}} is not None: local_global['{{name}}'] = {{name}}{{/ goparamsNonSub}}
+            local_global = { }{{# paramListNonSub}}
+            if {{name}} is not None: local_global['{{name}}'] = {{name}}{{/ paramListNonSub}}
 
-            # the invocation parameters for the non-subparameters can now be set - this picks up those defaults{{# goparamsNonSub}}
-            _invocation_parameters['{{name}}'] = self.__{{name}}( local_global ){{/ goparamsNonSub}}
+            # the invocation parameters for the non-subparameters can now be set - this picks up those defaults{{# paramListNonSub}}
+            _invocation_parameters['{{name}}'] = self.__{{name}}( local_global ){{/ paramListNonSub}}
 
-            # the sub-parameters can then be set. Use the supplied value if not None, else the function, which gets the appropriate default{{# goparamsSub}}
-            _invocation_parameters['{{name}}'] = self.__{{name}}( _invocation_parameters ) if {{name}} is None else {{name}}{{/ goparamsSub}}
+            # the sub-parameters can then be set. Use the supplied value if not None, else the function, which gets the appropriate default{{# paramListSub}}
+            _invocation_parameters['{{name}}'] = self.__{{name}}( _invocation_parameters ) if {{name}} is None else {{name}}{{/ paramListSub}}
 
         else:
-            # invoke with inp/go semantics{{# goparams}}
-            _invocation_parameters['{{name}}'] = self.__{{name}}( self.__globals_( ) ){{/ goparams}}
+            # invoke with inp/go semantics{{# paramList}}
+            _invocation_parameters['{{name}}'] = self.__{{name}}( self.__globals_( ) ){{/ paramList}}
         try:
             with open(_prefile,'w') as _f:
                 for _i in _invocation_parameters:
@@ -231,8 +231,8 @@ class _iclean:
         try:
             _logging_state_ = None
             assert _pc.validate(_invocation_parameters,self.__schema), create_error_string(_pc.errors)
-            _logging_state_ = _start_log( 'iclean', [{{# goparams}} '{{name}}=' + repr(_pc.document['{{name}}']),{{/ goparams}} ] )
-            task_result = _iclean_t( {{# goparams}}{{name}}=_pc.document['{{name}}'],{{/ goparams}} )
+            _logging_state_ = _start_log( 'iclean', [{{# paramList}} '{{name}}=' + repr(_pc.document['{{name}}']),{{/ paramList}} ] )
+            task_result = _iclean_t( {{# paramList}}{{name}}=_pc.document['{{name}}'],{{/ paramList}} )
         except Exception as e:
             from traceback import format_exc
             from casatasks import casalog
