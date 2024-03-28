@@ -8,7 +8,6 @@ from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing
 from xradio.vis.read_processing_set import read_processing_set
 
 import dask
-#from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, visualize
 import holoviews as hv
 import hvplot.xarray
 import numpy as np
@@ -118,29 +117,22 @@ def get_baseline_ticks(xda, baselines, ant_names):
 
 def calc_color_limits(xds):
     ''' Clip data color scaling ranges to 3-sigma limits as in msview '''
-    # Use cross correlation data for limits (unless all auto-corr)
+    # Use unflagged data for limits
     xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG).compute(), drop=True)
     if xda.size == 0:
-        print("no unflagged data for colorbar limits")
         return (None, None)
-    print("Using unflagged data for colorbar limits")
 
-    # Use unflagged cross correlation data for limits (unless all flagged)
+    # Use cross correlation data for limits (unless all auto-corr)
     xda_cross = xda.where((xds.baseline_antenna1_id != xds.baseline_antenna2_id).compute(), drop=True)
     if xda_cross.size == 0:
-        print("Using auto correlation baselines for colorbar limits")
         xda_cross = xda
-    else:
-        print("Using cross correlation baselines for colorbar limits")
 
-    #with Profiler() as prof, ResourceProfiler() as rprof, CacheProfiler() as cprof:
     minval, maxval, mean, std = dask.compute(
         xda_cross.min(),
         xda_cross.max(),
         xda_cross.mean(),
         xda_cross.std()
     )
-    #visualize([prof, rprof, cprof])
 
     datamin = min(0.0, minval.values)
     clipmin = max(datamin, mean.values - (3.0 * std.values))
@@ -237,8 +229,8 @@ def main(argv):
 
     # Select first channel and pol, sort by time to assign time index and labels
     plot_xds = plot_xds.isel(frequency=0, polarization=0)
-    plot_xds['frequency'] = plot_xds.frequency / 1.0e9;
-    plot_xds['frequency'] = plot_xds.frequency.assign_attrs(units="GHz");
+    plot_xds['frequency'] = plot_xds.frequency / 1.0e9
+    plot_xds['frequency'] = plot_xds.frequency.assign_attrs(units="GHz")
     plot_xds.sortby('time')
 
     # Data arrays needed for plot
