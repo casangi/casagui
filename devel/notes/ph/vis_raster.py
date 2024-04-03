@@ -231,7 +231,7 @@ def main(argv):
     plot_xds = plot_xds.isel(frequency=0, polarization=0)
     plot_xds['frequency'] = plot_xds.frequency / 1.0e9
     plot_xds['frequency'] = plot_xds.frequency.assign_attrs(units="GHz")
-    plot_xds.sortby('time')
+    plot_xds = plot_xds.sortby('time')
 
     # Data arrays needed for plot
     amp_xda = plot_xds.VISIBILITY
