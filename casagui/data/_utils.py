@@ -65,7 +65,7 @@ def _get_time_labels(time_xda):
 
 def _get_baseline_labels(xds):
     ''' Return single ant1@ant2 or list of (index, ant1 name) for each new ant1 in baseline '''
-    baseline_strings = []
+    baseline_labels = []
     antenna_names = _get_antenna_names(xds.antenna_xds)
     baseline_pairs = _get_baseline_pairs(xds.antenna_xds.antenna_id.size)
     baseline_ids = xds.baseline_id.values
@@ -84,13 +84,13 @@ def _get_baseline_labels(xds):
         if ant1 != last_ant1:
             last_ant1 = ant1
             if last_idx is None:
-                baseline_strings.append((idx, antenna_names[ant1]))
+                baseline_labels.append((idx, antenna_names[ant1]))
                 last_idx = idx
             else:
                 if (idx - last_idx) >= increment:
-                    baseline_strings.append((idx, antenna_names[ant1]))
+                    baseline_labels.append((idx, antenna_names[ant1]))
                     last_idx = idx
-    return baseline_strings
+    return baseline_labels
 
 def _get_antenna_names(antenna_xds):
     ''' Return lists of antenna names (antenna@station) '''
@@ -106,18 +106,24 @@ def _get_polarization_labels(polarization_xda):
         return list(enumerate(polarization_xda.values))
 
 def _get_frequency_labels(frequency_xda):
-    xda = set_frequency_GHz(frequency_xda)
-    if xda.size == 1:
-        return f"{xda.values:.3f} {xda.attrs['units']}"
-    return [f"{f:.3f}" for f in xda.values]
-
-def set_frequency_GHz(frequency_xda):
-    if frequency_xda.units[0] == 'Hz':
-        frequency_xda /= 1.0e9
-        frequency_xda.attrs['units'] = 'GHz'
+    if frequency_xda.size == 1:
+        return f"{frequency_xda.values:.3f} {frequency_xda.attrs['units']}"
     else:
-        frequency_xda.attrs['units'] = frequency_xda.units[0]
-    return frequency_xda
+        return None
+    #freq_labels = [f"{f:.3f}" for f in frequency_xda.values]
+    #return list(enumerate(freq_labels))
+
+def set_frequency_unit(xds):
+    # Set unit as string (not list) and convert to GHz if Hz
+    unit = xds.frequency.attrs['units']
+    if isinstance(unit, list):
+        unit = unit[0]
+
+    if unit == 'Hz':
+        xds['frequency'] = xds.frequency / 1.0e9
+        xds['frequency'] = xds.frequency.assign_attrs(units='GHz')
+    else:
+        xds['frequency'] = xds.frequency.assign_attrs(units=unit)
 
 def get_vis_axis_label(xda, axis):
     ''' Get vis axis label for colorbar '''
@@ -143,10 +149,12 @@ def get_axis_labels(xds, axis):
         if xds.baseline_id.size > 1:
             xds['baseline_id'] = np.array(range(xds.baseline_id.size))
     elif axis == "frequency":
-        unit = xds.frequency.attrs['units']
+        unit = xds.frequency.frequency.attrs['units']
         label =  f"Frequency ({unit})"
     else:
-        label =  "Polarization"
+        label =  "Correlation"
+        if xds.polarization.size > 1:
+            xds['polarization'] = np.array(range(xds.polarization.size))
     return (axis, label, ticks)
 
 def _get_date_string(time_xda):

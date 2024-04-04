@@ -24,11 +24,17 @@ def raster_plot(ps, ddi, x_axis, y_axis, vis_axis, vis_path):
     if vis_axis not in vis_axes:
         raise RuntimeError(f"Invalid vis axis, please select from {vis_axes}")
 
+    axis_to_coord = {'baseline': 'baseline_id', 'correlation': 'polarization'}
+    if x_axis in axis_to_coord.keys():
+        x_axis = axis_to_coord[x_axis]
+    if y_axis in axis_to_coord.keys():
+        y_axis = axis_to_coord[y_axis]
+
     # processing set for plot ddi only, concat into a single xarray Dataset
     ddi_ps = get_ddi_ps(ps, ddi)
     plot_xds = concat_ps_xds(ddi_ps)
 
-    # Check plot axes
+    # Check plot axes are dimensions of visibility data
     vis_dims = plot_xds.VISIBILITY.dims
     if x_axis not in vis_dims or y_axis not in vis_dims:
         raise RuntimeError(f"Invalid axis, please select from {vis_dims}")
@@ -40,8 +46,11 @@ def raster_plot(ps, ddi, x_axis, y_axis, vis_axis, vis_path):
     color_limits = _raster_color_limits(plot_xds, vis_axis)
 
     # Select first plane of unplotted axes and sort
-    plot_xds = _select_raster_plane_xds(plot_xds, x_axis, y_axis)
     plot_xds = plot_xds.sortby('time')
+    plot_xds = _select_raster_plane_xds(plot_xds, x_axis, y_axis)
+
+    # Set string for axis unit, convert to GHz if Hz
+    set_frequency_unit(plot_xds)
 
     # Title and axes for plot
     title = _get_plot_title(plot_xds, vis_dims, os.path.basename(vis_path))

@@ -34,7 +34,7 @@ class VisRaster:
             set_baseline_ids(self._ps[key])
         self._plot = None
 
-    def plot(self, ddi=None, x_axis='baseline_id', y_axis='time', vis_axis='amp', interactive=False):
+    def plot(self, ddi=None, x_axis='baseline', y_axis='time', vis_axis='amp', interactive=False):
         '''
         Create a raster plot of visibilities with specified xaxis and yaxis.
             ddi (int): ddi to plot. Default is first ddi numerically.
