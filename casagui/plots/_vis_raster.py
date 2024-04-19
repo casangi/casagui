@@ -28,7 +28,7 @@ class VisRaster:
         n_datasets = len(self._ps.keys())
         if n_datasets == 0:
             raise RuntimeError("Failed to read visibility file into processing set")
-        print(f"Processing {n_datasets} msv4 datasets:")
+        print(f"Processing {n_datasets} msv4 datasets")
 
         # Set unique baseline ids
         for key in self._ps:
@@ -42,7 +42,7 @@ class VisRaster:
         for row in summary.itertuples(index=False): #, name=None):
             name, ddi, intent, field_id, field_name, start_freq, end_freq, shape = row
             print("-----")
-            print(f"ddi {ddi}: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} correlations")
+            print(f"ddi {ddi}: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
             print(f"intent: {intent}")
             print(f"field: {field_name} ({field_id})")
             print(f"frequency range: {start_freq:.3e} - {end_freq:.3e}")
