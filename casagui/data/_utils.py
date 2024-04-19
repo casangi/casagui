@@ -5,24 +5,66 @@ import numpy as np
 from pandas import to_datetime
 import xarray as xr
 
-def get_ddi_ps(ps, ddi):
-    ''' Return processing set containing ddi only '''
+def get_ddi_ps(ps, selection):
+    ''' Return processing set containing selected ddi, field, and/or intent only.
+        Raise exception if selection is invalid. '''
+    ddi = selection['ddi'] if (selection is not None and 'ddi' in selection.keys()) else None
+    field = selection['field'] if (selection is not None and 'field' in selection.keys()) else None
+    intent = selection['intent'] if (selection is not None and 'intent' in selection.keys()) else None
+    if ddi is not None or field is not None or intent is not None:
+        print(f"Metadata selection: ddi={ddi} field={field} intent={intent}")
+
+    # Check ddi selection
     ddi_list = sorted(set(ps.summary()['ddi']))
     if ddi is None:
         ddi = ddi_list[0]
-        print(f"No ddi selected, using first ddi {ddi}")
+        print(f"No ddi selected, using first ddi: {ddi}.")
     elif ddi not in ddi_list:
-        raise ValueError(f"Invalid ddi selection {ddi}. Please select from {ddi_list}")
+        raise ValueError(f"Invalid ddi selection {ddi}. Please select from {ddi_list}.")
 
     ddi_ps = {}
     for key in ps:
-        if ps[key].ddi == ddi:
-            ddi_ps[key] = ps[key]
+        xds = ps[key]
+        if xds.ddi == ddi:
+            # Check field selection
+            if field is None:
+                selected_field = True # default all fields
+            else:
+                selected_field = False
+                field_info = xds.VISIBILITY.field_info
+                if isinstance(field, int):
+                    selected_field = (field_info['field_id'] == field)
+                elif isinstance(field, str):
+                    selected_field = (field_info['name'] == field)
+                elif isinstance(field, list):
+                    selected_field = (field_info['name'] in field or
+                                      field_info['field_id'] in field
+                    )
+                else:
+                    raise ValueError("Invalid type for field selection, must select by id or name")
+
+            if selected_field:
+                # Check intent selection (default all intents)
+                if intent is None:
+                    selected_intent = True # default all intents
+                elif xds.intent == intent:
+                    selected_intent = True
+                else:
+                    selected_intent = False
+
+                if selected_field and selected_intent:
+                    # passed all checks
+                    ddi_ps[key] = xds
     return ddi_ps
 
 def concat_ps_xds(ps):
     ''' Concatenate xarray Datasets in processing set '''
     xds_list = [ps[key] for key in ps]
+
+    if len(xds_list) == 0:
+        raise RuntimeError("Metadata selection resulted in no datasets.")
+
+    print("Plotting", len(xds_list), "msv4 datasets.")
     return xr.concat(xds_list, dim='time')
 
 def _get_baseline_pairs(n_antennas):
@@ -60,7 +102,8 @@ def _get_time_labels(time_xda):
     ''' Return single timestamp or list of (index, time string) '''
     times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
     if isinstance(times, str):
-        return times
+        date = _get_date_string(time_xda)
+        return date + " " + times
     return list(enumerate(times.values))
 
 def _get_baseline_labels(xds):

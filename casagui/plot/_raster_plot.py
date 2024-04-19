@@ -9,51 +9,47 @@ import os.path
 
 from ..data import *
 
-def raster_plot(ps, ddi, x_axis, y_axis, vis_axis, vis_path):
+def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path):
     '''
     Create raster plot y_axis vs x_axis for vis axis in ddi.
         ps (processing_set): xradio processing set (dict of msv4 xarray Datasets)
-        ddi (int): ddi to plot
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
         vis_axis (str): visibility component to plot (amp, phase, real, imag)
+        selection (dict): select ddi, field, intent, time/baseline/channel/correlation
         vis_path (str): path to visibility file
     Returns: plot
     '''
-    vis_axes = ['amp', 'phase', 'real', 'imag']
-    if vis_axis not in vis_axes:
-        raise RuntimeError(f"Invalid vis axis, please select from {vis_axes}")
-
-    axis_to_coord = {'baseline': 'baseline_id', 'correlation': 'polarization'}
-    if x_axis in axis_to_coord.keys():
-        x_axis = axis_to_coord[x_axis]
-    if y_axis in axis_to_coord.keys():
-        y_axis = axis_to_coord[y_axis]
-
-    # processing set for plot ddi only, concat into a single xarray Dataset
-    ddi_ps = get_ddi_ps(ps, ddi)
+    # Apply metadata selection to processing set, concat into xarray Dataset
+    ddi_ps = get_ddi_ps(ps, selection)
     plot_xds = concat_ps_xds(ddi_ps)
+    ddi = plot_xds.attrs['ddi']
 
-    # Check plot axes are dimensions of visibility data
-    vis_dims = plot_xds.VISIBILITY.dims
-    if x_axis not in vis_dims or y_axis not in vis_dims:
-        raise RuntimeError(f"Invalid axis, please select from {vis_dims}")
+    # Check x and y axes, vis axis, and plot selection
+    x_axis, y_axis = _check_axes(plot_xds, x_axis, y_axis)
+    vis_axis = _check_vis_axis(plot_xds, vis_axis)
+    selection = _check_plot_selection(plot_xds, x_axis, y_axis, selection)
 
     # Calculate complex component
+    
     plot_xds['VISIBILITY'] = get_axis_data(plot_xds, vis_axis)
 
     # Calculate colorbar limits for amplitudes
-    color_limits = _raster_color_limits(plot_xds, vis_axis)
+    if 'amp' in vis_axis:
+        color_limits = _raster_color_limits(plot_xds, vis_axis)
 
-    # Select first plane of unplotted axes and sort
+    # Sort xds
     plot_xds = plot_xds.sortby('time')
-    plot_xds = _select_raster_plane_xds(plot_xds, x_axis, y_axis)
+
+    # Select plane of unplotted axes
+    vis_dims = plot_xds.VISIBILITY.dims # fewer dims after selection
+    plot_xds = _select_raster_plane(plot_xds, x_axis, y_axis, selection)
 
     # Set string for axis unit, convert to GHz if Hz
     set_frequency_unit(plot_xds)
 
     # Title and axes for plot
-    title = _get_plot_title(plot_xds, vis_dims, os.path.basename(vis_path))
+    title = _get_plot_title(plot_xds, selection, vis_dims, os.path.basename(vis_path))
     x_axis_labels = get_axis_labels(plot_xds, x_axis)
     y_axis_labels = get_axis_labels(plot_xds, y_axis)
     c_axis_label = get_vis_axis_label(plot_xds.VISIBILITY, vis_axis)
@@ -68,6 +64,62 @@ def raster_plot(ps, ddi, x_axis, y_axis, vis_axis, vis_path):
         flagged_plot = _create_plot(flagged_xda, title, x_axis_labels, y_axis_labels, c_axis_label, color_limits, True)
         layout = layout * flagged_plot if layout is not None else flagged_plot
     return layout
+
+def _check_axes(xds, x_axis, y_axis):
+    '''
+    Check plot axes are dimensions of visibility data.
+    Return renamed axes or throw exception.
+    '''
+    # Check x and y axes
+    x_axis = 'baseline_id' if x_axis == 'baseline' else x_axis
+    y_axis = 'baseline_id' if y_axis == 'baseline' else y_axis
+    vis_dims = xds.VISIBILITY.dims
+    if x_axis not in vis_dims or y_axis not in vis_dims:
+        raise RuntimeError(f"Invalid x or y axis, please select from {vis_dims}")
+    return x_axis, y_axis
+
+def _check_vis_axis(xds, vis_axis):
+    ''' Check valid vis axis string. Use visibility data if requested type does not exist. '''
+    #TODO: model data, single dish float data ???
+    # Check value
+    vis_axes = [
+        'amp', 'phase', 'real', 'imag',
+        'amp_corrected', 'phase_corrected', 'real_corrected', 'imag_corrected'
+    ]
+    if vis_axis not in vis_axes:
+        raise RuntimeError(f"Invalid vis axis. Select from {vis_axes}")
+
+    # Check type
+    if 'corrected' in vis_axis and 'VISIBILITY_CORRECTED' not in xds.data_vars.keys():
+        print(f"No corrected data, using visibility data.")
+        vis_axis = vis_axis.split('_')[0]
+    return vis_axis
+
+def _check_plot_selection(xds, x_axis, y_axis, selection):
+    ''' Check if plot selection is valid (ignoring invalid keys).
+        Returns: validated selection if no exception. '''
+    if not selection:
+        return
+
+    if 'baseline' in selection.keys():
+        selection['baseline_id'] = selection.pop('baseline')
+
+    # Check selection keys: data dimensions and metadata.  Ignore invalid keys.
+    plot_keys = list(xds.VISIBILITY.dims)
+    metadata_keys = ['ddi', 'field', 'intent']
+    invalid_keys = []
+    plot_selection = {}
+    for key in selection:
+        if key not in plot_keys and key not in metadata_keys:
+            invalid_keys.append(key)
+        elif key in plot_keys:
+            plot_selection[key] = selection[key]
+    if invalid_keys:
+        print(f"Ignoring invalid selection keys: {invalid_keys}.")
+
+    # Test plot selection
+    _select_raster_plane(xds, x_axis, y_axis, plot_selection, test=True)
+    return selection
 
 def _raster_color_limits(xds, vis_axis):
     ''' Calculate data color scaling ranges to amplitude min/max or 3-sigma limits '''
@@ -98,30 +150,77 @@ def _raster_color_limits(xds, vis_axis):
     clipmin = max(datamin, mean.values - (3.0 * std.values))
     datamax = max(0.0, maxval.values)
     clipmax = min(datamax, mean.values + (3.0 * std.values))
-    print(f"Setting colorbar limits ({clipmin}, {clipmax})")
+    print(f"Setting colorbar limits ({clipmin:.4f}, {clipmax:.4f})")
     return (clipmin, clipmax)
 
-def _select_raster_plane_xds(xds, xaxis, yaxis):
-    ''' Select first index of unplotted axes '''
-    plot_axes = list(xds.VISIBILITY.dims)
-    plot_axes.remove(xaxis)
-    plot_axes.remove(yaxis)
+def _get_non_display_axes(xds, x_axis, y_axis):
+    ''' Return dimensions which are not plot axes '''
+    vis_axes = list(xds.VISIBILITY.dims)
+    vis_axes.remove(x_axis)
+    vis_axes.remove(y_axis)
+    return vis_axes
+    
+def _select_raster_plane(xds, x_axis, y_axis, selection, test=False):
+    ''' Select first index of unplotted dimensions if not selected.
+        Return selected xds if no exception. '''
+    non_display_axes = _get_non_display_axes(xds, x_axis, y_axis)
     data_selection = {}
-    for axis in plot_axes:
-        data_selection[axis] = 0
-    return xds.isel(data_selection)
+    data_iselection = {}
 
-def _get_plot_title(xds, vis_dims, vis_name):
-    # Return string containing vis name and selected dimension values
-    title = f"{vis_name}\nddi={xds.attrs['ddi']}"
+    for axis in non_display_axes:
+        if selection and axis in selection.keys():
+            value = selection[axis]
+            if isinstance(value, int):
+                data_iselection[axis] = value
+            elif isinstance(value, str):
+                data_selection[axis] = value
+        else:
+            data_iselection[axis] = 0 # default first
+
+    error = None
+    if data_iselection:
+        if not test:
+            print("Plot selection by index:", data_iselection)
+        try:
+            xds = xds.isel(data_iselection)
+        except IndexError as e:
+            raise RuntimeError(f"Plot selection failed: {data_iselection}") from e
+    if not error and data_selection:
+        try:
+            xds = xds.sel(data_selection)
+            if not test:
+                print("Plot selection by value:", data_selection)
+        except KeyError as e:
+            raise RuntimeError(f"Plot selection failed: {data_selection}") from e
+
+    if not test:
+        return xds
+
+def _get_plot_title(xds, selection, vis_dims, vis_name):
+    ''' Form string containing vis name and selected values '''
+    title = f"{vis_name}\nddi={xds.attrs['ddi']} "
+
+    # Append metadata selection to ddi
+    if selection is not None:
+        field = selection['field'] if 'field' in selection.keys() else None
+        intent = selection['intent'] if 'intent' in selection.keys() else None
+        if field:
+            if isinstance(field, int):
+                field = xds.VISIBILITY.attrs['field_info']['name']
+            title += f"field={field} "
+        if intent:
+            title += f"intent={intent} "
+
+    # Add selected dimensions to title
     for dim in vis_dims:
         if xds.coords[dim].size == 1:
-            # Add selected dimension to title
             label = get_coordinate_labels(xds, dim)
             if dim == 'baseline_id':
-                title += f" baseline={label}"
+                title += f"baseline={label} "
+            elif dim == 'polarization':
+                title += f"polarization={label} "
             else:
-                title += f" {dim}={label}"
+                title += f"{dim}={label} "
     return title
 
 def _create_plot(xda, title, x_axis_labels, y_axis_labels, c_axis_label, color_limits, is_flagged = False):
