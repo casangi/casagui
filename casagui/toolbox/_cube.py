@@ -1634,11 +1634,13 @@ class CubeMask:
                                                                                      set_edited(span2)
                                                                                  }''' ) )
 
-        self._cm_adjust['reset'] = CBResetTool( description="Reset pan/zoom and extents" )
+        self._cm_adjust['reset'] = CBResetTool( icon=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'reset.png' )),
+                                                description="Reset pan/zoom and extents" )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
                                          tools=[ self._cm_adjust['reset'],
                                                  'wheel_zoom', 'pan',
-                                                 ResetTool( description="Reset pan/zoom but preserve extents" ) ] )
+                                                 ResetTool( icon=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'zoom-to-fit.png' )),
+                                                            description="Reset pan/zoom but preserve extents" ) ] )
 
         self._cm_adjust['fig'].toolbar.active_scroll = self._cm_adjust['fig'].select_one(WheelZoomTool)
 
