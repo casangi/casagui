@@ -1,7 +1,7 @@
 '''Functions for local execution to create, tunnel, and connect to remote Jupyter kernels.'''
 import jupyter_client
-from ssh_ipykernel.kernel import SshKernel
-from ipykernel import get_connection_info
+##>>>from ssh_ipykernel.kernel import SshKernel
+##>>>from ipykernel import get_connection_info
 from queue import Empty
 import json
 import os

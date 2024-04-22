@@ -2,7 +2,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../'))
-import casaremote
+##>>>import casaremote
 
 # Remote functions needed
 # finalize, update(), reset
