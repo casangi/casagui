@@ -60,7 +60,7 @@ class CasaShell_Finder(_MetaPathFinder):
         self.__java = None
         self.__source_dir = os.path.dirname(__file__)
         self.__jarpath = None
-        self.__jarfile_name = "xml-casa-assembly-1.85.jar"
+        self.__jarfile_name = "xml-casa-assembly-1.86.jar"
         self.__task_xml_files = None
 
     def __which( self, program ):
