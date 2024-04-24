@@ -5,57 +5,79 @@ import numpy as np
 from pandas import to_datetime
 import xarray as xr
 
-def get_ddi_ps(ps, selection):
-    ''' Return processing set containing selected ddi, field, and/or intent only.
+def select_ps(ps, selection, do_select_ddi):
+    ''' Return processing set per ddi containing selected field, and intent.
+        If ddi is selected here, it is added to selection dict.
         Raise exception if selection is invalid. '''
     ddi = selection['ddi'] if (selection is not None and 'ddi' in selection.keys()) else None
     field = selection['field'] if (selection is not None and 'field' in selection.keys()) else None
     intent = selection['intent'] if (selection is not None and 'intent' in selection.keys()) else None
     if ddi is not None or field is not None or intent is not None:
-        print(f"Metadata selection: ddi={ddi} field={field} intent={intent}")
+        print(f"Processing set selection: ddi={ddi} field={field} intent={intent}")
 
-    # Check ddi selection
-    ddi_list = sorted(set(ps.summary()['ddi']))
+    # Apply ddi selection to make ddi list
+    ps_ddis = sorted(set(ps.summary()['ddi']))
     if ddi is None:
-        ddi = ddi_list[0]
-        print(f"No ddi selected, using first ddi: {ddi}.")
-    elif ddi not in ddi_list:
-        raise ValueError(f"Invalid ddi selection {ddi}. Please select from {ddi_list}.")
+        if do_select_ddi:
+            ddi = ps_ddis[0]
+            print(f"No ddi selected, using first ddi: {ddi}.")
+            if selection is None:
+                selection = {'ddi': ddi}
+            else:
+                selection['ddi'] = ddi
+    else:
+        if ddi not in ps_ddis:
+            raise ValueError(f"Invalid ddi selection {ddi}. Please select from {ps_ddis}.")
 
-    ddi_ps = {}
+    plot_ps = {}
     for key in ps:
         xds = ps[key]
-        if xds.ddi == ddi:
-            # Check field selection
+
+        # ddi selection
+        xds_ddi = xds.attrs['ddi']
+        if ddi is None:
+            has_selected_ddi = True # default all ddis
+            # Make ddi a data dimension
+            xds = xds.expand_dims(dim={"ddi": np.array(ps_ddis)}, axis=0)
+        else:
+            if isinstance(ddi, int):
+                has_selected_ddi = (xds.attrs['ddi'] == ddi)
+                xds = xds.expand_dims(dim={"ddi": np.array([ddi])}, axis=0)
+            elif isinstance(ddi, list):
+                has_selected_ddi = xds.attrs['ddi'] in ddi
+                xds = xds.expand_dims(dim={"ddi": np.array(ddi)}, axis=0)
+
+        if has_selected_ddi:
+            # field selection
             if field is None:
-                selected_field = True # default all fields
+                has_selected_field = True # default all fields
             else:
-                selected_field = False
                 field_info = xds.VISIBILITY.field_info
                 if isinstance(field, int):
-                    selected_field = (field_info['field_id'] == field)
+                    has_selected_field = (field_info['field_id'] == field)
                 elif isinstance(field, str):
-                    selected_field = (field_info['name'] == field)
+                    has_selected_field = (field_info['name'] == field)
                 elif isinstance(field, list):
-                    selected_field = (field_info['name'] in field or
-                                      field_info['field_id'] in field
+                    has_selected_field = (field_info['name'] in field or
+                                          field_info['field_id'] in field
                     )
                 else:
                     raise ValueError("Invalid type for field selection, must select by id or name")
 
-            if selected_field:
-                # Check intent selection (default all intents)
+            if has_selected_field:
+                # intent selection
                 if intent is None:
-                    selected_intent = True # default all intents
-                elif xds.intent == intent:
-                    selected_intent = True
-                else:
-                    selected_intent = False
+                    has_selected_intent = True # default all intents
+                elif isinstance(intent, str):
+                    has_selected_intent = (xds.intent == intent)
+                elif isinstance(intent, list):
+                    has_selected_intent = xds.intent in intent
 
-                if selected_field and selected_intent:
+                if has_selected_intent:
                     # passed all checks
-                    ddi_ps[key] = xds
-    return ddi_ps
+                    plot_ps[key] = xds
+
+    return plot_ps, selection
 
 def concat_ps_xds(ps):
     ''' Concatenate xarray Datasets in processing set '''
@@ -95,8 +117,10 @@ def get_coordinate_labels(xds, coordinate):
         return _get_baseline_labels(xds)
     elif coordinate == 'frequency':
         return _get_frequency_labels(xds.coords[coordinate])
-    else:
+    elif coordinate == 'polarization':
         return _get_polarization_labels(xds.coords[coordinate])
+    elif coordinate == 'ddi':
+        return _get_ddi_labels(xds.coords[coordinate])
 
 def _get_time_labels(time_xda):
     ''' Return single timestamp or list of (index, time string) '''
@@ -150,11 +174,15 @@ def _get_polarization_labels(polarization_xda):
 
 def _get_frequency_labels(frequency_xda):
     if frequency_xda.size == 1:
-        return f"{frequency_xda.values:.3f} {frequency_xda.attrs['units']}"
+        return f"{frequency_xda.values:.5f} {frequency_xda.attrs['units']}"
     else:
-        return None
-    #freq_labels = [f"{f:.3f}" for f in frequency_xda.values]
-    #return list(enumerate(freq_labels))
+        return None # auto ticks from frequency values
+
+def _get_ddi_labels(ddi_xda):
+    if ddi_xda.size == 1:
+        return f"{ddi_xda.values}"
+    else:
+        return None # auto ticks from ddi values
 
 def set_frequency_unit(xds):
     # Set unit as string (not list) and convert to GHz if Hz
@@ -168,13 +196,14 @@ def set_frequency_unit(xds):
     else:
         xds['frequency'] = xds.frequency.assign_attrs(units=unit)
 
-def get_vis_axis_label(xda, axis):
+def get_vis_axis_labels(xda, axis):
     ''' Get vis axis label for colorbar '''
-    label = axis.capitalize()
+    name = axis.capitalize()
+    label = name
     if 'units' in xda.attrs:
         unit = xda.attrs['units']
         label += f" ({unit})"
-    return label
+    return (name, label)
 
 def get_axis_labels(xds, axis):
     ''' Return axis name, label and ticks, reindex for regular axis '''
@@ -194,10 +223,12 @@ def get_axis_labels(xds, axis):
     elif axis == "frequency":
         unit = xds.frequency.frequency.attrs['units']
         label =  f"Frequency ({unit})"
-    else:
-        label =  "Correlation"
+    elif axis == "polarization":
+        label =  "Polarization"
         if xds.polarization.size > 1:
             xds['polarization'] = np.array(range(xds.polarization.size))
+    elif axis == "ddi":
+        label =  "DDI"
     return (axis, label, ticks)
 
 def _get_date_string(time_xda):
