@@ -45,7 +45,7 @@ class VisRaster:
         for row in summary.itertuples(index=False): #, name=None):
             name, ddi, intent, field_id, field_name, start_freq, end_freq, shape, field_coords = row
             print("-----")
-            print(f"ddi {ddi}: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} correlations")
+            print(f"ddi {ddi}: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
             print(f"intent: {intent}")
             print(f"field: {field_name} ({field_id})")
             print(f"field coordinates: {field_coords[1]} {field_coords[2]} ({field_coords[0]})")

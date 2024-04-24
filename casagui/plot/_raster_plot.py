@@ -26,6 +26,8 @@ def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path):
     do_select_ddi = 'ddi' not in [x_axis, y_axis]
     plot_ps, selection = select_ps(ps, selection, do_select_ddi)
     plot_xds = concat_ps_xds(plot_ps)
+    shape = plot_xds.sizes
+    print(f"Plotting visibilities with {shape['time']} times, {shape['baseline_id']} baselines, {shape['frequency']} channels, {shape['polarization']} polarizations")
 
     # Check x and y axes, vis axis, and plot selection
     x_axis, y_axis = _check_axes(plot_xds, x_axis, y_axis)
