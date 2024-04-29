@@ -44,7 +44,7 @@ from bokeh.io import reset_output as reset_bokeh_output, output_notebook
 from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
-from ..bokeh.models import TipButton, Tip, EvTextInput
+from ..bokeh.models import TipButton, Tip, EvTextInput, CollapsibleTabs
 from ..utils import resource_manager, reset_resource_manager, is_notebook
 
 # pylint: disable=no-name-in-module
@@ -2264,9 +2264,9 @@ class InteractiveClean:
         ###
         self._spec_conv_tabs = None
         if self._fig['spectrum']:
-            self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
-                                                TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
-                                         sizing_mode='stretch_both' )
+            self._spec_conv_tabs = CollapsibleTabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
+                                                           TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
+                                                    sizing_mode='stretch_both' )
 
         self._fig['layout'] = column(
                                   row(
@@ -2327,7 +2327,7 @@ class InteractiveClean:
                                       width_policy='max', height_policy='max' ),
                                   row(
                                       self._spec_conv_tabs if self._spec_conv_tabs else self._fig['convergence'],
-                                      width_policy='max',
+                                      width_policy='max', height_policy='min',
                                   ),
                                   width_policy='max', height_policy='max',
                               )

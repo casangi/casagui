@@ -8,11 +8,12 @@ import {CBResetTool} from "./src/bokeh/tools/cbreset_tool"
 import {serialize, deserialize} from "./src/bokeh/util/conversions"
 import {TipButton} from "./src/bokeh/models/tip_button"
 import {Tip} from "./src/bokeh/models/tip"
+import {CollapsibleTabs} from "./src/bokeh/models/collapsible_tabs"
 import {EditSpan} from "./src/bokeh/models/edit_span"
 import {EvTextInput} from "./src/bokeh/models/ev_text_input"
 import *  as find from "./src/bokeh/util/find"
 import {register_models} from "@bokehjs/base"
 
-export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput, serialize, deserialize }
+export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, CollapsibleTabs, EditSpan, EvTextInput, serialize, deserialize }
 
-register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput })
+register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, CollapsibleTabs, EditSpan, EvTextInput })
