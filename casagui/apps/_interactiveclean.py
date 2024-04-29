@@ -238,14 +238,17 @@ class InteractiveClean:
                          cell=['1arcmin', '1arcmin']
                          cell = '1arcsec' is equivalent to ['1arcsec','1arcsec']
     phasecenter          Phase center of the image (string or field id); if the phasecenter is the name known major solar system object ('MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO', 'SUN', 'MOON') or is an ephemerides table then that source is tracked and the background sources get smeared. There is a special case, when phasecenter='TRACKFIELD', which will use the ephemerides or polynomial phasecenter in the FIELD table of the MS's as the source center to track.
-                         example: phasecenter=6
-                                  phasecenter='J2000 19h30m00 -40d00m00'
-                                  phasecenter='J2000 292.5deg  -40.0deg'
-                                  phasecenter='J2000 5.105rad  -0.698rad'
-                                  phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
-                                  phasecenter='myComet_ephem.tab'
-                                  phasecenter='MOON'
-                                  phasecenter='TRACKFIELD'
+
+                              Note : If unspecified, tclean will use the phase-center from the first data field of the MS (or list of MSs) selected for imaging.
+
+                         			example: phasecenter=6
+                         phasecenter='J2000 19h30m00 -40d00m00'
+                         phasecenter='J2000 292.5deg  -40.0deg'
+                         phasecenter='J2000 5.105rad  -0.698rad'
+                         phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
+                         phasecenter='myComet_ephem.tab'
+                         phasecenter='MOON'
+                         phasecenter='TRACKFIELD'
     stokes               Stokes Planes to make
                          default='I'; example: stokes='IQUV';
                            Options: 'I','Q','U','V','IV','QU','IQ','UV','IQUV','RR','LL','XX','YY','RRLL','XXYY','pseudoI'

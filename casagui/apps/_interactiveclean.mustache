@@ -877,13 +877,15 @@ class InteractiveClean:
                                                   }
                                               }
                                               if ( state.mode === 'interactive' && cb_obj.origin.name === 'stop' ) {
-                                                  disable( true )
-                                                  //ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                  //                { action: 'stop',
-                                                  //                  value: { } },
-                                                  //                update_gui )
-                                                  flux_src._window_closed = true
-                                                  img_src.done( )  /*** <<-------<<<< this will close the tab ***/
+                                                  if ( confirm( "Are you sure you want to end this interactive clean session and close the GUI?" ) ) {
+                                                      disable( true )
+                                                      //ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                      //                { action: 'stop',
+                                                      //                  value: { } },
+                                                      //                update_gui )
+                                                      flux_src._window_closed = true
+                                                      img_src.done( )  /*** <<-------<<<< this will close the tab ***/
+                                                  }
                                               } else if ( state.mode === 'continuous' &&
                                                           cb_obj.origin.name === 'stop' &&
                                                           ! state.awaiting_stop ) {
