@@ -590,8 +590,10 @@ class InteractiveClean:
                                                        nmajor=msg['value']['nmajor'],
                                                        threshold=msg['value']['threshold'],
                                                        cyclefactor=msg['value']['cyclefactor'],
-                                                       nsigma=msg['value']['nsigma'],
-                                                       gain=msg['value']['gain'] ) )
+                                                       ### Checks are needed because the CASA imaging return
+                                                       ### dictionary are in flux, these could be removed later...
+                                                       nsigma=msg['value']['nsigma'] if 'nsigma' in msg['value'] else None,
+                                                       gain=msg['value']['gain'] if 'gain' in msg['value'] else None ) )
 
                 if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
 
