@@ -1296,7 +1296,14 @@ class CubeMask:
             self._stokes_labels = self._image_source.stokes_labels( )
 
             self._image = set_attributes( figure( height=self._pipe['image'].shape[1], width=self._pipe['image'].shape[0],
-                                                  output_backend="webgl", match_aspect=True,
+                                                  ###
+                                                  ### using webgl resulted in at least one case of unresponsive spans in the colormap
+                                                  ### adjust interface due to the GPU being unresponsive (perhaps because it is being
+                                                  ### used for something else). In this case, the tclean/deconvolve python session was
+                                                  ### on a remote linux system displaying to a mac laptop via X11 (same behavior w/ VNC)
+                                                  ###
+                                                  #output_backend="webgl",
+                                                  match_aspect=True,
                                                   tools=[ 'lasso_select', 'box_select',
                                                           'pan', 'wheel_zoom', 'save',
                                                           'reset', 'poly_select',
