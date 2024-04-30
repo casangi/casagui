@@ -8,7 +8,7 @@ authors = [
 ]
 
 dependencies = [
-    "bokeh>=3.0",
+    "bokeh==3.2.2",
     "astropy>=5.1",
     "regions>=0.6",
     "websockets>=10.3",
