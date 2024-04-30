@@ -207,7 +207,7 @@ summary = "Source of XYZ tiles providers"
 
 [metadata]
 lock_version = "4.1"
-content_hash = "sha256:c619c3aa0ebbfa2ed35b7886536798542c483f2f15ca3e253cbdc110663c0532"
+content_hash = "sha256:639d0d848dabfa407472df0a7d33f20641a4a36525478e18f4e9269669a59370"
 
 [metadata.files]
 "astropy 5.1" = [
