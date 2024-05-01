@@ -2038,7 +2038,7 @@ class CubeMask:
                                                       span1=self._cm_adjust['span one'],
                                                       span2=self._cm_adjust['span two'],
                                                       histogram=self._cm_adjust['histogram'],
-                                                      go_to=self._goto, cb=self._slider_callback,
+                                                      go_to=self._goto_txt, cb=self._slider_callback,
                                                       ids=self._ids, ctrl=self._pipe['control'], pix_wrld=self._coord_ctrl_dropdown ),
                                            code=self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
 
