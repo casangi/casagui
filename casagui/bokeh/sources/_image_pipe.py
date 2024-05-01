@@ -238,8 +238,9 @@ class ImagePipe(DataPipe):
                     print( f'''error: ${selected_scaling} is not a known scaling...''', file=sys.stderr )
                     result = image_plane
                 else:
+                    normalize = 0 if umin > 0 else -umin
                     result = np.ma.zeros(image_plane.shape,image_plane.dtype)
-                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included] if included is not None else image_plane,
+                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included]+normalize if included is not None else image_plane+normalize,
                                                                                **self.__quant_adjustments['transfer']['args'] )
                     if exclude_below is not None:
                         result[exclude_below] = result[included].min( )
@@ -251,7 +252,7 @@ class ImagePipe(DataPipe):
             ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
             ### Histogram of the scaled
             ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-            hist, edges = np.histogram( result, density=False, bins=255, range=( umin, umax ) )
+            edges = np.histogram_bin_edges( result, bins=254, range=( umin, umax ) )
 
             return np.digitize( result, edges, right=True ).astype(nptype)
 
