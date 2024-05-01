@@ -622,6 +622,7 @@ class CubeMask:
                                                   }
                                                   region.fill_color = 'rgba(0, 0, 0, 0)'
                                                   region.line_width = 3
+                                                  region.line_alpha = 0.7
                                                   region.line_dash = 'dashed'
                                                   region.line_color = selector.color
                                               }''',
