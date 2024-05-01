@@ -34,7 +34,6 @@ def select_ps(ps, selection, do_select_ddi):
         xds = ps[key]
 
         # ddi selection
-        xds_ddi = xds.attrs['ddi']
         if ddi is None:
             has_selected_ddi = True # default all ddis
             # Make ddi a data dimension
@@ -110,28 +109,39 @@ def set_baseline_ids(xds):
         new_baseline_ids.append(new_id)
     xds["baseline_id"] = np.array(new_baseline_ids)
 
-def get_coordinate_labels(xds, coordinate):
+def get_coordinate_label(xds, coordinate):
+    ''' Return coordinate value as string '''
+    label = get_coordinate_labels(xds, coordinate)[0][1]
     if coordinate == 'time':
-        return _get_time_labels(xds.coords[coordinate])
+        date = _get_date_string(xds.time)
+        return f"{date} {label}"
+    elif coordinate == 'frequency':
+        return f"{label} {xds.frequency.attrs['units']}"
+    return label
+
+def get_coordinate_labels(xds, coordinate):
+    ''' Return coordinate values as numeric array or list of (index, str) labels '''
+    if coordinate == 'time':
+        return _get_time_labels(xds.time)
     elif coordinate == 'baseline_id':
         return _get_baseline_labels(xds)
     elif coordinate == 'frequency':
-        return _get_frequency_labels(xds.coords[coordinate])
+        return _get_frequency_labels(xds.frequency)
     elif coordinate == 'polarization':
-        return _get_polarization_labels(xds.coords[coordinate])
+        return _get_polarization_labels(xds.polarization)
     elif coordinate == 'ddi':
-        return _get_ddi_labels(xds.coords[coordinate])
+        return _get_ddi_labels(xds.ddi)
 
 def _get_time_labels(time_xda):
-    ''' Return single timestamp or list of (index, time string) '''
+    ''' Return list of (index, time string) '''
     times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
     if isinstance(times, str):
-        date = _get_date_string(time_xda)
-        return date + " " + times
+        return [(0, times)]
     return list(enumerate(times.values))
 
 def _get_baseline_labels(xds):
-    ''' Return single ant1@ant2 or list of (index, ant1 name) for each new ant1 in baseline '''
+    ''' Return list of (index, ant1@station) for each new ant1 in baseline.
+        If single baseline, use ant1@station & ant2@station '''
     baseline_labels = []
     antenna_names = _get_antenna_names(xds.antenna_xds)
     baseline_pairs = _get_baseline_pairs(xds.antenna_xds.antenna_id.size)
@@ -139,7 +149,7 @@ def _get_baseline_labels(xds):
 
     if baseline_ids.size == 1:
         ant1, ant2 = baseline_pairs[baseline_ids]
-        return f"{antenna_names[ant1]} & {antenna_names[ant2]}"
+        return [(0, f"{antenna_names[ant1]} & {antenna_names[ant2]}")]
 
     last_ant1 = None
     last_idx = None
@@ -167,25 +177,27 @@ def _get_antenna_names(antenna_xds):
     return antennas
 
 def _get_polarization_labels(polarization_xda):
+    ''' Return list of (index, polarization) '''
     if polarization_xda.size == 1:
-        return polarization_xda.values
-    else:
-        return list(enumerate(polarization_xda.values))
+        return [(0, polarization_xda.values)]
+    return list(enumerate(polarization_xda.values))
 
 def _get_frequency_labels(frequency_xda):
+    ''' Return list of (index, frequency) or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.values:.5f} {frequency_xda.attrs['units']}"
+        return [(0, f"{frequency_xda.values:.5f}")]
     else:
         return None # auto ticks from frequency values
 
 def _get_ddi_labels(ddi_xda):
+    ''' Return list of (index, ddi) or None to autogenerate ticks '''
     if ddi_xda.size == 1:
-        return f"{ddi_xda.values}"
+        return [(0, f"{ddi_xda.values}")]
     else:
         return None # auto ticks from ddi values
 
 def set_frequency_unit(xds):
-    # Set unit as string (not list) and convert to GHz if Hz
+    ''' Set unit as string (not list) and convert to GHz if Hz '''
     unit = xds.frequency.attrs['units']
     if isinstance(unit, list):
         unit = unit[0]
@@ -215,23 +227,22 @@ def get_axis_labels(xds, axis):
         if xds.time.size > 1:
             tick_inc = int(len(ticks) / 10)
             ticks = ticks[::tick_inc]
-            xds['time'] = np.array(range(xds.time.size))
+        xds['time'] = np.array(range(xds.time.size))
     elif axis == "baseline_id":
         label = "Baseline Antenna1"
-        if xds.baseline_id.size > 1:
-            xds['baseline_id'] = np.array(range(xds.baseline_id.size))
+        xds['baseline_id'] = np.array(range(xds.baseline_id.size))
     elif axis == "frequency":
         unit = xds.frequency.frequency.attrs['units']
         label =  f"Frequency ({unit})"
     elif axis == "polarization":
         label =  "Polarization"
-        if xds.polarization.size > 1:
-            xds['polarization'] = np.array(range(xds.polarization.size))
+        xds['polarization'] = np.array(range(xds.polarization.size))
     elif axis == "ddi":
         label =  "DDI"
     return (axis, label, ticks)
 
 def _get_date_string(time_xda):
+    ''' Return date as dd-Mon-yyyy e.g. 23-Aug-2010 '''
     if time_xda.size == 1:
         return to_datetime(time_xda.values, unit=time_xda.units[0]).strftime("%d-%b-%Y")
     else:

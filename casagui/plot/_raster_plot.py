@@ -27,26 +27,27 @@ def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path):
     plot_ps, selection = select_ps(ps, selection, do_select_ddi)
     plot_xds = concat_ps_xds(plot_ps)
     shape = plot_xds.sizes
-    print(f"Plotting visibilities with {shape['time']} times, {shape['baseline_id']} baselines, {shape['frequency']} channels, {shape['polarization']} polarizations")
+    print(f"Plotting visibilities with {shape['ddi']} ddis, {shape['time']} times, {shape['baseline_id']} baselines, {shape['frequency']} channels, {shape['polarization']} polarizations")
 
     # Check x and y axes, vis axis, and plot selection
     x_axis, y_axis = _check_axes(plot_xds, x_axis, y_axis)
     vis_axis = _check_vis_axis(plot_xds, vis_axis)
     selection = _check_plot_selection(plot_xds, x_axis, y_axis, selection)
 
+    # Calculate colorbar limits for amplitudes
+    color_limits = _raster_color_limits(plot_ps, vis_path, vis_axis)
+
     # Calculate complex component
     plot_xds['VISIBILITY'] = get_axis_data(plot_xds, vis_axis)
-
-    # Calculate colorbar limits for amplitudes
-    if 'amp' in vis_axis:
-        color_limits = _raster_color_limits(plot_xds, vis_axis)
 
     # Sort xds
     plot_xds = plot_xds.sortby('time')
 
     # Select plane of unplotted axes
-    vis_dims = plot_xds.VISIBILITY.dims # fewer dims after selection
-    plot_xds = _select_raster_plane(plot_xds, x_axis, y_axis, selection)
+    # First capture original dims, fewer after selection
+    vis_dims = plot_xds.VISIBILITY.dims
+    # Add raster plane selections to selection
+    plot_xds, selection = _select_raster_plane(plot_xds, x_axis, y_axis, selection)
 
     # Set string for axis unit, convert to GHz if Hz (other axes do not have unit)
     set_frequency_unit(plot_xds)
@@ -124,38 +125,23 @@ def _check_plot_selection(xds, x_axis, y_axis, selection):
     _select_raster_plane(xds, x_axis, y_axis, plot_selection, test=True)
     return selection
 
-def _raster_color_limits(xds, vis_axis):
+def _raster_color_limits(ps, path, vis_axis):
     ''' Calculate data color scaling ranges to amplitude min/max or 3-sigma limits '''
     if vis_axis != "amp":
-        return (None, None)
+        return None
+    # To avoid graphviper:
+    #return None
 
     print("Calculating colorbar limits for amplitude...")
-    # Use unflagged cross correlation data for limits
-    xda = xds.VISIBILITY.where(np.logical_not(xds.FLAG).compute(), drop=True)
-    if xda.size == 0:
-        print("No unflagged data, will autoscale color limits")
-        return (None, None)
+    vis_type = 'corrected' if 'corrected' in vis_axis else 'data'
+    min_val, max_val, mean, std = get_vis_stats(ps, path, vis_type)
+    data_min = min(0.0, min_val)
+    clip_min = max(data_min, mean - (3.0 * std))
+    data_max = max(0.0, max_val)
+    clip_max = min(data_max, mean + (3.0 * std))
 
-    # Use cross correlation data for limits (unless all auto-corr)
-    xda_cross = xda.where((xds.baseline_antenna1_id != xds.baseline_antenna2_id).compute(), drop=True)
-    if xda_cross.size == 0:
-        xda_cross = xda
-
-    #with Profiler() as prof, ResourceProfiler() as rprof, CacheProfiler() as cprof:
-    minval, maxval, mean, std = dask.compute(
-        xda_cross.min(),
-        xda_cross.max(),
-        xda_cross.mean(),
-        xda_cross.std()
-    )
-    #visualize([prof, rprof, cprof])
-
-    datamin = min(0.0, minval.values)
-    clipmin = max(datamin, mean.values - (3.0 * std.values))
-    datamax = max(0.0, maxval.values)
-    clipmax = min(datamax, mean.values + (3.0 * std.values))
-    print(f"Setting colorbar limits ({clipmin:.4f}, {clipmax:.4f})")
-    return (clipmin, clipmax)
+    print(f"Setting colorbar limits ({clip_min:.4f}, {clip_max:.4f})")
+    return (clip_min, clip_max)
 
 def _get_non_plot_axes(xds, x_axis, y_axis):
     ''' Return dimensions which are not plot axes '''
@@ -180,6 +166,9 @@ def _select_raster_plane(xds, x_axis, y_axis, selection, test=False):
                 data_selection[axis] = value
         else:
             data_iselection[axis] = 0 # default first
+            # add to selection dict
+            if selection is None:
+                 selection = {}
             selection[axis] = 0
 
     error = None
@@ -199,14 +188,14 @@ def _select_raster_plane(xds, x_axis, y_axis, selection, test=False):
             raise RuntimeError(f"Plot selection failed: {data_selection}") from e
 
     if not test:
-        return xds
+        return xds, selection
 
 def _get_plot_title(xds, plot_axes, selection, vis_dims, vis_name):
     ''' Form string containing vis name and selected values '''
     title = f"{vis_name}\n"
 
     # Add plot selection
-    if selection is not None:
+    if selection is not None and ('field' in selection.keys() or 'intent' in selection.keys()):
         if 'field' in selection.keys():
             field = selection['field']
             if isinstance(field, int):
@@ -220,7 +209,7 @@ def _get_plot_title(xds, plot_axes, selection, vis_dims, vis_name):
     # Add selected dimensions to title: name and index
     for dim in vis_dims:
         if dim not in plot_axes and xds.coords[dim].size == 1:
-            label = get_coordinate_labels(xds, dim)
+            label = get_coordinate_label(xds, dim)
             if dim == 'baseline_id':
                 title += f"baseline={label} ({selection[dim]}) "
             elif dim == 'ddi':

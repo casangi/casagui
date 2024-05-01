@@ -5,9 +5,14 @@ from ._utils import (
     concat_ps_xds,
     set_baseline_ids,
     set_frequency_unit,
+    get_coordinate_label,
     get_coordinate_labels,
     get_axis_labels,
     get_vis_axis_labels,
+)
+
+from ._stats import (
+    get_vis_stats,
 )
 
 __all__ = [
@@ -16,8 +21,10 @@ __all__ = [
     "concat_ps_xds",
     "set_baseline_ids",
     "set_frequency_unit",
+    "get_coordinate_label",
     "get_coordinate_labels",
     "get_axis_labels",
     "get_vis_axis_labels",
+    "get_vis_stats",
 ]
 
