@@ -87,7 +87,8 @@ class CubeMask:
             If provided, the ``abort`` function will be called in the case of an error.
         '''
         self._is_notebook = is_notebook()
-        self._color = '#00FF00'                            # default color for mask, selection, etc.
+        #self._color = '#00FF00'                           # anti-green VLA users feedback (issue #40 2024-05-02 13:08:32)
+        self._color  = '#FFFFFF'                           # default color for mask, selection, etc.
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
