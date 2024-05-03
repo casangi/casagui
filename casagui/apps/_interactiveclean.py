@@ -2286,7 +2286,7 @@ class InteractiveClean:
                                                   Tip( self._fig['slider'],
                                                        tooltip=Tooltip( content=HTML("slide control to the desired channel"),
                                                                         position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
-                                                  self._cube.tapedeck( ),
+                                                  self._cube.tapedeck( ) if self._fig['slider'] else Div( ),
                                                   width_policy='max', height_policy='min',
                                               ),
                                               height_policy='max', width_policy='max',
