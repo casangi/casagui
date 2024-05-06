@@ -1,6 +1,6 @@
 ########################################################################
 #
-#TASK XML> tclean -argfilter=interactive,selectdata,projection,facets,psfphasecenter,vptable,aterm,cfcache,computepastep,rotatepastep,normtype,normtype,fusedthreshold,largestscale,restoration,outlierfile,noise,uvtaper,fullsummary,restart,calcres,calcpsf,psfcutoff -argfilter:initParams=vis,imagename
+#TASK XML> tclean -argfilter=interactive,fullsummary -argfilter:initParams=vis,imagename
 # Copyright (C) 2022,2023,2024
 # Associated Universities, Inc. Washington DC, USA.
 #
@@ -932,7 +932,7 @@ class InteractiveClean:
                                                   Tip( self._fig['slider'],
                                                        tooltip=Tooltip( content=HTML("slide control to the desired channel"),
                                                                         position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
-                                                  self._cube.tapedeck( ),
+                                                  self._cube.tapedeck( ) if self._fig['slider'] else Div( ),
                                                   width_policy='max', height_policy='min',
                                               ),
                                               height_policy='max', width_policy='max',

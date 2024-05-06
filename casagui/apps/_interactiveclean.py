@@ -76,6 +76,7 @@ class InteractiveClean:
                          default: none;
                          example: vis='ngc5921.ms'
                                   vis=['ngc5921a.ms','ngc5921b.ms']; multiple MSes
+    selectdata           Enable data selection parameters.
     field                to image or mosaic.  Use field id(s) or name(s).
                             ['go listobs' to obtain the list id's or names]
                          default: ''= all fields
@@ -238,17 +239,14 @@ class InteractiveClean:
                          cell=['1arcmin', '1arcmin']
                          cell = '1arcsec' is equivalent to ['1arcsec','1arcsec']
     phasecenter          Phase center of the image (string or field id); if the phasecenter is the name known major solar system object ('MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO', 'SUN', 'MOON') or is an ephemerides table then that source is tracked and the background sources get smeared. There is a special case, when phasecenter='TRACKFIELD', which will use the ephemerides or polynomial phasecenter in the FIELD table of the MS's as the source center to track.
-
-                              Note : If unspecified, tclean will use the phase-center from the first data field of the MS (or list of MSs) selected for imaging.
-
-                         			example: phasecenter=6
-                         phasecenter='J2000 19h30m00 -40d00m00'
-                         phasecenter='J2000 292.5deg  -40.0deg'
-                         phasecenter='J2000 5.105rad  -0.698rad'
-                         phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
-                         phasecenter='myComet_ephem.tab'
-                         phasecenter='MOON'
-                         phasecenter='TRACKFIELD'
+                         example: phasecenter=6
+                                  phasecenter='J2000 19h30m00 -40d00m00'
+                                  phasecenter='J2000 292.5deg  -40.0deg'
+                                  phasecenter='J2000 5.105rad  -0.698rad'
+                                  phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
+                                  phasecenter='myComet_ephem.tab'
+                                  phasecenter='MOON'
+                                  phasecenter='TRACKFIELD'
     stokes               Stokes Planes to make
                          default='I'; example: stokes='IQUV';
                            Options: 'I','Q','U','V','IV','QU','IQ','UV','IQUV','RR','LL','XX','YY','RRLL','XXYY','pseudoI'
@@ -264,6 +262,10 @@ class InteractiveClean:
                                               when either of the parallel-hand correlations are unflagged.
 
                                        The remaining constraints shall be removed (where logical) in a future release.
+    projection           Coordinate projection
+                         Examples : SIN,   NCP
+                         A list of supported (but untested) projections can be found here :
+                         http://casa.nrao.edu/active/docs/doxygen/html/classcasa_1_1Projection.html#a3d5f9ec787e4eabdce57ab5edaf7c0cd
     startmodel           Name of starting model image
 
                          The contents of the supplied starting model image will be
@@ -614,6 +616,31 @@ class InteractiveClean:
                                After the PSF generation, a PB is constructed using the same
                                models used in gridder='mosaic' but just evaluated in the image
                                domain without consideration to weights.
+    facets               Number of facets on a side
+
+                         A set of (facets x facets) subregions of the specified image
+                         are gridded separately using their respective phase centers
+                         (to minimize max W). Deconvolution is done on the joint
+                         full size image, using a PSF from the first subregion/facet.
+
+                         		       In our current version of tclean, facets>1 may be used only
+                         		       with parallel=False.
+    psfphasecenter       For mosaic use psf centered on this
+                         optional direction. You may need to use
+                         this if for example the mosaic does not
+                         have any pointing in the center of the
+                         image. Another reason; as the psf is
+                         approximate for a mosaic, this may help
+                         to deconvolve a non central bright source
+                         well and quickly.
+
+                         example:
+
+                            psfphasecenter=6 #center psf on field 6
+                            psfphasecenter='J2000 19h30m00 -40d00m00'
+                            psfphasecenter='J2000 292.5deg -40.0deg'
+                            psfphasecenter='J2000 5.105rad -0.698rad'
+                            psfphasecenter='ICRS 13:05:27.2780 -049.28.04.458'
     wprojplanes          Number of distinct w-values at which to compute and use different
                          gridding convolution functions for W-Projection
 
@@ -638,7 +665,38 @@ class InteractiveClean:
 
                          wprojplanes=-1 is an option for gridder='widefield' or 'wproject'
                          in which the number of planes is automatically computed.
+    vptable              vpmanager
+
+                         vptable="" : Choose default beams for different telescopes
+                                             ALMA : Airy disks
+                                             EVLA : old VLA models.
+
+                         Other primary beam models can be chosen via the vpmanager tool.
+
+                         Step 1 :  Set up the vpmanager tool and save its state in a table
+
+                                       vp.setpbpoly(telescope='EVLA', coeff=[1.0, -1.529e-3, 8.69e-7, -1.88e-10])
+                                       vp.saveastable('myvp.tab')
+
+                         Step 2 : Supply the name of that table in tclean.
+
+                                      tclean(....., vptable='myvp.tab',....)
+
+                         Please see the documentation for the vpmanager for more details on how to
+                         choose different beam models. Work is in progress to update the defaults
+                         for EVLA and ALMA.
+
+                         Note : AWProjection currently does not use this mechanism to choose
+                                   beam models. It instead uses ray-traced beams computed from
+                                   parameterized aperture illumination functions, which are not
+                                   available via the vpmanager. So, gridder='awproject' does not allow
+                                   the user to set this parameter.
     mosweight            When doing Brigg's style weighting (including uniform) to perform the weight density calculation for each field indepedently if True. If False the weight density is calculated from the average uv distribution of all the fields.
+    aterm                Use aperture illumination functions during gridding
+
+                         This parameter turns on the A-term of the AW-Projection gridder.
+                         Gridding convolution functions are constructed from aperture illumination
+                         function models of each antenna.
     psterm               Include the Prolate Spheroidal (PS) funtion as the anti-aliasing
                          operator in the gridding convolution functions used for gridding.
 
@@ -682,8 +740,47 @@ class InteractiveClean:
                          in the minor cycle (using the mtmfs algorithm) to avoid dynamic range limits
                          (of a few hundred for a 2:1 bandwidth).
                          This works for specmode='mfs' and its value is ignored for cubes
+    cfcache              Convolution function cache directory name
+
+                         Name of a directory in which to store gridding convolution functions.
+                         This cache is filled at the beginning of an imaging run. This step can be time
+                         consuming but the cache can be reused across multiple imaging runs that
+                         use the same image parameters (cell size, image size , spectral data
+                         selections, wprojplanes, wbawp, psterm, aterm).  The effect of the wbawp,
+                         psterm and aterm settings is frozen-in in the cfcache. Using an existing cfcache
+                         made with a different setting of these parameters will not reflect the current
+                         settings.
+
+                         In a parallel execution, the construction of the cfcache is also parallelized
+                         and the time to compute scales close to linearly with the number of compute
+                         cores used.   With the re-computation of Convolution Functions (CF) due to PA
+                         rotation turned-off (the computepastep parameter), the total number of in the
+                         cfcache can be computed as [No. of wprojplanes x No. of selected spectral windows x 4]
+
+                         By default, cfcache = imagename + '.cf'
     usepointing          The usepointing flag informs the gridder that it should utilize the pointing table
                          to use the correct direction in which the antenna is pointing with respect to the pointing phasecenter.
+    computepastep        Parallactic angle interval after the AIFs are recomputed (deg)
+
+                         This parameter controls the accuracy of the aperture illumination function
+                         used with AProjection for alt-az mount dishes where the AIF rotates on the
+                         sky as the synthesis image is built up.  Once the PA in the data changes by
+                         the given interval, AIFs are re-computed at the new PA.
+
+                         A value of 360.0 deg (the default) implies no re-computation due to PA rotation.
+                         AIFs are computed for the PA value of the first valid data received and used for
+                         all of the data.
+    rotatepastep         Parallactic angle interval after which the nearest AIF is rotated (deg)
+
+                         Instead of recomputing the AIF for every timestep's parallactic angle,
+                         the nearest existing AIF is used and rotated
+                         after the PA changed by rotatepastep value.
+
+                         A value of 360.0 deg (the default) disables rotation of the AIF.
+
+                         For example, computepastep=360.0 and rotatepastep=5.0 will compute
+                         the AIFs at only the starting parallactic angle and all other timesteps will
+                         use a rotated version of that AIF at the nearest 5.0 degree point.
     pointingoffsetsigdev Corrections for heterogenous and time-dependent pointing
                           offsets via AWProjection are controlled by this parameter.
                           It is a vector of 2 ints or doubles each of which is interpreted
@@ -762,6 +859,28 @@ class InteractiveClean:
                                           ia.open('test.image');
                                           ia.maskhandler(op='set', name='');
                                           ia.done()
+    normtype             Normalization type (flatnoise, flatsky, pbsquare)
+
+                          Gridded (and FT'd) images represent the PB-weighted sky image.
+                          Qualitatively it can be approximated as two instances of the PB
+                          applied to the sky image (one naturally present in the data
+                          and one introduced during gridding via the convolution functions).
+
+                          xxx.weight : Weight image approximately equal to sum ( square ( pb ) )
+                          xxx.pb : Primary beam calculated as  sqrt ( xxx.weight )
+
+                          normtype='flatnoise' : Divide the raw image by sqrt(.weight) so that
+                                                              the input to the minor cycle represents the
+                                                              product of the sky and PB. The noise is 'flat'
+                                                              across the region covered by each PB.
+
+                         normtype='flatsky' : Divide the raw image by .weight so that the input
+                                                          to the minor cycle represents only the sky.
+                                                          The noise is higher in the outer regions of the
+                                                          primary beam where the sensitivity is low.
+
+                         normtype='pbsquare' : No normalization after gridding and FFT.
+                                                               The minor cycle sees the sky times pb square
     deconvolver          Name of minor cycle algorithm (hogbom,clark,multiscale,mtmfs,mem,clarkstokes,asp)
 
                          Each of the following algorithms operate on residual images and psfs
@@ -907,6 +1026,46 @@ class InteractiveClean:
                          		      A score larger than 0.0 will bias the solution towards smaller scales.
                          		      A score smaller than 0.0 will bias the solution towards larger scales.
                          		      The effect of smallscalebias is more pronounced when using multi-scale relative to mtmfs.
+    fusedthreshold       ring Hogbom Clean (number in units of Jy)
+
+                         fusedthreshold = 0.0001  : 0.1 mJy
+
+                         This is a subparameter of the Asp Clean deconvolver. When peak residual
+                         is lower than the threshold, Asp Clean is "switched to Hogbom Clean" (i.e. only use the 0 scale for cleaning) for
+                         the following number of iterations until it switches back to Asp Clean.
+
+                         NumberIterationsInHogbom = 50 + 2 * (exp(0.05 * NthHogbom) - 1)
+
+                         , where NthHogbom is the number of times Hogbom Clean has been triggered.
+
+                         When the Asp Clean detects it is approaching convergence, it uses only the 0 scale for the following number of iterations for better computational efficiency.
+
+                         NumberIterationsInHogbom = 500 + 2 * (exp(0.05 * NthHogbom) - 1)
+
+                         Set 'fusedthreshold = -1' to make the Asp Clean deconvolver never "switch" to Hogbom Clean.
+    largestscale         xels) allowed for the initial guess for the Asp Clean deconvolver.
+
+                         largestscale = 100
+
+                         The default initial scale sizes used by Asp Clean is [0, w, 2w, 4w, 8w],
+                         		     where `w` is the PSF width. The default `largestscale` is -1 which indicates
+                         		     users accept these initial scales. If `largestscale` is set, the initial scales
+                         		     would be [0, w, ... up to the `largestscale`]. This is only an initial guess,
+                         		     and actual fitted scale sizes may evolve from these initial values.
+
+                         		     It is recommended not to set `largestscale` unless Asp Clean picks a large
+                         		     scale that has no constraints from the data (the UV hole issue).
+    restoration          e.
+
+                         Construct a restored image : imagename.image by convolving the model
+                         image with a clean beam and adding the residual image to the result.
+                         If a restoringbeam is specified, the residual image is also
+                         smoothed to that target resolution before adding it in.
+
+                         If a .model does not exist, it will make an empty one and create
+                         the restored image from the residuals ( with additional smoothing if needed ).
+                         With algorithm='mtmfs', this will construct Taylor coefficient maps from
+                         the residuals and compute .alpha and .alpha.error.
     restoringbeam        ize to use.
 
                          - restoringbeam='' or ['']
@@ -945,6 +1104,54 @@ class InteractiveClean:
                                       end of the band at its location. As a guideline, the artificial spectral
                                       index due to the PB is -1.4 at the 0.5 gain level and less than -0.2
                                       at the 0.9 gain level at the middle frequency )
+    outlierfile          Name of outlier-field image definitions
+
+                         A text file containing sets of parameter=value pairs,
+                         one set per outlier field.
+
+                         Example :   outlierfile='outs.txt'
+
+                                            Contents of outs.txt :
+
+                                                      imagename=tst1
+                                                      nchan=1
+                                                      imsize=[80,80]
+                                                      cell=[8.0arcsec,8.0arcsec]
+                                                      phasecenter=J2000 19:58:40.895 +40.55.58.543
+                                                      mask=circle[[40pix,40pix],10pix]
+
+                                                      imagename=tst2
+                                                      nchan=1
+                                                      imsize=[100,100]
+                                                      cell=[8.0arcsec,8.0arcsec]
+                                                      phasecenter=J2000 19:58:40.895 +40.56.00.000
+                                                      mask=circle[[60pix,60pix],20pix]
+
+                            The following parameters are currently allowed to be different between
+                            the main field and the outlier fields (i.e. they will be recognized if found
+                            in the outlier text file). If a parameter is not listed, the value is picked from
+                            what is defined in the main task input.
+
+                                imagename, imsize, cell, phasecenter, startmodel, mask
+                                specmode, nchan, start, width, nterms, reffreq,
+                                gridder, deconvolver, wprojplanes
+
+                            Note : 'specmode' is an option, so combinations of mfs and cube
+                                       for different image fields, for example, are supported.
+                                      'deconvolver' and 'gridder' are also options that allow different
+                                       imaging or deconvolution algorithm per image field.
+
+                                       For example, multiscale with wprojection and 16 w-term planes
+                                       on the main field and mtmfs with nterms=3 and wprojection
+                                       with 64 planes on a bright outlier source for which the frequency
+                                       dependence of the primary beam produces a strong effect that
+                                       must be modeled.   The traditional alternative to this approach is
+                                       to first image the outlier, subtract it out of the data (uvsub) and
+                                       then image the main field.
+
+                            Note : If you encounter a use-case where some other parameter needs
+                                      to be allowed in the outlier file (and it is logical to do so), please
+                                      send us feedback. The above is an initial list.
     weighting            Weighting scheme (natural,uniform,briggs,superuniform,radial, briggsabs, briggsbwtaper)
 
                                  During gridding of the dirty or residual image, each visibility value is
@@ -1023,6 +1230,7 @@ class InteractiveClean:
                          robust = -2.0 maps to uniform weighting.
                          robust = +2.0 maps to natural weighting.
                          (robust=0.5 is equivalent to robust=0.0 in AIPS IMAGR.)
+    noise                noise parameter for briggs abs mode weighting
     npixels              Number of pixels to determine uv-cell size for super-uniform weighting
                           (0 defaults to -/+ 3 pixels)
 
@@ -1036,6 +1244,29 @@ class InteractiveClean:
                                          superuniform weighting. Therefore, for 'superuniform'
                          				     weighting, if npixels=0 it will be forced to 6 (or a box
                          				     of -3pixels to +3pixels) to cover 7 pixels on a side.
+    uvtaper              uv-taper on outer baselines in uv-plane
+
+                                          Apply a Gaussian taper in addition to the weighting scheme specified
+                                          via the 'weighting' parameter. Higher spatial frequencies are weighted
+                                          down relative to lower spatial frequencies to suppress artifacts
+                                          arising from poorly sampled areas of the uv-plane. It is equivalent to
+                                          smoothing the PSF obtained by other weighting schemes and can be
+                                          specified either as the HWHM of a Gaussian in uv-space (eg. units of lambda)
+                                          or as the FWHM of a Gaussian in the image domain (eg. angular units like arcsec).
+
+                                          uvtaper = [bmaj, bmin, bpa]
+
+                         		   Note : FWHM_uv_lambda = (4 log2) / ( pi * FWHM_lm_radians )
+
+                         		   A FWHM_lm of 100.000 arcsec maps to a HWHM_uv of 910.18 lambda
+                                          A FWHM_lm of 1 arcsec maps to a HWHM_uv of 91 klambda
+
+                                          default: uvtaper=[]; no Gaussian taper applied
+                                          example: uvtaper=['5klambda']  circular taper of  HWHM=5 kilo-lambda
+                                                   uvtaper=['5klambda','3klambda','45.0deg'] uv-domain HWHM
+                         			    uvtaper=['50arcsec','30arcsec','30.0deg'] : image domain FWHM
+                                                   uvtaper=['10arcsec'] : image domain FWHM
+                                                   uvtaper=['300.0'] default units are lambda in aperture plane
     niter                Maximum number of iterations
 
                          A stopping criterion based on total iteration count.
@@ -1334,6 +1565,53 @@ class InteractiveClean:
                                                 outside the mask and inside the primary beam mask.
 
                                                 In all cases above RMS noise is calculated from MAD.
+    restart              images (and start from an existing model image)
+                         or automatically increment the image name and make a new image set.
+
+                         True : Re-use existing images. If imagename.model exists the subsequent
+                                   run will start from this model (i.e. predicting it using current gridder
+                                   settings and starting from the residual image).  Care must be taken
+                                   when combining this option with startmodel. Currently, only one or
+                                   the other can be used.
+
+                                   startmodel='', imagename.model exists :
+                                             - Start from imagename.model
+                                   startmodel='xxx', imagename.model does not exist :
+                                             - Start from startmodel
+                                   startmodel='xxx', imagename.model exists :
+                                             - Exit with an error message requesting the user to pick
+                                               only one model.  This situation can arise when doing one
+                                               run with startmodel='xxx' to produce an output
+                                               imagename.model that includes the content of startmodel,
+                                               and wanting to restart a second run to continue deconvolution.
+                                               Startmodel should be set to '' before continuing.
+
+                                    If any change in the shape or coordinate system of the image is
+                                    desired during the restart, please change the image name and
+                                    use the startmodel (and mask) parameter(s) so that the old model
+                                    (and mask) can be regridded to the new coordinate system before starting.
+
+                          False : A convenience feature to increment imagename with '_1', '_2',
+                                     etc as suffixes so that all runs of tclean are fresh starts (without
+                                     having to change the imagename parameter or delete images).
+
+                                     This mode will search the current directory for all existing
+                                     imagename extensions, pick the maximum, and adds 1.
+                                     For imagename='try' it will make try.psf, try_2.psf, try_3.psf, etc.
+
+                                     This also works if you specify a directory name in the path :
+                                     imagename='outdir/try'.  If './outdir' does not exist, it will create it.
+                                     Then it will search for existing filenames inside that directory.
+
+                                     If outlier fields are specified, the incrementing happens for each
+                                     of them (since each has its own 'imagename').  The counters are
+                                     synchronized across imagefields, to make it easier to match up sets
+                                     of output images.  It adds 1 to the 'max id' from all outlier names
+                                     on disk.  So, if you do two runs with only the main field
+                                    (imagename='try'), and in the third run you add an outlier with
+                                    imagename='outtry', you will get the following image names
+                                    for the third run :  'try_3' and 'outtry_3' even though
+                                    'outry' and 'outtry_2' have not been used.
     savemodel            Options to save model visibilities (none, virtual, modelcolumn)
 
                          Often, model visibilities must be created and saved in the MS
@@ -1379,6 +1657,51 @@ class InteractiveClean:
                          Note 3:    when parallel=True, use savemodel='none'; Other options are not yet ready
                                     for use in parallel. If model visibilities need to be saved (virtual or modelcolumn):
                                     please run tclean in serial mode with niter=0; after the parallel run
+    calcres              Calculate initial residual image
+
+                         This parameter controls what the first major cycle does.
+
+                         calcres=False with niter greater than 0 will assume that
+                         a .residual image already exists  and that the minor cycle can
+                         begin without recomputing it.
+
+                         calcres=False with niter=0 implies that only the PSF will be made
+                         and no data will be gridded.
+
+                         calcres=True requires that calcpsf=True or that the .psf and .sumwt
+                         images already exist on disk (for normalization purposes).
+
+                         Usage example : For large runs (or a pipeline scripts) it may be
+                                                     useful to first run tclean with niter=0 to create
+                                                     an initial .residual to look at and perhaps make
+                                                     a custom mask for. Imaging can be resumed
+                                                     without recomputing it.
+    calcpsf              Calculate PSF
+
+                         This parameter controls what the first major cycle does.
+
+                         calcpsf=False will assume that a .psf image already exists
+                         and that the minor cycle can begin without recomputing it.
+    psfcutoff            When the .psf image is created a 2 dimensional Gaussian is fit to the main lobe of the PSF.
+                         Which pixels in the PSF are fitted is determined by psfcutoff.
+                         The default value of psfcutoff is 0.35 and can varied from 0.01 to 0.99.
+                         Fitting algorithm:
+                             - A region of 41 x 41 pixels around the peak of the PSF is compared against the psfcutoff.
+                                 Sidelobes are ignored by radially searching from the PSF peak.
+                             - Calculate the bottom left corner (blc) and top right corner (trc) from the points. Expand blc and trc with a number of pixels (5).
+                             - Create a new sub-matrix from blc and trc.
+                             - Interpolate matrix to a target number of points (3001) using CUBIC spline.
+                             - All the non-sidelobe points, in the interpolated matrix, that are above the psfcutoff are used to fit a Gaussian.
+                                 A Levenberg-Marquardt algorithm is used.
+                             - If the fitting fails the algorithm is repeated with the psfcutoff decreased (psfcutoff=psfcutoff/1.5).
+                                 A message in the log will apear if the fitting fails along with the new value of psfcutoff.
+                                 This will be done up to 50 times if fitting fails.
+                         This Gaussian beam is defined by a major axis, minor axis, and position angle.
+                         During the restoration process, this Gaussian beam is used as the Clean beam.
+                         Varying psfcutoff might be useful for producing a better fit for highly non-Gaussian PSFs, however, the resulting fits should be carefully checked.
+                         This parameter should rarely be changed.
+
+                         (This is not the support size for clark clean.)
     parallel             Run major cycles in parallel (this feature is experimental)
 
                           Parallel tclean will run only if casa has already been started using mpirun.
@@ -1480,7 +1803,7 @@ class InteractiveClean:
         cmd += ' ' + str(hostname)
         return cmd
 
-    def __init__( self, vis, imagename, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', wprojplanes=int(1), mosweight=True, psterm=False, wbawp=True, conjbeams=False, usepointing=False, pointingoffsetsigdev=[  ], pblimit=float(0.2), deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), restoringbeam=[  ], pbcor=False, weighting='natural', robust=float(0.5), npixels=int(0), niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, savemodel='none', parallel=False ):
+    def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, outlierfile='', weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False ):
 
         ###
         ### Create application context (which includes a temporary directory).
@@ -1527,7 +1850,7 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( vis=vis, field=field, spw=spw, timerange=timerange, uvrange=uvrange, antenna=antenna, scan=scan, observation=observation, intent=intent, datacolumn=datacolumn, imagename=imagename, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes, startmodel=startmodel, specmode=specmode, reffreq=reffreq, nchan=nchan, start=start, width=width, outframe=outframe, veltype=veltype, restfreq=restfreq, interpolation=interpolation, perchanweightdensity=perchanweightdensity, gridder=gridder, wprojplanes=wprojplanes, mosweight=mosweight, psterm=psterm, wbawp=wbawp, conjbeams=conjbeams, usepointing=usepointing, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, deconvolver=deconvolver, scales=scales, nterms=nterms, smallscalebias=smallscalebias, restoringbeam=restoringbeam, pbcor=pbcor, weighting=weighting, robust=robust, npixels=npixels, niter=niter, gain=gain, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor, minpsffraction=minpsffraction, maxpsffraction=maxpsffraction, nmajor=nmajor, usemask=usemask, mask=mask, pbmask=pbmask, sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold, smoothfactor=smoothfactor, minbeamfrac=minbeamfrac, cutthreshold=cutthreshold, growiterations=growiterations, dogrowprune=dogrowprune, minpercentchange=minpercentchange, verbose=verbose, fastnoise=fastnoise, savemodel=savemodel, parallel=parallel  )
+        self._clean = _gclean( vis=vis, selectdata=selectdata, field=field, spw=spw, timerange=timerange, uvrange=uvrange, antenna=antenna, scan=scan, observation=observation, intent=intent, datacolumn=datacolumn, imagename=imagename, imsize=imsize, cell=cell, phasecenter=phasecenter, stokes=stokes, projection=projection, startmodel=startmodel, specmode=specmode, reffreq=reffreq, nchan=nchan, start=start, width=width, outframe=outframe, veltype=veltype, restfreq=restfreq, interpolation=interpolation, perchanweightdensity=perchanweightdensity, gridder=gridder, facets=facets, psfphasecenter=psfphasecenter, wprojplanes=wprojplanes, vptable=vptable, mosweight=mosweight, aterm=aterm, psterm=psterm, wbawp=wbawp, conjbeams=conjbeams, cfcache=cfcache, usepointing=usepointing, computepastep=computepastep, rotatepastep=rotatepastep, pointingoffsetsigdev=pointingoffsetsigdev, pblimit=pblimit, normtype=normtype, deconvolver=deconvolver, scales=scales, nterms=nterms, smallscalebias=smallscalebias, fusedthreshold=fusedthreshold, largestscale=largestscale, restoration=restoration, restoringbeam=restoringbeam, pbcor=pbcor, outlierfile=outlierfile, weighting=weighting, robust=robust, noise=noise, npixels=npixels, uvtaper=uvtaper, niter=niter, gain=gain, threshold=threshold, nsigma=nsigma, cycleniter=cycleniter, cyclefactor=cyclefactor, minpsffraction=minpsffraction, maxpsffraction=maxpsffraction, nmajor=nmajor, usemask=usemask, mask=mask, pbmask=pbmask, sidelobethreshold=sidelobethreshold, noisethreshold=noisethreshold, lownoisethreshold=lownoisethreshold, negativethreshold=negativethreshold, smoothfactor=smoothfactor, minbeamfrac=minbeamfrac, cutthreshold=cutthreshold, growiterations=growiterations, dogrowprune=dogrowprune, minpercentchange=minpercentchange, verbose=verbose, fastnoise=fastnoise, restart=restart, savemodel=savemodel, calcres=calcres, calcpsf=calcpsf, psfcutoff=psfcutoff, parallel=parallel  )
         ###
         ### self._convergence_data['chan']: accumulated, pre-channel convergence information
         ###                                 used by ColumnDataSource
