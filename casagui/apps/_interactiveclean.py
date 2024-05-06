@@ -2170,6 +2170,7 @@ class InteractiveClean:
                                                                            { action: 'finish',
                                                                              value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
                                                                                       threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                                                      nsigma: nsigma.value, gain: gain.value,
                                                                                       mask: img_src.masks( ),
                                                                                       breadcrumbs: img_src.breadcrumbs( ) } },
                                                                            update_gui )
