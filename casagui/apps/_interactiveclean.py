@@ -35,11 +35,11 @@ import websockets
 from uuid import uuid4
 from html import escape as html_escape
 from contextlib import asynccontextmanager
-from bokeh.models import Button, TextInput, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step, InlineStyleSheet
+from bokeh.models import Button, TextInput, Checkbox, Div, LinearAxis, CustomJS, Spacer, Span, HoverTool, DataRange1d, Step, InlineStyleSheet
 from bokeh.events import ModelEvent, MouseEnter
 from bokeh.models import TabPanel, Tabs
 from bokeh.plotting import ColumnDataSource, figure, show
-from bokeh.layouts import column, row, Spacer, layout
+from bokeh.layouts import column, row, layout
 from bokeh.io import reset_output as reset_bokeh_output, output_notebook
 from bokeh.models.dom import HTML
 
@@ -1873,6 +1873,19 @@ class InteractiveClean:
         self._params['cyclefactor'] = cyclefactor
         self._params['gain'] = gain
         self._params['nsigma'] = nsigma
+
+        ###
+        ### Auto Masking Parameters
+        ###
+        self._params_am = { }
+        self._params_am['usemask'] = usemask
+        self._params_am['noisethreshold'] = noisethreshold
+        self._params_am['sidelobethreshold'] = sidelobethreshold
+        self._params_am['lownoisethreshold'] = lownoisethreshold
+        self._params_am['minbeamfrac'] = minbeamfrac
+        self._params_am['negativethreshold'] = negativethreshold
+        self._params_am['dogrowprune'] = dogrowprune
+
         ###
         ### Polarity plane
         ###
@@ -1894,6 +1907,7 @@ class InteractiveClean:
             self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
         self._pipe = { 'control': None, 'converge': None }
         self._control = { }
+        self._automask = { 'active': False }
         self._cb = { }
         self._ids = { }
         self._last_mask_breadcrumbs = ''
@@ -2100,7 +2114,21 @@ class InteractiveClean:
                                                }
                                            }''',
 
-                       'clean-gui-update': '''function update_log( log_lines ) {
+                       'clean-gui-update': '''function get_update_dictionary( ) {
+                                                  const am = automask['active'] ?
+                                                             { noisethreshold:    automask['noisethreshold'].value,
+                                                               sidelobethreshold: automask['sidelobethreshold'].value,
+                                                               lownoisethreshold: automask['lownoisethreshold'].value,
+                                                               minbeamfrac:       automask['minbeamfrac'].value,
+                                                               negativethreshold: automask['negativethreshold'].value,
+                                                               dogrowprune:       automask['dogrowprune'].active } : { }
+                                                  return { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
+                                                           threshold: threshold.value, cyclefactor: cyclefactor.value,
+                                                           nsigma: nsigma.value, gain: gain.value,
+                                                           mask: img_src.masks( ),
+                                                           breadcrumbs: img_src.breadcrumbs( ), automask: am }
+                                           }
+                                           function update_log( log_lines ) {
                                                let b = logbutton
                                                b._log = b._log.concat( log_lines )
                                                if ( b._window && ! b._window.closed ) {
@@ -2168,11 +2196,7 @@ class InteractiveClean:
                                                            // *******************************************************************************************
                                                            ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                            { action: 'finish',
-                                                                             value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                                                      threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                                      nsigma: nsigma.value, gain: gain.value,
-                                                                                      mask: img_src.masks( ),
-                                                                                      breadcrumbs: img_src.breadcrumbs( ) } },
+                                                                             value: get_update_dictionary( ) },
                                                                            update_gui )
                                                        } else if ( ! state.stopped  ) {
                                                            // *******************************************************************************************
@@ -2270,8 +2294,8 @@ class InteractiveClean:
                                                        cyclefactor=msg['value']['cyclefactor'],
                                                        ### Checks are needed because the CASA imaging return
                                                        ### dictionary are in flux, these could be removed later...
-                                                       nsigma=msg['value']['nsigma'] if 'nsigma' in msg['value'] else None,
-                                                       gain=msg['value']['gain'] if 'gain' in msg['value'] else None ) )
+                                                       nsigma=msg['value']['nsigma'],
+                                                       gain=msg['value']['gain'], **msg['value']['automask'] ) )
 
                 if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
 
@@ -2451,6 +2475,17 @@ class InteractiveClean:
         self._control['gain'] = TextInput( title='gain', value="%s" % self._params['gain'], width=90 )
         self._control['nsigma'] = TextInput( title='nsigma', value="%s" % self._params['nsigma'], width=90 )
 
+        if self._params_am['usemask'] == 'auto-multithresh':
+            ###
+            ### Currently automasking tab is only available when the user selects 'auto-multithresh'
+            ###
+            self._automask['active'] = True
+            self._automask['noisethreshold'] = TextInput( title='noisethreshold', value="%s" % self._params_am['noisethreshold'], width=90 )
+            self._automask['sidelobethreshold'] = TextInput( title='sidelobethreshold', value="%s" % self._params_am['sidelobethreshold'], width=90 )
+            self._automask['lownoisethreshold'] = TextInput( title='lownoisethreshold', value="%s" % self._params_am['lownoisethreshold'], width=90 )
+            self._automask['minbeamfrac'] = TextInput( title='minbeamfrac', value="%s" % self._params_am['minbeamfrac'], width=90 )
+            self._automask['negativethreshold'] = TextInput( title='negativethreshold', value="%s" % self._params_am['negativethreshold'], width=90 )
+            self._automask['dogrowprune'] = Checkbox( label='dogrowprune', active=self._params_am['dogrowprune'] )
 
         self._fig['image'] = self._cube.image( height_policy='max', width_policy='max' )
         self._fig['image-source'] = self._cube.js_obj( )
@@ -2507,7 +2542,8 @@ class InteractiveClean:
                                                  stopstatus=self._status['stopcode'],
                                                  cube_obj = self._cube.js_obj( ),
                                                  go_to = self._control['goto'],
-                                                 stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                 stopdescmap=ImagingDict.get_summaryminor_stopdesc( ),
+                                                 automask=self._automask ),
                                       code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
                                            self._js['clean-enable'] + self._js['clean-status-update'] +
                                            self._js['clean-gui-update'] + self._js['clean-wait'] +
@@ -2528,11 +2564,7 @@ class InteractiveClean:
                                                       btns['stop'].button_type = "warning"
                                                       ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                       { action: 'finish',
-                                                                        value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                                 nsigma: nsigma.value, gain: gain.value,
-                                                                                 mask: img_src.masks( ),
-                                                                                 breadcrumbs: img_src.breadcrumbs( ) } },
+                                                                        value: get_update_dictionary( ) },
                                                                       update_gui )
                                                   }
                                               }
@@ -2548,11 +2580,7 @@ class InteractiveClean:
                                                       // (or even if 'XXX.origin.' is public)...
                                                       ctrl_pipe.send( ids[cb_obj.origin.name],
                                                                       { action: 'next',
-                                                                        value: { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                                                 threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                                                 nsigma: nsigma.value, gain: gain.value,
-                                                                                 mask: img_src.masks( ),
-                                                                                 breadcrumbs: img_src.breadcrumbs( ) } },
+                                                                        value: get_update_dictionary( ) },
                                                                       update_gui )
                                                   }
                                               }
@@ -2591,6 +2619,29 @@ class InteractiveClean:
             self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
                                                 TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
                                          sizing_mode='stretch_both' )
+        if self._params_am['usemask'] == 'auto-multithresh':
+            auto_masking_panel = [ TabPanel( child=column( row( Tip( self._automask['noisethreshold'],
+                                                                     tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold above which significant emission is masked during the initial round of mask creation' ),
+                                                                                      position='bottom' ) ),
+                                                                Tip( self._automask['sidelobethreshold'],
+                                                                     tooltip=Tooltip( content=HTML( 'sets a threshold based on the sidelobe level above which significant emission is masked during the initial round of mask creation' ),
+                                                                                      position='bottom' ) ) ),
+                                                           row( Tip( self._automask['minbeamfrac'],
+                                                                     tooltip=Tooltip( content=HTML( 'sets the minimum size a region must be to be retained in the mask' ),
+                                                                                      position='bottom' ) ),
+                                                                Tip( self._automask['lownoisethreshold'],
+                                                                     tooltip=Tooltip( content=HTML( 'sets the threshold into which the initial mask (which is determined by either noisethreshold or sidelobethreshold) is expanded in order to include low signal-to-noise regions in the mask' ),
+                                                                                      position='bottom' ) ) ),
+                                                           row( Tip( self._automask['negativethreshold'],
+                                                                     tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold for absorption features to be masked' ),
+                                                                                      position='bottom' ) ),
+                                                                column( Spacer( height=25, height_policy="fixed", width_policy="auto" ),
+                                                                        Tip( self._automask['dogrowprune'],
+                                                                             tooltip=Tooltip( content=HTML( 'allows you to turn off the pruning of the low signal-to-noise mask, which speeds up masking for images and cubes with complex low signal-to-noise emission' ),
+                                                                                              position='bottom' ) ) ) ) ),
+                                             title='Auto Masking' ) ]
+        else:
+            auto_masking_panel = [ ]
 
         self._fig['layout'] = column(
                                   row(
@@ -2644,7 +2695,7 @@ class InteractiveClean:
                                                            TabPanel( child=self._cube.colormap_adjust( ),
                                                                      title='Colormap' ),
                                                            TabPanel( child=self._cube.statistics( width=340 ),
-                                                                     title='Statistics' ) ],
+                                                                     title='Statistics' ) ] + auto_masking_panel,
                                                     sizing_mode='stretch_width' ),
                                               height_policy='max', width=340
                                       ),
