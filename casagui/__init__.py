@@ -29,6 +29,8 @@
 used to build GUI applications for astronomy. It also contains some
 applications turn-key applications'''
 
+import os as __os
+
 try:
     from .__version__ import __version__
 except:
@@ -38,3 +40,12 @@ except:
     ### available so set it to a default value...
     ###
     __version__ = {}
+
+
+def xml_interface_defs( ):
+    return { }
+
+__mustache_interface_templates__ = { 'iclean': __os.path.join( __os.path.dirname(__file__), "private", "casashell", "iclean.mustache" ) }
+def mustache_interface_templates( ):
+    return __mustache_interface_templates__
+

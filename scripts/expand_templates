@@ -26,7 +26,7 @@ if not java:
     exit( "Could not find java executable..." )
 
 jarfile_name = "xml-casa-assembly-1.86.jar"
-jarpath = join( dirname(dirname(realpath(__file__))), "casagui", "__java__", jarfile_name )
+jarpath = join( dirname(dirname(realpath(__file__))), "casagui", "private", "__java__", jarfile_name )
 if not isfile(jarpath):
     exit( "JAR file ('{jarfile_name}') does not exit..." )
 cmd = [ java, '-jar', jarpath ]

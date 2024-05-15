@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2021,2022
+# Copyright (C) 2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,7 +25,7 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''casashell provides on-the-fly creation of inp/go wrappers for tasks
+'''casatasks provides on-the-fly creation of inp/go wrappers for tasks
 https://bayesianbrad.github.io/posts/2017_loader-finder-python.html
 '''
 
@@ -36,7 +36,7 @@ import re
 import os
 import sys
 
-class CasaShell_Loader(_Loader):
+class CasaTasks_Loader(_Loader):
 
     def __init__( self, java, jarpath, args, templ, xml ):
         self.__java = java
@@ -53,10 +53,10 @@ class CasaShell_Loader(_Loader):
         exec( python_source, module.__dict__ )
 
 
-class CasaShell_Finder(_MetaPathFinder):
+class CasaTasks_Finder(_MetaPathFinder):
 
     def __init__( self ):
-        super(CasaShell_Finder, self).__init__( )
+        super(CasaTasks_Finder, self).__init__( )
         self.__java = None
         self.__source_dir = os.path.dirname(__file__)
         self.__jarpath = None
@@ -116,8 +116,7 @@ class CasaShell_Finder(_MetaPathFinder):
 
     def find_spec(self, fullname, path, target = None):
 
-        #if fullname == 'casagui.casashell.iclean':
-        if fullname.startswith('casagui.casashell.'):
+        if fullname.startswith('casagui.private.casatasks.'):
             if self.__java is None:
                 self.__java = self.__which( "java" )
             if self.__jarpath is None:
@@ -134,8 +133,8 @@ class CasaShell_Finder(_MetaPathFinder):
             templ, xml, args = self.__find_parameters( fullname.split(sep='.')[-1] )
             if templ is not None and xml is not None:
                 from importlib.machinery import ModuleSpec
-                return ModuleSpec( fullname, CasaShell_Loader( self.__java, self.__jarpath, args, templ, xml ) )
+                return ModuleSpec( fullname, CasaTasks_Loader( self.__java, self.__jarpath, args, templ, xml ) )
 
         return None
 
-sys.meta_path.append(CasaShell_Finder( ))
+sys.meta_path.append(CasaTasks_Finder( ))
