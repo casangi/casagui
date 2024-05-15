@@ -549,7 +549,9 @@ class ImagePipe(DataPipe):
         ia = imagetool( )
         ia.open(self.__image_path)
         if self.__mask_statistics:
-            rawstats = ia.statistics( region=reg, mask=self.__mask_path )
+            ### mask is an LEL expression and quotes prevents a name containing
+            ### numbers from being interpreted as an expression
+            rawstats = ia.statistics( region=reg, mask=f'''"{self.__mask_path}"''' )
         else:
             rawstats = ia.statistics( region=reg )
         ia.close( )
