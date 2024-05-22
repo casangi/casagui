@@ -1,7 +1,6 @@
 import multiprocessing
 
 from xradio.vis.load_processing_set import processing_set_iterator
-from graphviper.dask.client import local_client
 from graphviper.graph_tools import generate_dask_workflow
 from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
 from graphviper.graph_tools.map import map
@@ -9,17 +8,6 @@ from graphviper.graph_tools.reduce import reduce
 
 import dask
 import numpy as np
-
-def _get_ps_per_ddi(ps):
-    ''' Return dict of processing sets per ddi '''
-    ddi_ps = {}
-    for key in ps:
-        ddi = ps[key].attrs['ddi']
-        if ddi in ddi_ps:
-            ddi_ps[ddi][key] = ps[key]
-        else:
-            ddi_ps[ddi] = {key: ps[key]}
-    return ddi_ps
 
 def _get_stats_xda(xds, data_var):
     ''' Return xda with only unflagged cross-corr visibility data '''
@@ -93,52 +81,44 @@ def _reduce_variance(graph_inputs, input_params):
     sq_diff_count = sum([input[1] for input in graph_inputs])
     return (sq_diff_sum, sq_diff_count)
 
-def get_vis_stats(ps, ps_store, vis_type):
+def calculate_vis_stats(ps, ps_store, vis_type):
     '''
-        Calculate stats for visibilities: min, max, mean, std
+        Calculate stats for unflagged visibilities: min, max, mean, std
         ps (msv4 processing set): visibility data with flags
         ps_store (str): path to visibility file
         vis_type (str): type of visibility ('data' or 'corrected')
     '''
-    print("************************* SET UP VIPER CLIENT *********************")
-    cores = multiprocessing.cpu_count()
-    viper_client = local_client(cores=cores, memory_limit='32GB')
-    print("************************* SET UP VIPER CLIENT DONE ****************")
-    ddi_ps = _get_ps_per_ddi(ps)
-
-    vis_data_var = 'VISIBILITY' if vis_type == 'data' else 'VISIBILITY_CORRECTED'
+    vis_data_var = 'VISIBILITY' if vis_type=='data' else 'VISIBILITY_CORRECTED'
     input_params = {'input_data_store': ps_store}
     input_params['vis_data_var'] = vis_data_var
+    n_chunks = 8
 
     # Calculate min, max, mean across each ddi using frequency parallel coords
     data_min = None
     data_max = None
     data_sum = 0.0
     data_count = 0
-    for ddi in ddi_ps:
-        ps_dict = ddi_ps[ddi]
-        for key in ps_dict:
-            n_chunks = 8
-            frequencies = ps_dict[key].frequency
-            parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_chunks)}
-            node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, input_data=ps)
+    for key in ps:
+        frequencies = ps[key].frequency
+        parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_chunks)}
+        node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, input_data=ps)
 
-            graph = map(
-                input_data=ps,
-                node_task_data_mapping=node_task_data_mapping,
-                node_task=_map_stats,
-                input_params=input_params
-            )
-            graph_reduce = reduce(
-                graph, _reduce_stats, input_params, mode='tree'
-            )
-            dask_graph = generate_dask_workflow(graph_reduce)
-            results = dask.compute(dask_graph)
-            ddi_min, ddi_max, ddi_sum, ddi_count = results[0][0]
-            data_min = min(data_min, ddi_min) if data_min is not None else ddi_min
-            data_max = max(data_max, ddi_max) if data_max is not None else ddi_max
-            data_sum += ddi_sum
-            data_count += ddi_count
+        graph = map(
+            input_data=ps,
+            node_task_data_mapping=node_task_data_mapping,
+            node_task=_map_stats,
+            input_params=input_params
+        )
+        graph_reduce = reduce(
+            graph, _reduce_stats, input_params, mode='tree'
+        )
+        dask_graph = generate_dask_workflow(graph_reduce)
+        results = dask.compute(dask_graph)
+        ddi_min, ddi_max, ddi_sum, ddi_count = results[0]
+        data_min = min(data_min, ddi_min) if data_min is not None else ddi_min
+        data_max = max(data_max, ddi_max) if data_max is not None else ddi_max
+        data_sum += ddi_sum
+        data_count += ddi_count
 
     data_mean = data_sum / data_count
     #print(f"stats: min={data_min}, max={data_max}, mean={data_mean}")
@@ -147,7 +127,11 @@ def get_vis_stats(ps, ps_store, vis_type):
     # Calculate variance and standard deviation
     var_sum = 0.0
     var_count = 0
-    for ps in ddi_ps:
+    for key in ps:
+        frequencies = ps[key].frequency
+        parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_chunks)}
+        node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, input_data=ps)
+
         graph = map(
             input_data=ps,
             node_task_data_mapping=node_task_data_mapping,
@@ -155,16 +139,15 @@ def get_vis_stats(ps, ps_store, vis_type):
             input_params=input_params
         )
         graph_reduce = reduce(
-             graph, _reduce_variance, input_params, mode='tree'
+            graph, _reduce_variance, input_params, mode='tree'
         )
         dask_graph = generate_dask_workflow(graph_reduce)
         results = dask.compute(dask_graph)
-        ddi_var_sum, ddi_var_count = results[0][0]
+        ddi_var_sum, ddi_var_count = results[0]
         var_sum += ddi_var_sum
         var_count += ddi_var_count
 
     data_variance = var_sum / var_count
     data_stddev = data_variance ** 0.5
     #print(f"stats: variance={data_variance}, stddev={data_stddev}")
-    del viper_client
     return (data_min, data_max, data_mean, data_stddev)

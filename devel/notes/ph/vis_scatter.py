@@ -46,7 +46,7 @@ def vis_to_ps(vis_path):
 
 def xds_to_ddf(xds):
     '''
-    xds_to_partitioned_frame: read dataset into dask dataframe
+    xds_to_ddf: read dataset into dask dataframe
     input xds (xarray Dataset): msv4 in processing set
     returns: list of dask DataFrames with amplitude and time columns, partitioned by time selection and correlation
     '''

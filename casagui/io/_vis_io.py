@@ -5,8 +5,9 @@ Functions for reading visibilities (MSv2 or zarr MSv4) into processing set
 import os.path
 
 try:
-    from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
     from xradio.vis.read_processing_set import read_processing_set
+    # requires python-casacore
+    from xradio.vis.convert_msv2_to_processing_set import convert_msv2_to_processing_set
     __have_xradio = True
 except:
     __have_xradio = False
@@ -21,9 +22,6 @@ def get_processing_set(vis_path):
         xradio processing set (xarray Dataset)
     '''
 
-    if not __have_xradio:
-        raise RuntimeError("xradio is not available, cannot read MeasurementSet")
-
     if not os.path.exists(vis_path):
         raise RuntimeError(f"Visibility file {vis_path} does not exist")
 
@@ -35,6 +33,8 @@ def get_processing_set(vis_path):
     if ext == ".zarr":
         zarr_path = vis_path
     else:
+        if not __have_xradio:
+            raise RuntimeError("Cannot import xradio module to read MeasurementSet")
         zarr_path = basename + ".vis.zarr"
         if not os.path.exists(zarr_path):
             print(f"Converting input MS {vis_path} to zarr {zarr_path}")
