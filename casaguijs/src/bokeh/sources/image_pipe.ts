@@ -106,7 +106,7 @@ export class ImagePipe extends DataPipe {
             dataid: [ String ],
             shape: [ Tuple(Number,Number,Number,Number) ],
             fits_header_json: [ Nullable(String), null ],
-            _histogram_source: [ Ref(ColumnDataSource), null ]
+            _histogram_source: [ Nullable(Ref(ColumnDataSource)), null ]
         }));
     }
 }

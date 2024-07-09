@@ -399,17 +399,17 @@ class ImagePipe(DataPipe):
         ### here for X rather than just the index
         try:
             if mask:
-                return { 'x': list(range(len(result))), 'y': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
+                return { 'chan': list(range(len(result))), 'pixel': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
             else:
-                return { 'x': list(range(len(result))), 'y': list(result) }
+                return { 'chan': list(range(len(result))), 'pixel': list(result) }
         except Exception as e:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
             if mask:
-                return { 'x': [0], 'y': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
+                return { 'chan': [0], 'pixel': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
             else:
-                return { 'x': [0], 'y': [float(result)] }
+                return { 'chan': [0], 'pixel': [float(result)] }
 
     def histogram_source( self, data ):
         if not self._histogram_source:

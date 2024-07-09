@@ -28,11 +28,19 @@
 ########################################################################
 '''implementation of the ``InteractiveClean`` application for interactive control
 of tclean'''
+
+###
+### Useful for debugging
+###
+###from casagui.bokeh.state import initialize_bokeh
+###initialize_bokeh( bokehjs_subst=".../bokeh-3.2.2.js" )
+###
 import os
 import copy
 import asyncio
 import shutil
 import websockets
+from os.path import basename, abspath, exists
 from uuid import uuid4
 from html import escape as html_escape
 from contextlib import asynccontextmanager
@@ -47,10 +55,12 @@ from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip, EvTextInput
 from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import ContextMgrChain as CMC
 
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
 
 from casagui.utils import find_ws_address, convert_masks
@@ -58,6 +68,8 @@ from casagui.toolbox import CubeMask, AppContext
 from casagui.bokeh.utils import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
+
+from . import _interactiveclean_wrappers as icw
 
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
@@ -72,10 +84,10 @@ class InteractiveClean:
 
     def __reset( self ):
         if self.__pipes_initialized:
-            self._pipe = { 'control': None, 'converge': None }
+            self._pipe = { 'control': None }
+            self._clean = { 'converge': { 'state': { } }, 'last-success': None }
             reset_bokeh_output( )
             reset_resource_manager( )
-            self._clean.reset( )
 
         ###
         ### reset asyncio result future
@@ -86,19 +98,31 @@ class InteractiveClean:
         ### used by data pipe (websocket) initialization function
         ###
         self.__pipes_initialized = False
-        self._mask_history = [ ]
 
-        self._cube = CubeMask( self._residual_path, mask=self._clean.mask( ), abort=self._abort_handler )
         ###
         ### error or exception result
         ###
         self._error_result = None
 
         ###
-        ### websocket servers
+        ### Create image cube display for each field
         ###
-        self._control_server = None
-        self._converge_server = None
+        for i, (imid, imdetails) in enumerate(self._clean_targets.items( )):
+            imdetails['mask-history'] = [ ]
+            imdetails['gui'] = { 'params': { 'iteration': { }, 'automask': { } },
+                                 'image': { },
+                                 'image-adjust': { } }
+
+            ###
+            ### Only the first image should initialize the initial convergence state
+            ###
+            imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=self._clean['masks'][imid], abort=self._abort_handler,
+                                                 init_script=CustomJS( args=dict( initial_convergence_state={
+                                                                                      'chan': self._clean['last-success']['convergence'],
+                                                                                      'cyclethreshold': self._clean['last-success']['cyclethreshold']
+                                                                                  } ),
+                                                                       code='''document._casa_convergence_data = initial_convergence_state''' )
+                                                             if i == 0 else None )
 
     '''
         _gen_port_fwd_cmd()
@@ -110,10 +134,14 @@ class InteractiveClean:
     def _gen_port_fwd_cmd(self):
         hostname = os.uname()[1]
 
-        ports = [self._pipe['control'].address[1],
-                self._pipe['converge'].address[1],
-                self._cube._pipe['image'].address[1],
-                self._cube._pipe['control'].address[1]]
+        ###
+        ### need to add extra cube ports here for multifield imaging
+        ###
+        ports = [ self._pipe['control'].address[1], self._clean['converge']['pipe'].address[1] ]
+
+        for imid, imdetails in self._clean_targets.items( ):
+            ports.append( imdetails['gui']['cube']._pipe['image'].address[1] )
+            ports.append( imdetails['gui']['cube']._pipe['control'].address[1] )
 
         # Also forward http port if serving webpage
         if not self._is_notebook:
@@ -128,6 +156,13 @@ class InteractiveClean:
 
     def __init__( self, vis, imagename{{# initParams}}, {{name}}={{default}}{{/ initParams}} ):
 
+        ###
+        ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
+        ### browser window (requiring scrolling) if a width is not specified. It could be that
+        ### this should be computed from the width of the tabbed control area at the right of
+        ### the image display.
+        ###
+        self._conv_spect_plot_width = 450
         ###
         ### Create application context (which includes a temporary directory).
         ### This sets the title of the plot.
@@ -162,10 +197,15 @@ class InteractiveClean:
         self.__pipes_initialized = False
 
         ###
+        ### State required to manage iteration control
+        ###
+        self._control = { 'iteration': { } }
+
+        ###
         ### color specs
         ###
-        self._color = { 'residual': 'black',
-                        'flux':     'forestgreen' }
+        self._converge_color = { 'residual': 'black',
+                                 'flux':     'forestgreen' }
 
         ###
         ### clean generator
@@ -173,50 +213,11 @@ class InteractiveClean:
         if _gclean is None:
             raise RuntimeError('casatasks gclean interface is not available')
 
-        self._clean = _gclean( {{argsNamed}}  )
         ###
-        ### self._convergence_data['chan']: accumulated, pre-channel convergence information
-        ###                                 used by ColumnDataSource
+        ### Set up dictionary of javascript code snippets
         ###
-        self._status = { }
-        stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = next(self._clean)
-        if self._convergence_data['chan'] is None or len(self._convergence_data['chan'].keys()) == 0:
-            raise RuntimeError(stopdesc)
-        self._convergence_id = str(uuid4( ))
-        #print(f'convergence:',self._convergence_id)
+        self._initialize_javascript( )
 
-        ###
-        ### Initial Conditions
-        ###
-        self._params = { }
-        self._params['nmajor'] = majorleft
-        self._params['niter'] = iterleft
-        self._params['cycleniter'] = cycleniter
-        self._params['threshold'] = threshold
-        self._params['cyclefactor'] = cyclefactor
-        self._params['gain'] = gain
-        self._params['nsigma'] = nsigma
-
-        ###
-        ### Auto Masking Parameters
-        ###
-        self._params_am = { }
-        self._params_am['usemask'] = usemask
-        self._params_am['noisethreshold'] = noisethreshold
-        self._params_am['sidelobethreshold'] = sidelobethreshold
-        self._params_am['lownoisethreshold'] = lownoisethreshold
-        self._params_am['minbeamfrac'] = minbeamfrac
-        self._params_am['negativethreshold'] = negativethreshold
-        self._params_am['dogrowprune'] = dogrowprune
-
-        ###
-        ### Polarity plane
-        ###
-        self._stokes = 0
-
-        ###
-        ### GUI Elements
-        self._imagename = imagename
         # Create folder for the generated html webpage - needs its own folder to not name conflict (must be 'index.html')
         webpage_dirname = imagename + '_webpage'
         ### Directory is created when an HTTP server is running
@@ -224,366 +225,212 @@ class InteractiveClean:
 #       if not os.path.isdir(webpage_dirname):
 #          os.makedirs(webpage_dirname)
         self._webpage_path = os.path.abspath(webpage_dirname)
-        if deconvolver == 'mtmfs':
-            self._residual_path = ("%s.residual.tt0" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
-        else:
-            self._residual_path = ("%s.residual" % imagename) if self._clean.has_next() else (self._clean.finalize()['image'])
-        self._pipe = { 'control': None, 'converge': None }
-        self._control = { }
-        self._automask = { 'active': False }
-        self._cb = { }
-        self._ids = { }
-        self._last_mask_breadcrumbs = ''
-        ###
-        ### tclean/deconvolve log page
-        ###
-        self.__log_button = None
-        ###
-        ### ColumnDataSource for convergence plot
-        ###
-        self._flux_data     = None
-        self._residual_data = None
+
+        self._pipe = { 'control': None }
+        self._clean = { 'converge': { 'state': { } }, 'last-success': None }
+
+        self._clean_targets = { imagename: { 'args': {{forwDict}} } }
+        self._parameters = ImagerParameters( **{ k:v for k,v in self._clean_targets[imagename]['args'].items( )
+                                                 if k in ImagerParameters.__init__.__code__.co_varnames[1:] } )
+        self._clean_targets[imagename]['args']['outlierfile'] = ''		### >>HERE>> outlierfile TEMPORARILY handled in _interactiveclean.py
+        if outlierfile and exists(outlierfile):
+            outliers, err = self._parameters.parseOutlierFile(outlierfile)
+            if err: raise RuntimeError( f'''outlierfile error: {err}''' )
+            for image in outliers:
+                if 'impars' in image and 'imagename' in image['impars']:
+                    name = image['impars']['imagename']
+                    self._clean_targets[name] = { }
+                    args = {{forwDict}}
+                    args['outlierfile'] = ''					### >>HERE>> outlierfile TEMPORARILY handled in _interactiveclean.py
+                    for _,arg_mods in image.items( ):
+                        for k,v in arg_mods.items( ):
+                            if k in args:
+                                args[k] = v
+                    self._clean_targets[name]['args'] = args
 
         ###
-        ### The tclean convergence data is automatically generated by tclean and it
-        ### accumulates in this object. If the data becomes bigger than these
-        ### thresholds, the implementation switches to fetching threshold data
-        ### from python for each channel selected in the GUI within the browser.
+        ### create clean interface -- final version will have only one gclean object
         ###
-        self._threshold_chan = 400
-        self._threshold_iterations = 2000
-
-        self._js = { ### initialize state
-                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     ### -- flux_src is used storing state (initialized and convergence data cache below   --
-                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     'initialize':      '''if ( ! flux_src._initialized ) {
-                                               flux_src._initialized = true
-                                               flux_src._window_closed = false
-                                               window.addEventListener( 'beforeunload',
-                                                                        function (e) {
-                                                                            // if the window is already closed this message is never
-                                                                            // delivered (unless interactive clean is called again then
-                                                                            // the event shows up in the newly created control pipe
-                                                                            if ( flux_src._window_closed == false ) {
-                                                                                ctrl_pipe.send( ids['stop'],
-                                                                                                { action: 'stop', value: { } },
-                                                                                                  undefined ) } } )
-                                           }''',
-
-                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     ### -- flux_src._convergence_data is used to store the complete                              --
-                     ### --                                                                                       --
-                     ### -- The "Insert here ..." code seems to be called when when the stokes plane is changed   --
-                     ### -- but there have been no tclean iterations yet...                                       --
-                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-                     'update-converge': '''function update_convergence( msg ) {
-                                               let convdata
-                                               if ( typeof msg === 'undefined' ) {
-                                                   if ( '_convergence_data' in flux_src ) {
-                                                       // use complete convergence cache attached to flux_src...
-                                                       // get the convergence data for channel and stokes
-                                                       const pos = img_src.cur_chan
-                                                       convdata = flux_src._convergence_data.chan.get(pos[1]).get(pos[0])
-                                                       //          chan-------------------------------^^^^^^      ^^^^^^----stokes
-                                                   } else {
-                                                       //console.log( 'Insert code here to get convergence data when no cache and no update (msg) is available...' )
-                                                       return
-                                                   }
-                                               } else if ( 'result' in msg ) {
-                                                   // update based on msg received from convergence update message
-                                                   convdata = msg.result.converge
-                                               }
-                                               const iterations = convdata.iterations
-                                               const peakRes = convdata.peakRes
-                                               const threshold = convdata.cycleThresh
-                                               const modelFlux = convdata.modelFlux
-                                               const stopCode = convdata.stopCode
-                                               const stopDesc = convdata.stopCode.map( code => stopdescmap.has(code) ? stopdescmap.get(code): "" )
-                                               residual_src.data = { iterations, threshold, stopDesc, values: peakRes, type: Array(iterations.length).fill('residual') }
-                                               flux_src.data = { iterations, threshold, stopDesc, values: modelFlux, type: Array(iterations.length).fill('flux') }
-                                               threshold_src.data = { iterations, values: threshold }
-                                           }''',
-
-                     'clean-refresh':   '''function refresh( clean_msg ) {
-                                               let stokes = 0    // later we will receive the polarity
-                                                                 // from some widget mechanism...
-                                               //img_src.refresh( msg => { if ( 'stats' in msg ) { //  -- this should happen within CubeMask
-                                               //                              stat_src.data = msg.stats
-                                               //                          }
-                                               //                        } )
-                                               if ( clean_msg !== undefined ) {
-                                                   if ( 'iterleft' in clean_msg ) {
-                                                       niter.value = '' + clean_msg['iterleft']
-                                                   } else if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
-                                                       const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
-                                                       niter.value = '' + (remaining < 0 ? 0 : remaining)
-                                                   }
-
-                                                   if ( 'majorleft' in clean_msg ) {
-                                                       nmajor.value = '' + clean_msg['majorleft']
-                                                   } else if ( 'majordone' in clean_msg ) {
-                                                       const nm = parseInt(nmajor.value)
-                                                       if ( nm != -1 ) {
-                                                           const remaining = nm - parseInt(clean_msg['majordone'])
-                                                           nmajor.value = '' + (remaining < 0 ? 0 : remaining)
-                                                       } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
-                                                   }
-                                               }
-
-                                               img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
-
-                                               if ( clean_msg !== undefined && 'convergence' in clean_msg ) {
-                                                   // save convergence information and update convergence using saved state
-                                                   if ( clean_msg.convergence === null ) {
-                                                       delete flux_src._convergence_data
-                                                       const pos = img_src.cur_chan
-                                                       // fetch convergence information for the current channel (pos[1])
-                                                       // ...convergence update expects [ stokes, chan ]
-                                                       conv_pipe.send( convergence_id, { action: 'update', value: pos }, update_convergence )
-                                                   } else {
-                                                       flux_src._convergence_data = { chan: clean_msg.convergence,
-                                                                                      cyclethreshold: clean_msg.cyclethreshold }
-                                                       update_convergence( )
-                                                   }
-                                               } else {
-                                                   const pos = img_src.cur_chan
-                                                   // fetch convergence information for the current channel (pos[1])
-                                                   conv_pipe.send( convergence_id, { action: 'update', value: pos[1] }, update_convergence )
-                                               }
-                                           }''',
-
-                       'clean-disable': '''// enabling/disabling tools in self._fig['image'].toolbar.tools does not seem to not work
-                                           // self._fig['image'].toolbar.tools.tool_name (e.g. "Box Select", "Lasso Select")
-                                           function disable( with_stop ) {
-                                               img_src.disable_masking( )
-                                               nmajor.disabled = true
-                                               niter.disabled = true
-                                               cycleniter.disabled = true
-                                               threshold.disabled = true
-                                               cyclefactor.disabled = true
-                                               nsigma.disabled = true
-                                               gain.disabled = true
-                                               btns['continue'].disabled = true
-                                               btns['finish'].disabled = true
-                                               if ( slider ) slider.disabled = true
-                                               if ( go_to ) go_to.disabled = true
-                                               image_fig.disabled = true
-                                               stokes_dropdown.disabled = true
-                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = true }
-                                               if ( spectrum_fig ) spectrum_fig.disabled = true
-                                               if ( with_stop ) {
-                                                   btns['stop'].disabled = true
-                                               } else {
-                                                   btns['stop'].disabled = false
-                                               }
-                                           }''',
-
-                       'clean-enable':  '''function enable( only_stop ) {
-                                               img_src.enable_masking( )
-                                               nmajor.disabled = false
-                                               niter.disabled = false
-                                               cycleniter.disabled = false
-                                               threshold.disabled = false
-                                               cyclefactor.disabled = false
-                                               nsigma.disabled = false
-                                               gain.disabled = false
-                                               btns['stop'].disabled = false
-                                               if ( slider ) slider.disabled = false
-                                               if ( go_to ) go_to.disabled = false
-                                               image_fig.disabled = false
-                                               stokes_dropdown.disabled = false
-                                               if ( cursor_tracking_text) { cursor_tracking_text.disabled = false }
-                                               if ( spectrum_fig ) spectrum_fig.disabled = false
-                                               if ( ! only_stop ) {
-                                                   btns['continue'].disabled = false
-                                                   btns['finish'].disabled = false
-                                               }
-                                           }''',
+        convergence = { }
+        cyclethreshold = { }
+        self._clean['gclean'] = None
+        self._clean['masks'] = { }
+        self._clean['imid'] = [ ]
+        self._clean['gclean_rest'] = [ ]
+        for imid, imdetails in self._clean_targets.items( ):
+            self._clean['imid'].append(imid)
+            if self._clean['gclean'] is None:
+                self._clean['gclean'] = _gclean( **imdetails['args'] )
 
 
-                       'slider-update': '''if ( '_convergence_data' in flux_src ) {
-                                               // use saved state for update of convergence plot if it is
-                                               // available (so update can happen while tclean is running)
-                                               update_convergence( )
-                                           } else {
-                                               // update convergence plot with a request to python
-                                               const pos = img_src.cur_chan
-                                               conv_pipe.send( convergence_id,
-                                                               { action: 'update', value: [ pos[0], cb_obj.value ] },
-                                                                 //      stokes-------------^^^^^^  ^^^^^^^^^^^^^^--------chan
-                                                                 update_convergence )
-                                           }''',
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
 
-                       'clean-status-update': '''function update_status( status ) {
-                                               const stopstr = [ 'Zero stop code',
-                                                                 'Iteration limit hit',
-                                                                 'Force stop',
-                                                                 'No change in peak residual across two major cycles',
-                                                                 'Peak residual increased by 3x from last major cycle',
-                                                                 'Peak residual increased by 3x from the minimum',
-                                                                 'Zero mask found',
-                                                                 'No mask found',
-                                                                 'N-sigma or other valid exit criterion',
-                                                                 'Stopping criteria encountered',
-                                                                 'Unrecognized stop code' ]
-                                               if ( typeof status === 'number' ) {
-                                                   stopstatus.text = '<p>' +
-                                                                     stopstr[ status < 0 || status >= stopstr.length ?
-                                                                              stopstr.length - 1 : status ] +
-                                                                     '</p>'
-                                               } else {
-                                                   stopstatus.text = `<p>${status}</p>`
-                                               }
-                                           }''',
+                clean_cmds = self._clean['gclean'].cmds( )
 
-                       'clean-gui-update': '''function get_update_dictionary( ) {
-                                                  const am = automask['active'] ?
-                                                             { noisethreshold:    automask['noisethreshold'].value,
-                                                               sidelobethreshold: automask['sidelobethreshold'].value,
-                                                               lownoisethreshold: automask['lownoisethreshold'].value,
-                                                               minbeamfrac:       automask['minbeamfrac'].value,
-                                                               negativethreshold: automask['negativethreshold'].value,
-                                                               dogrowprune:       automask['dogrowprune'].active } : { }
-                                                  return { niter: niter.value, cycleniter: cycleniter.value, nmajor: nmajor.value,
-                                                           threshold: threshold.value, cyclefactor: cyclefactor.value,
-                                                           nsigma: nsigma.value, gain: gain.value,
-                                                           mask: img_src.masks( ),
-                                                           breadcrumbs: img_src.breadcrumbs( ), automask: am }
-                                           }
-                                           function update_log( log_lines ) {
-                                               let b = logbutton
-                                               b._log = b._log.concat( log_lines )
-                                               if ( b._window && ! b._window.closed ) {
-                                                   for ( const line of log_lines ) {
-                                                       const p = b._window.document.createElement('p')
-                                                       p.appendChild( b._window.document.createTextNode(line) )
-                                                       b._window.document.body.appendChild(p)
-                                                   }
-                                               }
-                                           }
-                                           function update_gui( msg ) {
-                                               if ( msg.result === 'error' ) {
-                                                   // ************************************************************************************
-                                                   // ******** error occurs and is signaled by _gclean, e.g. exception in gclean  ********
-                                                   // ************************************************************************************
-                                                   state.mode = 'interactive'
-                                                   btns['stop'].button_type = "danger"
-                                                   enable(false)
-                                                   state.stopped = false
-                                                   update_status( msg.stopdesc ? msg.stopdesc : 'An internal error has occurred' )
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                               } else if ( msg.result === 'no-action' ) {
-                                                   update_status( msg.stopdesc ? msg.stopdesc : 'nothing done' )
-                                                   enable( false )
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                               } else if ( msg.result == 'converged' ) {
-                                                   state.mode = 'interactive'
-                                                   btns['stop'].button_type = "danger"
-                                                   enable(false)
-                                                   state.stopped = false
-                                                   update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                                   refresh( msg )
-                                               } else if ( msg.result === 'update' ) {
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                                   refresh( msg )
-                                                   // stopcode == 1: iteration limit hit
-                                                   // stopcode == 9: major cycle limit hit
-                                                   // *******************************************************************************************
-                                                   // ******** perhaps the user should not be locked into exiting after the limit is hit ********
-                                                   // *******************************************************************************************
-                                                   //state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
-                                                   state.stopped = false
-                                                   if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
-                                                       btns['stop'].button_type = "danger"
-                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
-                                                       if ( ! state.stopped ) {
-                                                           enable( false )
-                                                       } else {
-                                                           disable( false )
-                                                       }
-                                                   } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
-                                                       if ( ! state.stopped && niter.value > 0 && (nmajor.value > 0 || nmajor.value == -1) ) {
-                                                           // *******************************************************************************************
-                                                           // ******** 'niter.value > 0 so continue with one more iteration                      ********
-                                                           // ******** 'nmajor.value' == -1 implies do not consider nmajor in stop consideration ********
-                                                           // *******************************************************************************************
-                                                           ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                           { action: 'finish',
-                                                                             value: get_update_dictionary( ) },
-                                                                           update_gui )
-                                                       } else if ( ! state.stopped  ) {
-                                                           // *******************************************************************************************
-                                                           // ******** 'niter.value <= 0 so iteration should stop                                ********
-                                                           // *******************************************************************************************
-                                                           state.mode = 'interactive'
-                                                           btns['stop'].button_type = "danger"
-                                                           enable(false)
-                                                           state.stopped = false
-                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
-                                                       } else {
-                                                           state.mode = 'interactive'
-                                                           btns['stop'].button_type = "danger"
-                                                           enable(false)
-                                                           state.stopped = false
-                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
-                                                       }
-                                                   }
-                                               } else if ( msg.result === 'error' ) {
-                                                   img_src.drop_breadcrumb('E')
-                                                   if ( 'cmd' in msg ) {
-                                                       update_log( msg.cmd )
-                                                   }
-                                                   state.mode = 'interactive'
-                                                   btns['stop'].button_type = "danger"
-                                                   state.stopped = false
-                                                   update_status( 'stopcode' in msg ? msg.stopcode : -1 )
-                                                   enable( false )
-                                               }
-                                           }''',
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
+                    raise RuntimeError(stopdesc)
 
-                       'clean-wait':    '''function wait_for_tclean_stop( msg ) {
-                                               state.mode = 'interactive'
-                                               btns['stop'].button_type = "danger"
-                                               enable( false )
-                                               state.awaiting_stop = false
-                                               update_status( 'user requested stop' )
-                                           }''',
-                   }
+                convergence[self._clean['imid'][0]] = imdetails['converge']['chan']
+                cyclethreshold[self._clean['imid'][0]] = imdetails['converge']['major']['cyclethreshold']
 
+                self._clean['masks'][imid] = self._clean['gclean'].mask( )
+
+
+                if 'path' not in imdetails: imdetails['path'] = { }
+                if deconvolver == 'mtmfs':
+                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
+                else:
+                    imdetails['path']['residual'] = ("%s.residual" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
+
+
+            else:
+                next_gclean =  _gclean( **imdetails['args'] )
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
+
+                clean_cmds = self._clean['gclean'].cmds( )
+
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
+                    raise RuntimeError(stopdesc)
+
+                convergence[self._clean['imid'][0]] = imdetails['converge']['chan']
+                cyclethreshold[self._clean['imid'][0]] = imdetails['converge']['major']['cyclethreshold']
+
+                self._clean['masks'][imid] = next_gclean.mask( )
+                if deconvolver == 'mtmfs':
+                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
+                else:
+                    imdetails['path']['residual'] = ("%s.residual" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
+                self._clean['gclean_rest'].append(next_gclean)
+
+        self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
+                                            convergence=convergence,
+                                            iterdone=0, iterleft=iterleft,
+                                            majordone=majordone, majorleft=majorleft, cyclethreshold=cyclethreshold, stopdesc=stopdesc )
+
+        for imid, imdetails in self._clean_targets.items( ):
+            imdetails['gui'] = { }
+
+            ###
+            ### Iteration Parameters
+            ###
+            imdetails['params'] = { }
+            imdetails['params']['it'] = { }
+            imdetails['params']['it']['nmajor'] = majorleft
+            imdetails['params']['it']['niter'] = iterleft
+            imdetails['params']['it']['cycleniter'] = cycleniter
+            imdetails['params']['it']['threshold'] = threshold
+            imdetails['params']['it']['cyclefactor'] = cyclefactor
+            imdetails['params']['it']['gain'] = gain
+            imdetails['params']['it']['nsigma'] = nsigma
+
+            ###
+            ### Auto Masking Parameters
+            ###
+            imdetails['params']['am'] = { }
+            imdetails['params']['am']['usemask'] = usemask
+            imdetails['params']['am']['noisethreshold'] = noisethreshold
+            imdetails['params']['am']['sidelobethreshold'] = sidelobethreshold
+            imdetails['params']['am']['lownoisethreshold'] = lownoisethreshold
+            imdetails['params']['am']['minbeamfrac'] = minbeamfrac
+            imdetails['params']['am']['negativethreshold'] = negativethreshold
+            imdetails['params']['am']['dogrowprune'] = dogrowprune
 
     def _init_pipes( self ):
         if not self.__pipes_initialized:
             self.__pipes_initialized = True
             self._pipe['control'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
-            self._pipe['converge'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
+            ###
+            ### One pipe for updating the convergence plots.
+            ###
+            self._clean['converge'] = { 'state': None }
+            self._clean['converge']['pipe'] = DataPipe( address=find_ws_address( ), abort=self._abort_handler )
+            self._clean['converge']['id'] = str(uuid4( ))
+
+
 
             # Get port for serving HTTP server if running in script
             self._http_port = find_ws_address("")[1]
+        for imid, imdetails in self._clean_targets.items( ):
+            imdetails['gui']['cube']._init_pipes( )
+
+    def _create_convergence_gui( self, imdetails, orient='horizontal', sizing_mode='stretch_width', **kw ):
+        TOOLTIPS='''<div>
+                        <div>
+                            <span style="font-weight: bold;">@type</span>
+                            <span>@values</span>
+                        </div>
+                        <div>
+                            <span style="font-weight: bold; font-size: 10px">cycle threshold</span>
+                            <span>@threshold</span>
+                        </div>
+                        <div>
+                            <span style="font-weight: bold; font-size: 10px">stop</span>
+                            <span>@stopDesc</span>
+                        </div>
+                    </div>'''
+
+        hover = HoverTool( tooltips=TOOLTIPS )
+        imdetails['gui']['convergence'] = figure( sizing_mode=sizing_mode, y_axis_location="right",
+                                                  tools=[ hover ], **kw )
+
+        if orient == 'vertical':
+            imdetails['gui']['convergence'].yaxis.axis_label='Iteration (cycle threshold dotted red)'
+            imdetails['gui']['convergence'].xaxis.axis_label='Peak Residual'
+            imdetails['gui']['convergence'].extra_x_ranges = { 'residual_range': DataRange1d( ),
+                                                               'flux_range': DataRange1d( ) }
+            imdetails['gui']['convergence'].step( 'values', 'iterations', source=imdetails['converge-data']['cyclethreshold'],
+                                                  line_color='red', x_range_name='residual_range', line_dash='dotted', line_width=2 )
+            imdetails['gui']['convergence'].line(   'values', 'iterations',   source=imdetails['converge-data']['residual'],
+                                                    line_color=self._converge_color['residual'], x_range_name='residual_range' )
+            imdetails['gui']['convergence'].circle( 'values', 'iterations',   source=imdetails['converge-data']['residual'],
+                                                    color=self._converge_color['residual'], x_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].line(   'values', 'iterations', source=imdetails['converge-data']['flux'],
+                                                    line_color=self._converge_color['flux'], x_range_name='flux_range' )
+            imdetails['gui']['convergence'].circle( 'values', 'iterations', source=imdetails['converge-data']['flux'],
+                                                    color=self._converge_color['flux'], x_range_name='flux_range', size=10 )
+
+            imdetails['gui']['convergence'].add_layout( LinearAxis( x_range_name='flux_range', axis_label='Total Flux',
+                                                        axis_line_color=self._converge_color['flux'],
+                                                        major_label_text_color=self._converge_color['flux'],
+                                                        axis_label_text_color=self._converge_color['flux'],
+                                                        major_tick_line_color=self._converge_color['flux'],
+                                                        minor_tick_line_color=self._converge_color['flux'] ), 'above')
+
+        else:
+            imdetails['gui']['convergence'].xaxis.axis_label='Iteration (cycle threshold dotted red)'
+            imdetails['gui']['convergence'].yaxis.axis_label='Peak Residual'
+            imdetails['gui']['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
+                                                               'flux_range': DataRange1d( ) }
+
+
+
+
+            imdetails['gui']['convergence'].step( 'iterations', 'values', source=imdetails['converge-data']['cyclethreshold'],
+                                                  line_color='red', y_range_name='residual_range', line_dash='dotted', line_width=2 )
+            imdetails['gui']['convergence'].line(   'iterations', 'values',   source=imdetails['converge-data']['residual'],
+                                                    line_color=self._converge_color['residual'], y_range_name='residual_range' )
+            imdetails['gui']['convergence'].circle( 'iterations', 'values',   source=imdetails['converge-data']['residual'],
+                                                    color=self._converge_color['residual'], y_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].line(   'iterations', 'values', source=imdetails['converge-data']['flux'],
+                                                    line_color=self._converge_color['flux'], y_range_name='flux_range' )
+            imdetails['gui']['convergence'].circle( 'iterations', 'values', source=imdetails['converge-data']['flux'],
+                                                    color=self._converge_color['flux'], y_range_name='flux_range', size=10 )
+
+            imdetails['gui']['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
+                                                        axis_line_color=self._converge_color['flux'],
+                                                        major_label_text_color=self._converge_color['flux'],
+                                                        axis_label_text_color=self._converge_color['flux'],
+                                                        major_tick_line_color=self._converge_color['flux'],
+                                                        minor_tick_line_color=self._converge_color['flux'] ), 'right')
+
 
     def _launch_gui( self ):
         '''create and show GUI
         '''
-        image_channels = self._cube.shape( )[3]
-
+        ###
+        ### Will contain the top level GUI
+        ###
         self._fig = { }
-
-        ###
-        ### set up websockets which will be used for control and convergence updates
-        ###
-        self._init_pipes( )
-
-        self._status['log'] = self._clean.cmds( )
-        self._status['stopcode']= self._cube.status_text( "<p>initial residual image</p>" if image_channels > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230 )
 
         ###
         ### Python-side handler for events from the interactive clean control buttons
@@ -592,14 +439,17 @@ class InteractiveClean:
             if msg['action'] == 'next' or msg['action'] == 'finish':
 
                 if 'mask' in msg['value']:
+                    ###
+                    ### >>HERE>> breadcrumbs must be specific to the field they are related to...
+                    ###
                     if 'breadcrumbs' in msg['value'] and msg['value']['breadcrumbs'] is not None and msg['value']['breadcrumbs'] != self._last_mask_breadcrumbs:
                         self._last_mask_breadcrumbs = msg['value']['breadcrumbs']
                         mask_dir = "%s.mask" % self._imagename
                         shutil.rmtree(mask_dir)
-                        new_mask = self._cube.jsmask_to_raw(msg['value']['mask'])
+                        new_mask = imdetails['gui']['cube'].jsmask_to_raw(msg['value']['mask'])
                         self._mask_history.append(new_mask)
 
-                        msg['value']['mask'] = convert_masks(masks=new_mask, coord='pixel', cdesc=self._cube.coorddesc())
+                        msg['value']['mask'] = convert_masks(masks=new_mask, coord='pixel', cdesc=imdetails['gui']['cube'].coorddesc())
 
                     else:
                         ##### seemingly the mask path used to be spliced in?
@@ -610,33 +460,50 @@ class InteractiveClean:
                     #msg['value']['mask'] = self._mask_path
                     pass
 
-                err,errmsg = self._clean.update( dict( niter=msg['value']['niter'],
-                                                       cycleniter=msg['value']['cycleniter'],
-                                                       nmajor=msg['value']['nmajor'],
-                                                       threshold=msg['value']['threshold'],
-                                                       cyclefactor=msg['value']['cyclefactor'],
-                                                       ### Checks are needed because the CASA imaging return
-                                                       ### dictionary are in flux, these could be removed later...
-                                                       nsigma=msg['value']['nsigma'],
-                                                       gain=msg['value']['gain'], **msg['value']['automask'] ) )
+                ###
+                ### In the final implementation, there will only be one gclean object...
+                ###
+                convergence = { }
+                cyclethreshold = { }
+                err,errmsg = self._clean['gclean'].update( dict( **msg['value']['iteration'],
+                                                                 **msg['value']['automask'] ) )
 
-                if err: return dict( result='no-action', stopcode=1, iterdone=0, majordone=0, stopdesc=html_escape(errmsg) )
+                iteration_limit = int(msg['value']['iteration']['niter'])
+                stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean['gclean'].__anext__( )
 
-                iteration_limit = int(msg['value']['niter'])
-                stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean.__anext__( )
+                clean_cmds = self._clean['gclean'].cmds( )
 
                 if len(self._convergence_data['chan']) == 0 or stopcode == -1:
                     ### stopcode == -1 indicates an error condition within gclean
-                    return dict( result='error', stopcode=stopcode, cmd=self._clean.cmds( ),
+                    return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
+
+                convergence[self._clean['imid'][0]] = self._convergence_data['chan']
+                cyclethreshold[self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
+
+                for g in zip(self._clean['imid'][0][1:],self._clean['gclean_rest']):
+                    e,em = g[1].update( dict( **msg['value']['iteration'],
+                                              **msg['value']['automask'] ) )
+                    sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
+
+                    clean_cmds = clean_cmds + g[1].cmds( )
+
+                    if len(cvg['chan']) == 0 or scode == -1:
+                        convergence[g[0]] = { }
+                        cyclethreshold[g[0]] = { }
+                    else:
+                        convergence[g[0]] = cvg['chan']
+                        cyclethreshold[g[0]] = cvg['major']['cyclethreshold']
+
                 ### stopcode != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
                 ###               (so 'converged' isn't quite right...)
-                return dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=self._clean.cmds( ),
-                             convergence=self._convergence_data['chan'],
-                             iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                             majordone=majordone, majorleft=majorleft, cyclethreshold=self._convergence_data['major']['cyclethreshold'], stopdesc=stopdesc )
+                self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
+                                                   convergence=convergence,
+                                                   iterdone=iteration_limit - iterleft, iterleft=iterleft,
+                                                   majordone=majordone, majorleft=majorleft, cyclethreshold=cyclethreshold, stopdesc=stopdesc )
+                return self._clean['last-success']
 
             elif msg['action'] == 'stop':
                 self.__stop( )
@@ -647,59 +514,269 @@ class InteractiveClean:
                 print( "got something else: '%s'" % msg['action'] )
 
         ###
+        ### set up websockets which will be used for control and convergence updates
+        ###
+        self._init_pipes( )
+
+        ###
         ### Setup id that will be used for messages from each button
         ###
-        self._ids['clean'] = { }
+        self._clean_ids = { }
         for btn in "continue", 'finish', 'stop':
-            self._ids['clean'][btn] = str(uuid4( ))
-            #print("%s: %s" % ( btn, self._ids['clean'][btn] ) )
-            self._pipe['control'].register( self._ids['clean'][btn], clean_handler )
+            self._clean_ids[btn] = str(uuid4( ))
+            #print("%s: %s" % ( btn, self._clean_ids[btn] ) )
+            self._pipe['control'].register( self._clean_ids[btn], clean_handler )
+
 
         ###
-        ### Retrieve convergence information
+        ### There is one set of tclean controls for all images/outlier/etc. because
+        ### in the final version gclean will handle the iterations for all fields...
         ###
-        def convergence_handler( msg, self=self ):
-            if msg['value'][1] in self._convergence_data['chan']:
-                return { 'action': 'update-success',
-                         'result': dict(converge=self._convergence_data['chan'][msg['value'][1]][msg['value'][0]],
-                ###                                                  chan-------^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^-------stokes
-                                        cyclethreshold=self._convergence_data['major']['cyclethreshold']) }
+        cwidth = 64
+        cheight = 40
+        self._control['iteration'] = { }
+        self._control['iteration']['continue'] = TipButton( max_width=cwidth, max_height=cheight, name='continue',
+                                                        icon=svg_icon(icon_name="iclean-continue", size=18),
+                                                        tooltip=Tooltip( content=HTML( '''Stop after <b>one major cycle</b> or when any stopping criteria is met.''' ), position='left') )
+        self._control['iteration']['finish'] = TipButton( max_width=cwidth, max_height=cheight, name='finish',
+                                                      icon=svg_icon(icon_name="iclean-finish", size=18),
+                                                      tooltip=Tooltip( content=HTML( '''<b>Continue</b> until some stopping criteria is met.''' ), position='left') )
+        self._control['iteration']['stop'] = TipButton( button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
+                                                    icon=svg_icon(icon_name="iclean-stop", size=18),
+                                                    tooltip=Tooltip( content=HTML( '''<p>Clicking a <font color="red">red</font> stop button will cause this tab to close and control will return to Python.<p>Clicking an <font color="orange">orange</font> stop button will cause <tt>tclean</tt> to stop after the current major cycle.''' ), position='left' ) )
+
+        ###
+        ### The single SHARED help button will be supplied by the first CubeMask...
+        ###
+        help_button = None
+        ###
+        ### First status line will be reused...
+        ###
+        status_line = None
+
+        for imid, imdetails in self._clean_targets.items( ):
+            imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
+
+            imdetails['gui']['fig'] = { }
+
+            status_line = imdetails['gui']['stopcode'] = imdetails['gui']['cube'].status_text( "<p>initial residual image</p>" if imdetails['image-channels'] > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230, reuse=status_line )
+
+            ###
+            ### Retrieve convergence information
+            ###
+            def convergence_handler( msg, self=self, imid=imid ):
+                if msg['action'] == 'retrieve':
+                    return { 'result': self._clean['last-success'] }
+                else:
+                    return { 'result': None, 'error': 'unrecognized action' }
+
+            self._clean['converge']['pipe'].register( self._clean['converge']['id'], convergence_handler )
+
+            ###
+            ### Data source that will be used for updating the convergence plot
+            ###
+            stokes = 0
+            convergence = imdetails['converge']['chan'][0][stokes]
+            imdetails['converge-data'] = { }
+            imdetails['converge-data']['flux']     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
+                                                               threshold=convergence['cycleThresh'],
+                                                               stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
+                                                               type=['flux'] * len(convergence['iterations']) ) )
+            imdetails['converge-data']['residual'] = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
+                                                               threshold=convergence['cycleThresh'],
+                                                               stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
+                                                               type=['residual'] * len(convergence['iterations'])) )
+            imdetails['converge-data']['cyclethreshold'] = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
+
+
+            ###
+            ### help page for cube interactions
+            ###
+            if help_button is None:
+                help_button = imdetails['gui']['cube'].help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
+                                                                    '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orange) will return control to the GUI after the currently executing tclean run completes</td></tr>' ], position='right' )
+
+
+            self._create_convergence_gui( imdetails, orient='vertical', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
+
+            imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % imdetails['params']['it']['nmajor'], width=90 )
+            imdetails['gui']['params']['iteration']['niter'] = icw.niter( title='niter', value="%s" % imdetails['params']['it']['niter'], width=90 )
+            imdetails['gui']['params']['iteration']['cycleniter'] = icw.cycleniter( title="cycleniter", value="%s" % imdetails['params']['it']['cycleniter'], width=90 )
+            imdetails['gui']['params']['iteration']['threshold'] = icw.threshold( title="threshold", value="%s" % imdetails['params']['it']['threshold'], width=90 )
+            imdetails['gui']['params']['iteration']['cyclefactor'] = icw.cyclefactor( value="%s" % imdetails['params']['it']['cyclefactor'], title="cyclefactor", width=90 )
+            imdetails['gui']['params']['iteration']['gain'] = icw.gain( title='gain', value="%s" % imdetails['params']['it']['gain'], width=90 )
+            imdetails['gui']['params']['iteration']['nsigma'] = icw.nsigma( title='nsigma', value="%s" % imdetails['params']['it']['nsigma'], width=90 )
+
+            if imdetails['params']['am']['usemask'] == 'auto-multithresh':
+                ###
+                ### Currently automasking tab is only available when the user selects 'auto-multithresh'
+                ###
+                imdetails['gui']['params']['automask']['active'] = True
+                imdetails['gui']['params']['automask']['noisethreshold'] = icw.noisethreshold( title='noisethreshold', value="%s" % imdetails['params']['am']['noisethreshold'], width=90 )
+                imdetails['gui']['params']['automask']['sidelobethreshold'] = icw.sidelobethreshold( title='sidelobethreshold', value="%s" % imdetails['params']['am']['sidelobethreshold'], width=90 )
+                imdetails['gui']['params']['automask']['lownoisethreshold'] = icw.lownoisethreshold( title='lownoisethreshold', value="%s" % imdetails['params']['am']['lownoisethreshold'], width=90 )
+                imdetails['gui']['params']['automask']['minbeamfrac'] = icw.minbeamfrac( title='minbeamfrac', value="%s" % imdetails['params']['am']['minbeamfrac'], width=90 )
+                imdetails['gui']['params']['automask']['negativethreshold'] = icw.negativethreshold( title='negativethreshold', value="%s" % imdetails['params']['am']['negativethreshold'], width=90 )
+                imdetails['gui']['params']['automask']['dogrowprune'] = icw.dogrowprune( label='dogrowprune', active=imdetails['params']['am']['dogrowprune'], margin=( 25, 5, 5, 5 ) )
+
+
+            imdetails['gui']['image']['src'] = imdetails['gui']['cube'].js_obj( )
+            imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( height_policy='max', width_policy='max',
+                                                                               channelcb=CustomJS( args=dict( img_state={ 'src': imdetails['gui']['image']['src'],
+                                                                                                                          'flux': imdetails['converge-data']['flux'],
+                                                                                                                          'residual': imdetails['converge-data']['residual'],
+                                                                                                                          'cyclethreshold': imdetails['converge-data']['cyclethreshold'] },
+                                                                                                              imid=imid,
+                                                                                                              ctrl={ 'converge': self._clean['converge'] },
+                                                                                                              stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
+                                                                                                   code=self._js['update-converge'] +
+                                                                                                        '''update_convergence_single( img_state, document._casa_convergence_data.chan[imid] )''' ) )
+
+            ###
+            ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
+            ###
+            if imdetails['image-channels'] > 1:
+                imdetails['gui']['spectrum'] = imdetails['gui']['cube'].spectrum( orient='vertical', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
+                imdetails['gui']['slider'] = imdetails['gui']['cube'].slider( show_value=False, title='', margin=(14,5,5,5), sizing_mode="scale_width" )
+                imdetails['gui']['goto'] = imdetails['gui']['cube'].goto( )
             else:
-                return { 'action': 'update-failure' }
+                imdetails['gui']['spectrum'] = None
+                imdetails['gui']['slider'] = None
+                imdetails['gui']['goto'] = None
 
-        self._pipe['converge'].register( self._convergence_id, convergence_handler )
+            imdetails['gui']['channel-ctrl'] = imdetails['gui']['cube'].channel_ctrl( )
+
+            imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
+
+            imdetails['gui']['image-adjust']['mask-color-pick'], imdetails['gui']['image-adjust']['mask-alpha-pick'], imdetails['gui']['image-adjust']['mask-clean-notclean-pick'] = imdetails['gui']['cube'].bitmask_controls( button_type='light' )
+
+            if imdetails['params']['am']['usemask'] == 'auto-multithresh':
+                imdetails['gui']['auto-masking-panel'] = [ TabPanel( child=column( row( Tip( imdetails['gui']['params']['automask']['noisethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold above which significant emission is masked during the initial round of mask creation' ),
+                                                                                                              position='bottom' ) ),
+                                                                                        Tip( imdetails['gui']['params']['automask']['sidelobethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets a threshold based on the sidelobe level above which significant emission is masked during the initial round of mask creation' ),
+                                                                                                              position='bottom' ) ) ),
+                                                                                   row( Tip( imdetails['gui']['params']['automask']['minbeamfrac'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the minimum size a region must be to be retained in the mask' ),
+                                                                                                              position='bottom' ) ),
+                                                                                        Tip( imdetails['gui']['params']['automask']['lownoisethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the threshold into which the initial mask (which is determined by either noisethreshold or sidelobethreshold) is expanded in order to include low signal-to-noise regions in the mask' ),
+                                                                                                              position='bottom' ) ) ),
+                                                                                   row( Tip( imdetails['gui']['params']['automask']['negativethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold for absorption features to be masked' ),
+                                                                                                              position='bottom' ) ),
+                                                                                        column( Spacer( height=5, height_policy="fixed", width_policy="auto" ),
+                                                                                                Tip( imdetails['gui']['params']['automask']['dogrowprune'],
+                                                                                                     tooltip=Tooltip( content=HTML( 'allows you to turn off the pruning of the low signal-to-noise mask, which speeds up masking for images and cubes with complex low signal-to-noise emission' ),
+                                                                                                                      position='bottom' ) ) ) ) ),
+                                                                                   title='Automask' ) ]
+            else:
+                imdetails['gui']['auto-masking-panel'] = [ ]
 
         ###
-        ### Data source that will be used for updating the convergence plot
+        ### button to display the tclean log -- in the final implmentation, outliers and other multifield imaging should be handled by gclean
         ###
-        convergence = self._convergence_data['chan'][0][self._stokes]
-        self._flux_data     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'],
-                                                           stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
-                                                           type=['flux'] * len(convergence['iterations']) ) )
-        self._residual_data = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
-                                                           threshold=convergence['cycleThresh'],
-                                                           stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
-                                                           type=['residual'] * len(convergence['iterations'])) )
-        self._cyclethreshold_data = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
+        self._log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
+                                      icon=svg_icon(icon_name="bp-application-sm", size=25),
+                                      tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="right" ),
+                                      margin=(-1, 0, -10, 0), button_type='light',
+                                      stylesheets=[ InlineStyleSheet( css='''.bk-btn { border: 0px solid #ccc;  padding: 0 var(--padding-vertical) var(--padding-horizontal); margin-top: 3px; }''' ) ] )
+
+        self._control['iteration']['cb'] = CustomJS( args=dict( images_state={ k: { 'status': v['gui']['stopcode'],
+                                                                                    'automask': v['gui']['params']['automask'],
+                                                                                    'iteration': v['gui']['params']['iteration'],
+                                                                                    'img': v['gui']['image']['fig'],
+                                                                                    'spectrum': v['gui']['spectrum'],
+                                                                                    'src': v['gui']['image']['src'],
+                                                                                    'flux': v['converge-data']['flux'],
+                                                                                    'cyclethreshold': v['converge-data']['cyclethreshold'],
+                                                                                    'residual': v['converge-data']['residual'],
+                                                                                    'navi': { 'slider': v['gui']['slider'],
+                                                                                              'goto': v['gui']['goto'],
+                                                                                              'tracking': v['gui']['cursor-pixel-text'],
+                                                                                              'stokes': v['gui']['channel-ctrl'][1] } }
+                                                                               for k,v in self._clean_targets.items( ) },
+                                                                ctrl={ 'converge': self._clean['converge'] },
+                                                                clean_ctrl=self._control['iteration'],
+                                                                state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
+                                                                ctrl_pipe=self._pipe['control'],
+                                                                ids=self._clean_ids,
+                                                                logbutton=self._log_button,
+                                                                stopdescmap=ImagingDict.get_summaryminor_stopdesc( )
+                                                              ),
+                                                 code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
+                                                      self._js['clean-enable'] + self._js['clean-status-update'] +
+                                                      self._js['iter-gui-update'] + self._js['clean-wait'] +
+                                                      '''function invalid_niter( s ) {
+                                                             let v = parseInt( s )
+                                                             if ( v > 0 ) return ''
+                                                             if ( v == 0 ) return 'niter is zero'
+                                                             if ( v < 0 ) return 'niter cannot be negative'
+                                                             if ( isNaN(v) ) return 'niter must be an integer'
+                                                         }
+                                                         if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
+                                                             let invalid = invalid_niter(niter.value)
+                                                             if ( invalid ) update_status( invalid )
+                                                             else {
+                                                                 state.mode = 'continuous'
+                                                                 update_status( 'Running multiple iterations' )
+                                                                 disable( false )
+                                                                 clean_ctrl.stop.button_type = "warning"
+                                                                 const thevalue = get_update_dictionary( )
+                                                                 ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                                 { action: 'finish',
+                                                                                   value: thevalue },
+                                                                                 update_gui )
+                                                             }
+                                                         }
+                                                         if ( ! state.stopped && state.mode === 'interactive' &&
+                                                              cb_obj.origin.name === 'continue' ) {
+                                                             let invalid = invalid_niter(niter.value)
+                                                             if ( invalid ) update_status( invalid )
+                                                             else {
+                                                                 update_status( 'Running one set of deconvolution iterations' )
+                                                                 disable( true )
+                                                                 // only send message for button that was pressed
+                                                                 // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
+                                                                 // (or even if 'XXX.origin.' is public)...
+                                                                 ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                                 { action: 'next',
+                                                                                   value: get_update_dictionary( ) },
+                                                                                 update_gui )
+                                                             }
+                                                         }
+                                                         if ( state.mode === 'interactive' && cb_obj.origin.name === 'stop' ) {
+                                                             if ( confirm( "Are you sure you want to end this interactive clean session and close the GUI?" ) ) {
+                                                                 disable( true )
+                                                                 //ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                 //                { action: 'stop',
+                                                                 //                  value: { } },
+                                                                 //                update_gui )
+                                                                 document._casa_window_closed = true
+                                                                 /*** this will close the tab >>>>---------+   ***/
+                                                                 /***                                      |   ***/
+                                                                 /***     vvvvv----------------------------+   ***/
+                                                                 document._done( Object.entries(images_state).reduce((acc,[k,v]) => ({ ...acc, [k]: v.src.masks( ) }),{ } ) )
+                                                             }
+                                                         } else if ( state.mode === 'continuous' &&
+                                                                     cb_obj.origin.name === 'stop' &&
+                                                                     ! state.awaiting_stop ) {
+                                                             disable( true )
+                                                             state.awaiting_stop = true
+                                                             ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                             { action: 'status',
+                                                                               value: { } },
+                                                                             wait_for_tclean_stop )
+                                                         }''' )
 
 
-        ###
-        ### help page for cube interactions
-        ###
-        help_button = self._cube.help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
-                                              '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orange) will return control to the GUI after the currently executing tclean run completes</td></tr>' ] )
+        self._control['iteration']['continue'].js_on_click( self._control['iteration']['cb'] )
+        self._control['iteration']['finish'].js_on_click( self._control['iteration']['cb'] )
+        self._control['iteration']['stop'].js_on_click( self._control['iteration']['cb'] )
 
-        ###
-        ### button to display the tclean log
-        ###
-        self.__log_button = TipButton( max_width=help_button.width, max_height=help_button.height, name='log',
-                                       icon=svg_icon(icon_name="bp-application-sm", size=25),
-                                       tooltip=Tooltip( content=HTML('''click here to see the <pre>tclean</pre> execution log'''), position="bottom" ),
-                                       margin=(-1, 0, -10, 0), button_type='light',
-                                       stylesheets=[ InlineStyleSheet( css='''.bk-btn { border: 0px solid #ccc;  padding: 0 var(--padding-vertical) var(--padding-horizontal); margin-top: 3px; }''' ) ] )
-        self.__log_button.js_on_click( CustomJS( args=dict( logbutton=self.__log_button ),
-                                                 code='''function format_log( elem ) {
+        self._log_button.js_on_click( CustomJS( args=dict( logbutton=self._log_button ),
+                                                code='''function format_log( elem ) {
                                                              return `<html>
                                                                      <head>
                                                                          <style type="text/css">
@@ -728,309 +805,45 @@ class InteractiveClean:
         ### Setup script that will be called when the user closes the
         ### browser tab that is running interactive clean
         ###
-        self._pipe['control'].init_script = CustomJS( args=dict( flux_src=self._flux_data,
-                                                                 residual_src=self._residual_data,
-                                                                 ctrl_pipe=self._pipe['control'],
-                                                                 ids=self._ids['clean'],
-                                                                 logbutton=self.__log_button,
-                                                                 log=self._status['log'] ),
+        initial_log = self._clean['gclean'].cmds( )
+        for g in self._clean['gclean_rest']:
+            initial_log = initial_log + g.cmds( )
+
+        self._pipe['control'].init_script=CustomJS( args=dict( ctrl_pipe=self._pipe['control'],
+                                                               ids=self._clean_ids,
+                                                               logbutton=self._log_button,
+                                                               log=initial_log,
+                                                               initial_image=list(self._clean_targets.items( ))[0][0]
+                                                             ),
                                                       code=self._js['initialize'] +
                                                            '''if ( ! logbutton._log ) {
                                                                   /*** store log list with log button for access in other callbacks ***/
                                                                   logbutton._log = log
                                                               }''' )
 
-        TOOLTIPS='''<div>
-                        <div>
-                            <span style="font-weight: bold;">@type</span>
-                            <span>@values</span>
-                        </div>
-                        <div>
-                            <span style="font-weight: bold; font-size: 10px">cycle threshold</span>
-                            <span>@threshold</span>
-                        </div>
-                        <div>
-                            <span style="font-weight: bold; font-size: 10px">stop</span>
-                            <span>@stopDesc</span>
-                        </div>
-                    </div>'''
+        tab_panels = list( map( self._create_image_panel, self._clean_targets.items( ) ) )
 
-        hover = HoverTool( tooltips=TOOLTIPS )
-        self._fig['convergence'] = figure( height=180, width=450, tools=[ hover ],
-                                           x_axis_label='Iteration (cycle threshold dotted red)', y_axis_label='Peak Residual',
-                                           sizing_mode='stretch_width' )
+        for imid, imdetails in self._clean_targets.items( ):
+            imdetails['gui']['cube'].connect( )
 
-        self._fig['convergence'].extra_y_ranges = { 'residual_range': DataRange1d( ),
-                                                    'flux_range': DataRange1d( ) }
-
-        self._fig['convergence'].step( 'iterations', 'values', source=self._cyclethreshold_data,  line_color='red',              y_range_name='residual_range',
-                                       line_dash='dotted', line_width=2 )
-        self._fig['convergence'].line(   'iterations', 'values',   source=self._residual_data, line_color=self._color['residual'], y_range_name='residual_range' )
-        self._fig['convergence'].circle( 'iterations', 'values',   source=self._residual_data,      color=self._color['residual'], y_range_name='residual_range',size=10 )
-        self._fig['convergence'].line(   'iterations', 'values', source=self._flux_data,     line_color=self._color['flux'],     y_range_name='flux_range' )
-        self._fig['convergence'].circle( 'iterations', 'values', source=self._flux_data,          color=self._color['flux'],     y_range_name='flux_range', size=10 )
-
-        self._fig['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
-                                                         axis_line_color=self._color['flux'],
-                                                         major_label_text_color=self._color['flux'],
-                                                         axis_label_text_color=self._color['flux'],
-                                                         major_tick_line_color=self._color['flux'],
-                                                         minor_tick_line_color=self._color['flux'] ), 'right')
-
-        # TClean Controls
-        cwidth = 80
-        cheight = 50
-        self._control['clean'] = { }
-        self._control['clean']['continue'] = TipButton( max_width=cwidth, max_height=cheight, name='continue',
-                                                        icon=svg_icon(icon_name="iclean-continue", size=25),
-                                                        tooltip=Tooltip( content=HTML( '''Stop after <b>one major cycle</b> or when any stopping criteria is met.''' ), position='bottom') )
-        self._control['clean']['finish'] = TipButton( max_width=cwidth, max_height=cheight, name='finish',
-                                                      icon=svg_icon(icon_name="iclean-finish", size=25),
-                                                      tooltip=Tooltip( content=HTML( '''<b>Continue</b> until some stopping criteria is met.''' ), position='bottom') )
-        self._control['clean']['stop'] = TipButton( button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
-                                                    icon=svg_icon(icon_name="iclean-stop", size=25),
-                                                    tooltip=Tooltip( content=HTML( '''Clicking a <font color="red">red</font> stop button will cause this tab to close and control will return to Python.<p>Clicking an <font color="orange">orange</font> stop button will cause <tt>tclean</tt> to stop after the current major cycle.''' ), position='bottom' ) )
-        self._control['nmajor'] = TextInput( title='nmajor', value="%s" % self._params['nmajor'], width=90 )
-        self._control['niter'] = TextInput( title='niter', value="%s" % self._params['niter'], width=90 )
-        self._control['cycleniter'] = TextInput( title="cycleniter", value="%s" % self._params['cycleniter'], width=90 )
-        self._control['threshold'] = TextInput( title="threshold", value="%s" % self._params['threshold'], width=90 )
-        self._control['cycle_factor'] = TextInput( value="%s" % self._params['cyclefactor'], title="cyclefactor", width=90 )
-        self._control['gain'] = TextInput( title='gain', value="%s" % self._params['gain'], width=90 )
-        self._control['nsigma'] = TextInput( title='nsigma', value="%s" % self._params['nsigma'], width=90 )
-
-        if self._params_am['usemask'] == 'auto-multithresh':
-            ###
-            ### Currently automasking tab is only available when the user selects 'auto-multithresh'
-            ###
-            self._automask['active'] = True
-            self._automask['noisethreshold'] = TextInput( title='noisethreshold', value="%s" % self._params_am['noisethreshold'], width=90 )
-            self._automask['sidelobethreshold'] = TextInput( title='sidelobethreshold', value="%s" % self._params_am['sidelobethreshold'], width=90 )
-            self._automask['lownoisethreshold'] = TextInput( title='lownoisethreshold', value="%s" % self._params_am['lownoisethreshold'], width=90 )
-            self._automask['minbeamfrac'] = TextInput( title='minbeamfrac', value="%s" % self._params_am['minbeamfrac'], width=90 )
-            self._automask['negativethreshold'] = TextInput( title='negativethreshold', value="%s" % self._params_am['negativethreshold'], width=90 )
-            self._automask['dogrowprune'] = Checkbox( label='dogrowprune', active=self._params_am['dogrowprune'] )
-
-        self._fig['image'] = self._cube.image( height_policy='max', width_policy='max' )
-        self._fig['image-source'] = self._cube.js_obj( )
-
-        if image_channels > 1:
-            self._control['goto'] = self._cube.goto( )
-            self._fig['spectrum'] = self._cube.spectrum( width=450 )
-            self._fig['slider'] = self._cube.slider( CustomJS( args=dict( flux_src=self._flux_data,
-                                                                          residual_src=self._residual_data,
-                                                                          threshold_src=self._cyclethreshold_data,
-                                                                          convergence_fig=self._fig['convergence'],
-                                                                          conv_pipe=self._pipe['converge'], convergence_id=self._convergence_id,
-                                                                          img_src=self._fig['image-source'],
-                                                                          stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                               code=self._js['update-converge'] + self._js['slider-update'] ),
-                                                     show_value=False, title='', margin=(14,5,5,5), width=None, width_policy='max'
-                                                   )
-        else:
-            self._control['goto'] = None
-            self._fig['slider'] = None
-            self._fig['spectrum'] = None
-
-        self._channel_ctrl = self._cube.channel_ctrl( )
-
-        ### Stokes 'label' should be updated AFTER the channel update has happened
-        self._channel_ctrl[1].child.js_on_change( 'label',
-                                                  CustomJS( args=dict( img_src=self._fig['image-source'],
-                                                                       flux_src=self._flux_data,
-                                                                       residual_src=self._residual_data,
-                                                                       threshold_src=self._cyclethreshold_data,
-                                                                       stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
-                                                            code=self._js['update-converge'] + '''update_convergence( )''' ) )
-        self._fig['cursor_pixel_text'] = self._cube.pixel_tracking_text( )
-        self._cb['clean'] = CustomJS( args=dict( btns=self._control['clean'],
-                                                 state=dict( mode='interactive', stopped=False, awaiting_stop=False, mask="" ),
-                                                 ctrl_pipe=self._pipe['control'], conv_pipe=self._pipe['converge'],
-                                                 ids=self._ids['clean'],
-                                                 img_src=self._fig['image-source'],
-                                                 niter=self._control['niter'], cycleniter=self._control['cycleniter'],
-                                                 nmajor=self._control['nmajor'],
-                                                 threshold=self._control['threshold'], cyclefactor=self._control['cycle_factor'],
-                                                 nsigma=self._control['nsigma'], gain=self._control['gain'],
-                                                 flux_src=self._flux_data,
-                                                 residual_src=self._residual_data,
-                                                 threshold_src=self._cyclethreshold_data,
-                                                 convergence_id=self._convergence_id,
-                                                 convergence_fig=self._fig['convergence'],
-                                                 logbutton=self.__log_button,
-                                                 slider=self._fig['slider'],
-                                                 image_fig=self._fig['image'],
-                                                 spectrum_fig=self._fig['spectrum'],
-                                                 stokes_dropdown = self._channel_ctrl[1].child,
-                                                 cursor_tracking_text = self._fig['cursor_pixel_text'],
-                                                 stopstatus=self._status['stopcode'],
-                                                 cube_obj = self._cube.js_obj( ),
-                                                 go_to = self._control['goto'],
-                                                 stopdescmap=ImagingDict.get_summaryminor_stopdesc( ),
-                                                 automask=self._automask ),
-                                      code=self._js['update-converge'] + self._js['clean-refresh'] + self._js['clean-disable'] +
-                                           self._js['clean-enable'] + self._js['clean-status-update'] +
-                                           self._js['clean-gui-update'] + self._js['clean-wait'] +
-                                           '''function invalid_niter( s ) {
-                                                  let v = parseInt( s )
-                                                  if ( v > 0 ) return ''
-                                                  if ( v == 0 ) return 'niter is zero'
-                                                  if ( v < 0 ) return 'niter cannot be negative'
-                                                  if ( isNaN(v) ) return 'niter must be an integer'
-                                              }
-                                              if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
-                                                  let invalid = invalid_niter(niter.value)
-                                                  if ( invalid ) update_status( invalid )
-                                                  else {
-                                                      state.mode = 'continuous'
-                                                      update_status( 'Running multiple iterations' )
-                                                      disable( false )
-                                                      btns['stop'].button_type = "warning"
-                                                      ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                      { action: 'finish',
-                                                                        value: get_update_dictionary( ) },
-                                                                      update_gui )
-                                                  }
-                                              }
-                                              if ( ! state.stopped && state.mode === 'interactive' &&
-                                                   cb_obj.origin.name === 'continue' ) {
-                                                  let invalid = invalid_niter(niter.value)
-                                                  if ( invalid ) update_status( invalid )
-                                                  else {
-                                                      update_status( 'Running one set of deconvolution iterations' )
-                                                      disable( true )
-                                                      // only send message for button that was pressed
-                                                      // it's unclear whether 'this.origin.' or 'cb_obj.origin.' should be used
-                                                      // (or even if 'XXX.origin.' is public)...
-                                                      ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                      { action: 'next',
-                                                                        value: get_update_dictionary( ) },
-                                                                      update_gui )
-                                                  }
-                                              }
-                                              if ( state.mode === 'interactive' && cb_obj.origin.name === 'stop' ) {
-                                                  if ( confirm( "Are you sure you want to end this interactive clean session and close the GUI?" ) ) {
-                                                      disable( true )
-                                                      //ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                      //                { action: 'stop',
-                                                      //                  value: { } },
-                                                      //                update_gui )
-                                                      flux_src._window_closed = true
-                                                      img_src.done( )  /*** <<-------<<<< this will close the tab ***/
-                                                  }
-                                              } else if ( state.mode === 'continuous' &&
-                                                          cb_obj.origin.name === 'stop' &&
-                                                          ! state.awaiting_stop ) {
-                                                  disable( true )
-                                                  state.awaiting_stop = true
-                                                  ctrl_pipe.send( ids[cb_obj.origin.name],
-                                                                  { action: 'status',
-                                                                    value: { } },
-                                                                  wait_for_tclean_stop )
-                                              }''' )
-
-        self._control['clean']['continue'].js_on_click( self._cb['clean'] )
-        self._control['clean']['finish'].js_on_click( self._cb['clean'] )
-        self._control['clean']['stop'].js_on_click( self._cb['clean'] )
-
-        mask_color_pick, mask_alpha_pick, mask_clean_notclean_pick = self._cube.bitmask_controls( button_type='light' )
-
-        ###
-        ### For cube imaging, tabify the spectrum and convergence plots
-        ###
-        self._spec_conv_tabs = None
-        if self._fig['spectrum']:
-            self._spec_conv_tabs = Tabs( tabs=[ TabPanel(child=layout([self._fig['convergence']], sizing_mode='stretch_width'), title='Convergence'),
-                                                TabPanel(child=layout([self._fig['spectrum']], sizing_mode='stretch_width'), title='Spectrum') ],
-                                         sizing_mode='stretch_both' )
-        if self._params_am['usemask'] == 'auto-multithresh':
-            auto_masking_panel = [ TabPanel( child=column( row( Tip( self._automask['noisethreshold'],
-                                                                     tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold above which significant emission is masked during the initial round of mask creation' ),
-                                                                                      position='bottom' ) ),
-                                                                Tip( self._automask['sidelobethreshold'],
-                                                                     tooltip=Tooltip( content=HTML( 'sets a threshold based on the sidelobe level above which significant emission is masked during the initial round of mask creation' ),
-                                                                                      position='bottom' ) ) ),
-                                                           row( Tip( self._automask['minbeamfrac'],
-                                                                     tooltip=Tooltip( content=HTML( 'sets the minimum size a region must be to be retained in the mask' ),
-                                                                                      position='bottom' ) ),
-                                                                Tip( self._automask['lownoisethreshold'],
-                                                                     tooltip=Tooltip( content=HTML( 'sets the threshold into which the initial mask (which is determined by either noisethreshold or sidelobethreshold) is expanded in order to include low signal-to-noise regions in the mask' ),
-                                                                                      position='bottom' ) ) ),
-                                                           row( Tip( self._automask['negativethreshold'],
-                                                                     tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold for absorption features to be masked' ),
-                                                                                      position='bottom' ) ),
-                                                                column( Spacer( height=25, height_policy="fixed", width_policy="auto" ),
-                                                                        Tip( self._automask['dogrowprune'],
-                                                                             tooltip=Tooltip( content=HTML( 'allows you to turn off the pruning of the low signal-to-noise mask, which speeds up masking for images and cubes with complex low signal-to-noise emission' ),
-                                                                                              position='bottom' ) ) ) ) ),
-                                             title='Auto Masking' ) ]
-        else:
-            auto_masking_panel = [ ]
+        image_tabs = Tabs( tabs=tab_panels, tabs_location='below', height_policy='max', width_policy='max' )
 
         self._fig['layout'] = column(
-                                  row(
-                                      column( row( *self._channel_ctrl, self._cube.coord_ctrl( ),
-                                                   Spacer(height=help_button.height, sizing_mode="scale_width"),
-                                                   self._cube.palette( ),
-                                                   mask_clean_notclean_pick,
-                                                   mask_color_pick,
-                                                   mask_alpha_pick,
-                                                   self.__log_button,
-                                                   help_button,
-                                                  ),
-                                              self._fig['image'],
-                                              row(
-                                                  self._fig['cursor_pixel_text'],
-                                                  self._control['goto'] if self._control['goto'] else Div( ),
-                                                  Tip( self._fig['slider'],
-                                                       tooltip=Tooltip( content=HTML("slide control to the desired channel"),
-                                                                        position="top" ), width_policy='max' ) if self._fig['slider'] else Div( ),
-                                                  self._cube.tapedeck( ) if self._fig['slider'] else Div( ),
-                                                  width_policy='max', height_policy='min',
-                                              ),
-                                              height_policy='max', width_policy='max',
-                                      ),
-                                      column( Tabs( tabs=[ TabPanel(child=column( row( self._control['clean']['stop'],
-                                                                                       self._control['clean']['continue'],
-                                                                                       self._control['clean']['finish'] ),
-                                                                                  row( Tip( self._control['nmajor'],
-                                                                                            tooltip=Tooltip( content=HTML( 'maximum number of major cycles to run before stopping'),
-                                                                                                             position='bottom' ) ),
-                                                                                       Tip( self._control['niter'],
-                                                                                            tooltip=Tooltip( content=HTML( 'number of clean iterations to run' ),
-                                                                                                             position='bottom' ) ),
-                                                                                       Tip( self._control['threshold'],
-                                                                                            tooltip=Tooltip( content=HTML( 'stopping threshold' ),
-                                                                                                             position='bottom' ) ) ),
-                                                                                  row( Tip( self._control['nsigma'],
-                                                                                            tooltip=Tooltip( content=HTML( 'multiplicative factor for rms-based threshold stopping'),
-                                                                                                             position='bottom' ) ),
-                                                                                       Tip( self._control['gain'],
-                                                                                            tooltip=Tooltip( content=HTML( 'fraction of the source flux to subtract out of the residual image'),
-                                                                                                             position='bottom' ) ) ),
-                                                                                  row( Tip( self._control['cycleniter'],
-                                                                                            tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
-                                                                                                             position='bottom' ) ),
-                                                                                       Tip( self._control['cycle_factor'],
-                                                                                            tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
-                                                                                                             position='bottom_left' ) ), background="lightgray" ),
-                                                                                  row ( Div( text="<div><b>status:</b></div>" ), self._status['stopcode'] ) ),
-                                                                    title='Iteration' ),
-                                                           TabPanel( child=self._cube.colormap_adjust( ),
-                                                                     title='Colormap' ),
-                                                           TabPanel( child=self._cube.statistics( width=340 ),
-                                                                     title='Statistics' ) ] + auto_masking_panel,
-                                                    sizing_mode='stretch_width' ),
-                                              height_policy='max', width=340
-                                      ),
-                                      width_policy='max', height_policy='max' ),
-                                  row(
-                                      self._spec_conv_tabs if self._spec_conv_tabs else self._fig['convergence'],
-                                      width_policy='max',
-                                  ),
-                                  width_policy='max', height_policy='max',
-                              )
+                                  row( help_button,
+                                       self._log_button,
+                                       Spacer( height=self._control['iteration']['stop'].height, sizing_mode="scale_width" ),
+                                       Div( text="<div><b>status:</b></div>" ),
+                                       status_line,
+                                       self._control['iteration']['stop'], self._control['iteration']['continue'], self._control['iteration']['finish'], sizing_mode="scale_width" ),
+                                  row( image_tabs, height_policy='max', width_policy='max' ),
+                                  height_policy='max', width_policy='max' )
 
-        self._cube.connect( )
+        ###
+        ### Keep track of which image is currently active in document._casa_image (which is
+        ### initialized in self._js['initialize']
+        ###
+        image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._clean_targets.items( ) ] ),
+                                                     code='''document._casa_image = names[cb_obj.active]''' ) )
 
         # Change display type depending on runtime environment
         if self._is_notebook:
@@ -1042,6 +855,64 @@ class InteractiveClean:
             pass
 
         show(self._fig['layout'])
+
+    def _create_control_image_tab( self, imdetails ):
+        return Tabs( tabs=[ TabPanel(child=column( row( Tip( imdetails['gui']['params']['iteration']['nmajor'],
+                                                             tooltip=Tooltip( content=HTML( 'maximum number of major cycles to run before stopping'),
+                                                                              position='bottom' ) ),
+                                                        Tip( imdetails['gui']['params']['iteration']['niter'],
+                                                             tooltip=Tooltip( content=HTML( 'number of clean iterations to run' ),
+                                                                              position='bottom' ) ),
+                                                        Tip( imdetails['gui']['params']['iteration']['threshold'],
+                                                             tooltip=Tooltip( content=HTML( 'stopping threshold' ),
+                                                                              position='bottom' ) ) ),
+                                                   row( Tip( imdetails['gui']['params']['iteration']['nsigma'],
+                                                             tooltip=Tooltip( content=HTML( 'multiplicative factor for rms-based threshold stopping'),
+                                                                              position='bottom' ) ),
+                                                        Tip( imdetails['gui']['params']['iteration']['gain'],
+                                                             tooltip=Tooltip( content=HTML( 'fraction of the source flux to subtract out of the residual image'),
+                                                                              position='bottom' ) ) ),
+                                                   row( Tip( imdetails['gui']['params']['iteration']['cycleniter'],
+                                                             tooltip=Tooltip( content=HTML( 'maximum number of <b>minor-cycle</b> iterations' ),
+                                                                              position='bottom' ) ),
+                                                        Tip( imdetails['gui']['params']['iteration']['cyclefactor'],
+                                                             tooltip=Tooltip( content=HTML( 'scaling on PSF sidelobe level to compute the minor-cycle stopping threshold' ),
+                                                                              position='bottom_left' ) ), background="lightgray" ) ),
+                                     title='Iteration' ) ] +
+                          ( [ TabPanel( child=imdetails['gui']['spectrum'],
+                                        title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
+                          [ TabPanel( child=imdetails['gui']['convergence'],
+                                      title='Convergence' ),
+                            TabPanel( child=imdetails['gui']['cube'].colormap_adjust( ),
+                                      title='Colormap' ),
+                            TabPanel( child=imdetails['gui']['cube'].statistics( ),
+                                      title='Statistics' ) ] + imdetails['gui']['auto-masking-panel'],
+                     width=500, sizing_mode='stretch_height', tabs_location='below' )
+
+    def _create_image_panel( self, imagetuple ):
+        imid, imdetails = imagetuple
+
+
+
+        return TabPanel( child=column( row( *imdetails['gui']['channel-ctrl'], imdetails['gui']['cube'].coord_ctrl( ),
+                                            #Spacer( height=5, sizing_mode="scale_width" ),
+                                            imdetails['gui']['cube'].palette( ),
+                                            imdetails['gui']['image-adjust']['mask-clean-notclean-pick'],
+                                            imdetails['gui']['image-adjust']['mask-color-pick'],
+                                            imdetails['gui']['image-adjust']['mask-alpha-pick'],
+                                            #Spacer( height=5, height_policy="fixed", sizing_mode="scale_width" ),
+                                            imdetails['gui']['cursor-pixel-text'],
+                                            row( Spacer( sizing_mode='stretch_width' ),
+                                                 imdetails['gui']['cube'].tapedeck( size='20px' ) if imdetails['image-channels'] > 1 else Div( ),
+                                                 Spacer( height=5, width=350 ), width_policy='max' ),
+                                            width_policy='max' ),
+                                       row( imdetails['gui']['image']['fig'],
+                                            column( row( imdetails['gui']['goto'],
+                                                         imdetails['gui']['slider'],
+                                                         width_policy='max' ) if imdetails['image-channels'] > 1 else Div( ),
+                                                    self._create_control_image_tab(imdetails), height_policy='max' ),
+                                            height_policy='max', width_policy='max' ),
+                                       height_policy='max', width_policy='max' ), title=imid )
 
     def __call__( self ):
         '''Display GUI and process events until the user stops the application.
@@ -1072,7 +943,7 @@ class InteractiveClean:
 
         async def _run_( ):
             async with self.serve( ) as s:
-                await s[0]
+                await s
 
         if self._is_notebook:
             ic_task = asyncio.create_task(_run_())
@@ -1083,7 +954,6 @@ class InteractiveClean:
     def setup( self ):
         self.__reset( )
         self._init_pipes()
-        self._cube._init_pipes()
 
     @asynccontextmanager
     async def serve( self ):
@@ -1131,23 +1001,21 @@ class InteractiveClean:
 
                 httpd.serve_forever()
 
-         ###
-         ### Launching a webserver allows for remote connecton to the interactive clean running on a remote system
-         ### but we need to figure out how we want to manage remote execution.
-         ### (MAX)
-#        if not self._is_notebook:
-#            from threading import Thread
-#            thread = Thread(target=start_http_server)
-#            thread.daemon = True # Let Ctrl+C kill server thread
-#            thread.start()
-
         self._launch_gui( )
 
-        async with websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl, \
-                   websockets.serve( self._pipe['converge'].process_messages, self._pipe['converge'].address[0], self._pipe['converge'].address[1] ) as conv, \
-                   self._cube.serve( self.__stop ) as cube:
+        async with CMC( *( [ ctx for img in self._clean_targets.keys( ) for ctx in
+                             [
+                                 self._clean_targets[img]['gui']['cube'].serve(self.__stop),
+                             ]
+                           ] + [ websockets.serve( self._pipe['control'].process_messages,
+                                                   self._pipe['control'].address[0],
+                                                   self._pipe['control'].address[1] ),
+                                 websockets.serve( self._clean['converge']['pipe'].process_messages,
+                                                   self._clean['converge']['pipe'].address[0],
+                                                   self._clean['converge']['pipe'].address[1] ) ]
+                          ) ):
             self.__result_future = asyncio.Future( )
-            yield ( self.__result_future, { 'ctrl': ctrl, 'conv': conv, 'cube': cube } )
+            yield self.__result_future
 
     def __retrieve_result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
@@ -1156,14 +1024,18 @@ class InteractiveClean:
             raise self._error_result
         elif self._error_result is not None:
             return self._error_result
-        return self._convergence_data
+        return { k: v['converge'] for k,v in self._clean_targets.items( ) }
 
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
         GUI dialog between Python and JavaScript and this function would return it'''
         if self.__result_future is None:
             raise RuntimeError( 'no interactive clean result is available' )
-        self._clean.restore( )
+
+        self._clean['gclean'].restore( )
+        for g in self._clean['gclean_rest']:
+            g.restore( )
+
         return self.__result_future.result( )
 
     def masks( self ):
@@ -1198,3 +1070,307 @@ class InteractiveClean:
         list[str]  tclean calls made during the interactive clean session.
         '''
         return self._clean.cmds( True )
+
+    def _initialize_javascript( self ):
+        self._js = { ### initialize state
+                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+                     ### -- document is used storing state                                                        --
+                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+                     'initialize':      '''if ( ! document._casa_initialized ) {
+                                               document._casa_image = initial_image
+                                               document._casa_initialized = true
+                                               document._casa_window_closed = false
+                                               window.addEventListener( 'beforeunload',
+                                                                        function (e) {
+                                                                            // if the window is already closed this message is never
+                                                                            // delivered (unless interactive clean is called again then
+                                                                            // the event shows up in the newly created control pipe
+                                                                            if ( document._casa_window_closed == false ) {
+                                                                                ctrl_pipe.send( ids['stop'],
+                                                                                                { action: 'stop', value: { } },
+                                                                                                  undefined ) } } )
+                                           }''',
+
+                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+                     ### -- flux_src._convergence_data is used to store the complete                              --
+                     ### --                                                                                       --
+                     ### -- The "Insert here ..." code seems to be called when when the stokes plane is changed   --
+                     ### -- but there have been no tclean iterations yet...                                       --
+                     ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+                     'update-converge': '''function update_convergence_single( target, data ) {
+                                               const pos = target.src.cur_chan
+                                               const imdata = data.get(pos[1]).get(pos[0])
+                                               //  chan----------------^^^^^^      ^^^^^^----stokes
+                                               const iterations = imdata.iterations
+                                               const peakRes = imdata.peakRes
+                                               const cyclethreshold = imdata.cycleThresh
+                                               const modelFlux = imdata.modelFlux
+                                               const stopCode = imdata.stopCode
+                                               const stopDesc = imdata.stopCode.map( code => stopdescmap.has(code) ? stopdescmap.get(code): "" )
+                                               target.residual.data = { iterations, cyclethreshold, stopDesc, values: peakRes, type: Array(iterations.length).fill('residual') }
+                                               target.flux.data = { iterations, cyclethreshold, stopDesc, values: modelFlux, type: Array(iterations.length).fill('flux') }
+                                               target.cyclethreshold.data = { iterations, values: cyclethreshold }
+                                           }
+
+                                           function update_convergence( recurse=false ) {
+                                               let convdata
+                                               if ( hasprop(document,'_casa_convergence_data') ) {
+                                                   convdata = document._casa_convergence_data
+                                               } else {
+                                                   if ( ! recurse ) {
+                                                       ctrl.converge.pipe.send( ctrl.converge.id, { action: 'retrieve' },
+                                                                                (msg) => { if ( hasprop( msg.result, 'convergence' ) ) {
+                                                                                               document._convergence_data = { chan: msg.result.convergence,
+                                                                                                                              cyclethreshold: msg.result.cyclethreshold }
+                                                                                               update_convergence(true)
+                                                                                           } } )
+                                                   } else { console.log( 'INTERNAL ERROR: fetching convergence data failed' ) }
+                                                   return
+                                               }
+
+                                               Object.entries(images_state).map(
+                                                   ([k,v],i) => { update_convergence_single(v,convdata.chan[k]) } )
+                                           }''',
+
+                     'clean-refresh':   '''function refresh( clean_msg ) {
+                                               let stokes = 0    // later we will receive the polarity
+                                                                 // from some widget mechanism...
+                                               //img_src.refresh( msg => { if ( 'stats' in msg ) { //  -- this should happen within CubeMask
+                                               //                              stat_src.data = msg.stats
+                                               //                          }
+                                               //                        } )
+                                               if ( clean_msg !== undefined ) {
+                                                   if ( 'iterleft' in clean_msg ) {
+                                                       niter.value = '' + clean_msg['iterleft']
+                                                   } else if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
+                                                       const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
+                                                       niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                                   }
+
+                                                   if ( 'majorleft' in clean_msg ) {
+                                                       nmajor.value = '' + clean_msg['majorleft']
+                                                   } else if ( 'majordone' in clean_msg ) {
+                                                       const nm = parseInt(nmajor.value)
+                                                       if ( nm != -1 ) {
+                                                           const remaining = nm - parseInt(clean_msg['majordone'])
+                                                           nmajor.value = '' + (remaining < 0 ? 0 : remaining)
+                                                       } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
+                                                   }
+
+                                                   if ( hasprop(clean_msg,'convergence') && clean_msg.convergence != null ) {
+                                                       document._casa_convergence_data = { chan: clean_msg.convergence,
+                                                                                           cyclethreshold: clean_msg.cyclethreshold }
+                                                   }
+                                               }
+                                               // >>HERE>> still needed?
+                                               // >>HERE>> img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
+
+                                               update_convergence( )
+                                           }''',
+
+                       ###
+                       ### enabling/disabling tools in imdetails['gui']['image']['fig'].toolbar.tools does not seem to not work
+                       ###     imdetails['gui']['image']['fig'].toolbar.tools.tool_name (e.g. "Box Select", "Lasso Select")
+                       ###
+                       ### By design, images_state[*].automask.*/images_state[*].iteration.* are singletons which only need
+                       ### to be disabled once...
+                       ###
+                       'clean-disable': '''function disable( with_stop ) {
+                                               const amobj = Object.entries(images_state)[0][1].automask
+                                               Object.entries(amobj).map(
+                                                   ([k,v],i) => { if ( hasprop(v,'disabled') ) v.disabled = true } )
+                                               const itobj = Object.entries(images_state)[0][1].iteration
+                                               Object.entries(itobj).map(
+                                                   ([k,v],i) => { if ( hasprop(v,'disabled') ) v.disabled = true } )
+                                               Object.entries(images_state).map(
+                                                   ([k,v],i) => {
+                                                       v.img.disabled = true
+                                                       if ( v.spectrum ) v.spectrum.disabled = true
+                                                       v.src.disable_masking( )
+                                                       Object.entries(v.navi).map(
+                                                           ([k1,v1],i1) => { if ( hasprop(v1,'disabled') ) v1.disabled = true }
+                                                       )
+                                                   }
+                                               )
+                                               clean_ctrl.continue.disabled = true
+                                               clean_ctrl.finish.disabled = true
+                                               clean_ctrl.stop.disabled = with_stop
+                                           }''',
+
+                       'clean-enable':  '''function enable( only_stop ) {
+                                               const amobj = Object.entries(images_state)[0][1].automask
+                                               Object.entries(amobj).map(
+                                                   ([k,v],i) => { if ( hasprop(v,'disabled') ) v.disabled = false } )
+                                               const itobj = Object.entries(images_state)[0][1].iteration
+                                               Object.entries(itobj).map(
+                                                   ([k,v],i) => { if ( hasprop(v,'disabled') ) v.disabled = false } )
+                                               Object.entries(images_state).map(
+                                                   ([k,v],i) => {
+                                                       v.img.disabled = false
+                                                       if ( v.spectrum ) v.spectrum.disabled = false
+                                                       v.src.enable_masking( )
+                                                       Object.entries(v.navi).map(
+                                                           ([k1,v1],i) => { if ( hasprop(v1,'disabled') ) v1.disabled = false } )
+                                                   } )
+
+                                               clean_ctrl.stop.disabled = false
+                                               if ( ! only_stop ) {
+                                                   clean_ctrl.continue.disabled = false
+                                                   clean_ctrl.finish.disabled = false
+                                               }
+                                           }''',
+
+
+                       'clean-status-update': '''function update_status( status ) {
+                                               const stopstr = [ 'Zero stop code',
+                                                                 'Iteration limit hit',
+                                                                 'Force stop',
+                                                                 'No change in peak residual across two major cycles',
+                                                                 'Peak residual increased by 3x from last major cycle',
+                                                                 'Peak residual increased by 3x from the minimum',
+                                                                 'Zero mask found',
+                                                                 'No mask found',
+                                                                 'N-sigma or other valid exit criterion',
+                                                                 'Stopping criteria encountered',
+                                                                 'Unrecognized stop code' ]
+                                               if ( typeof status === 'number' ) {
+                                                   images_state[document._casa_image]['status'].text =
+                                                       '<p>' +
+                                                       stopstr[ status < 0 || status >= stopstr.length ?
+                                                                stopstr.length - 1 : status ] +
+                                                       '</p>'
+                                               } else {
+                                                   images_state[document._casa_image]['status'].text = `<p>${status}</p>`
+                                               }
+                                           }''',
+
+                       'iter-gui-update': '''function get_update_dictionary( ) {
+                                                  //const amste = images_state[document._casa_image]['automask']
+                                                  //const clste = images_state[document._casa_image]['iteration']
+                                                  // Assumption is that there is ONE set of iteration and automask updates
+                                                  // for ALL imaging fields...
+                                                  const amobj = Object.entries(images_state)[0][1].automask
+                                                  const automask = amobj.active ?
+                                                                   Object.entries(amobj).reduce(
+                                                                       (acc,[k1,v1]) => { if ( hasprop(v1,'value') ) acc[k1] = v1.value; return acc },
+                                                                       { dogrowprune: amobj.dogrowprune.active,
+                                                                         active: true }
+                                                                   ) : { }
+                                                  const itobj = Object.entries(images_state)[0][1].iteration
+                                                  const iteration = Object.entries(itobj).reduce(
+                                                                        (acc,[k1,v1]) => { if ( hasprop(v1,'value') ) acc[k1] = v1.value; return acc },
+                                                                        { }
+                                                                    )
+
+                                                  const masks = Object.entries(images_state).reduce( (acc,[k,v]) => { acc[k] = v.src.masks( ); return acc }, { } )
+                                                  const breadcrumbs = Object.entries(images_state).reduce( (acc,[k,v]) => { acc[k] = v.src.breadcrumbs( ); return acc }, { } )
+                                                  return { iteration, automask, masks, breadcrumbs, current_image: document._casa_image }
+                                           }
+                                           function update_log( log_lines ) {
+                                               let b = logbutton
+                                               b._log = b._log.concat( log_lines )
+                                               if ( b._window && ! b._window.closed ) {
+                                                   for ( const line of log_lines ) {
+                                                       const p = b._window.document.createElement('p')
+                                                       p.appendChild( b._window.document.createTextNode(line) )
+                                                       b._window.document.body.appendChild(p)
+                                                   }
+                                               }
+                                           }
+                                           function update_gui( msg ) {
+                                               if ( msg.result === 'error' ) {
+                                                   // ************************************************************************************
+                                                   // ******** error occurs and is signaled by _gclean, e.g. exception in gclean  ********
+                                                   // ************************************************************************************
+                                                   state.mode = 'interactive'
+                                                   clean_ctrl.stop.button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'An internal error has occurred' )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                               } else if ( msg.result === 'no-action' ) {
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'nothing done' )
+                                                   enable( false )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                               } else if ( msg.result == 'converged' ) {
+                                                   state.mode = 'interactive'
+                                                   clean_ctrl.stop.button_type = "danger"
+                                                   enable(false)
+                                                   state.stopped = false
+                                                   update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                                   refresh( msg )
+                                               } else if ( msg.result === 'update' ) {
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                                   refresh( msg )
+                                                   // stopcode == 1: iteration limit hit
+                                                   // stopcode == 9: major cycle limit hit
+                                                   // *******************************************************************************************
+                                                   // ******** perhaps the user should not be locked into exiting after the limit is hit ********
+                                                   // *******************************************************************************************
+                                                   //state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
+                                                   state.stopped = false
+                                                   if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
+                                                       clean_ctrl.stop.button_type = "danger"
+                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                       if ( ! state.stopped ) {
+                                                           enable( false )
+                                                       } else {
+                                                           disable( false )
+                                                       }
+                                                   } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
+                                                       if ( ! state.stopped && niter.value > 0 && (nmajor.value > 0 || nmajor.value == -1) ) {
+                                                           // *******************************************************************************************
+                                                           // ******** 'niter.value > 0 so continue with one more iteration                      ********
+                                                           // ******** 'nmajor.value' == -1 implies do not consider nmajor in stop consideration ********
+                                                           // *******************************************************************************************
+                                                           ctrl_pipe.send( ids[cb_obj.origin.name],
+                                                                           { action: 'finish',
+                                                                             value: get_update_dictionary( ) },
+                                                                           update_gui )
+                                                       } else if ( ! state.stopped  ) {
+                                                           // *******************************************************************************************
+                                                           // ******** 'niter.value <= 0 so iteration should stop                                ********
+                                                           // *******************************************************************************************
+                                                           state.mode = 'interactive'
+                                                           clean_ctrl.stop.button_type = "danger"
+                                                           enable(false)
+                                                           state.stopped = false
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopping criteria reached' )
+                                                       } else {
+                                                           state.mode = 'interactive'
+                                                           clean_ctrl.stop.button_type = "danger"
+                                                           enable(false)
+                                                           state.stopped = false
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                       }
+                                                   }
+                                               } else if ( msg.result === 'error' ) {
+                                                   img_src.drop_breadcrumb('E')
+                                                   if ( 'cmd' in msg ) {
+                                                       update_log( msg.cmd )
+                                                   }
+                                                   state.mode = 'interactive'
+                                                   clean_ctrl.stop.button_type = "danger"
+                                                   state.stopped = false
+                                                   update_status( 'stopcode' in msg ? msg.stopcode : -1 )
+                                                   enable( false )
+                                               }
+                                           }''',
+
+                       'clean-wait':    '''function wait_for_tclean_stop( msg ) {
+                                               state.mode = 'interactive'
+                                               clean_ctrl.stop.button_type = "danger"
+                                               enable( false )
+                                               state.awaiting_stop = false
+                                               update_status( 'user requested stop' )
+                                           }''',
+        }

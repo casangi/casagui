@@ -89,14 +89,14 @@ def initialize_bokeh( bokehjs_subst=None ):
                 return [ ]
             if type(replacement) == str:
                 if path.isfile(replacement):
-                    return [ f'''file:/{abspath(replacement)}''' ]
+                    return [ f'''file://{abspath(replacement)}''' ]
                 else:
                     return replacement
             if type(replacement) == list:
                 result = [ ]
                 for u in replacement:
                     if path.isfile(u):
-                        result.append( f'''file:/{abspath(u)}''' )
+                        result.append( f'''file://{abspath(u)}''' )
                     else:
                         result.append( u )
                 return result

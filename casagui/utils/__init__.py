@@ -61,6 +61,7 @@ from ._conversion import serialize, deserialize
 from ._static import static_vars, static_dir
 from ._image import image_as_mime
 from ._tiles import TMSTiles
+from ._contextmgrchain import ContextMgrChain
 
 @static_vars(mgr=None)
 def resource_manager( ):

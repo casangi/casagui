@@ -12,6 +12,22 @@ import { contours } from 'd3-contour'
 // see https://d3js.org/d3-polygon
 import { polygonContains } from 'd3-polygon'
 
+//
+// In JavaScript "'PROP' in OBJ" only works if the type of OBJ
+// is actually an object. 'hasOwnProperty' can only be use
+// for objects as well. Also, OBJ.hasOwnProperty('PROP') returns
+// false for most Bokeh models presumably because the PROPs
+// are defined in a prototype...
+//
+// 'hasprop' resolves these problems by combining checks checks
+// for whether the object is an object, is not null and that the
+// PROP is somehow defined... so for example hasprop returns
+// false for "hasprop(true)"...
+//
+function hasprop( obj: any, prop: string ) {
+    return typeof obj == 'object' && obj && prop in obj
+}
+
 declare global {
     var Bokeh: any
 }
@@ -42,3 +58,5 @@ if ( typeof Bokeh !== "undefined" ) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).casalib = casalib;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).hasprop = hasprop;

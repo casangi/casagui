@@ -66,7 +66,7 @@ class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
     interactive clean and make mask'''
 
-    def __init__( self, image, mask=None, abort=None ):
+    def __init__( self, image, mask=None, abort=None, init_script=None ):
         '''Create a cube masking GUI which includes the 2-D raster cube plane display
         along with these optional components:
 
@@ -85,7 +85,11 @@ class CubeMask:
             regions. This is the standard mode of operation for interactive clean.
         abort: function
             If provided, the ``abort`` function will be called in the case of an error.
+        init_script: CustomJS script
+            Script to run upon initialization of Cube
         '''
+        self._user_init_script = init_script
+
         self._is_notebook = is_notebook()
         #self._color = '#00FF00'                           # anti-green VLA users feedback (issue #40 2024-05-02 13:08:32)
         self._color  = '#FFFFFF'                           # default color for mask, selection, etc.
@@ -115,7 +119,6 @@ class CubeMask:
         self._goto_txt = None                              # goto channel text input
         self._goto_stokes = None                           # goto channel stokes dropdown
         self._slider = None                                # slider to move from plane to plane
-        self._slider_callback = None                       # called after the channel update for slider movement is complete
         self._tapedeck = None                              # buttons to move the slider
         self._spectrum = None                              # figure displaying spectrum along the frequency axis
         self._statistics = None                            # statistics data table
@@ -167,12 +170,19 @@ class CubeMask:
                                                         # on successive image cube planes
 
         self._cm_adjust = { 'id': self._ids['colormap-adjust'],
-                            'bins': 256 }               # state for colormap_adjust(...)
+                            'bins': 256,               # state for colormap_adjust(...)
+                            'min input': None,
+                            'max input': None,
+                            'span one': None,
+                            'span two': None,
+                            'histogram': None,
+                           }
 
         self.__abort = abort
 
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
+
 
         ###########################################################################################################################
         ### Notes on States                                                                                                     ###
@@ -633,13 +643,12 @@ class CubeMask:
                                                                         if ( 'hist' in msg ) {
                                                                             %s
                                                                             %s
-                                                                        }
-                                                                        if ( cb ) cb.execute( this ) } )
+                                                                        } } )
                                                if ( isource._current_pos )
                                                    update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
                                                                     ( spec ) => {
                                                                         refresh_pixel_display( spec.index,
-                                                                                               spec.spectrum.y[spec.chan[1]],
+                                                                                               spec.spectrum.pixel[spec.chan[1]],
                                                                                                'mask' in spec && spec.mask[spec.chan[1]],
                                                                                                pix_wrld && pix_wrld.label == 'pixel' ? false : true )
                                                                 } )
@@ -647,13 +656,16 @@ class CubeMask:
                                                    go_to.value = String( slider.value )
                                                }
                                            }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
+                     ###
+                     ### >>HERE>> This code has drifted out of date... so creating a display WITHOUT statistics
+                     ###          will result in errors without JavaScript
+                     ###
                      'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                source.channel( slider.value, source.cur_chan[0],
                                                                msg => { if ( 'hist' in msg ) {
                                                                             %s
                                                                             %s
-                                                                        }
-                                                                        if ( cb ) cb.execute( this ) } )
+                                                                        } } )
                                            }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
                      ### initialize mask state
                      ###
@@ -1126,13 +1138,16 @@ class CubeMask:
         self._init_pipes( )
         return self._pipe['image'].channel( self._image_source.cur_chan, pixel_type )
 
-    def jsmask_to_raw( self, jsmask ):
+    def jsmask_to_raw( self, all_jsmasks ):
         '''The CubeMask raw format uses tuples for dictionary keys but tuples are not a type that can be
         created in javascript...
+
+        Expected Format: { <IMAGE-NAME>: { 'mask': [...], 'polys': [...] }, ... }
         '''
         def convert_elem( vec, f=lambda x: x ):
             return { f(chan_or_poly[0]): chan_or_poly[1] for chan_or_poly in vec }
-        return { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
+        return { img: { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
+                 for img,jsmask in all_jsmasks.items( ) }
 
     def mask( self ):
         return self._mask_path
@@ -1156,7 +1171,15 @@ class CubeMask:
                 mask[:] = 1.0 if value else 0.0
                 self._pipe['image'].put_mask( [stokes,chan], mask )
 
-    def image( self, maxanno=50, **kw ):
+    def set_channelcb( self, callback ):
+        self._channel_callback = callback
+
+    def _init_image_source( self ):
+        if self._image_source is None:
+            self._init_pipes( )
+            self._image_source = ImageDataSource( image_source=self._pipe['image'] )
+
+    def image( self, maxanno=50, channelcb=None, **kw ):
         '''Create the 2D raster display which displays image planes. This widget is should be
         created for all ``cube_mask`` objects because this is the GUI component that ties
         all of the other GUIs together.
@@ -1169,6 +1192,9 @@ class CubeMask:
             extra keyword/value paramaters passed on to ``figure``
         '''
         if self._image is None:
+
+            self._channel_callback = channelcb
+
             async def receive_return_value( msg, self=self ):
                 self._result = self.jsmask_to_raw( msg['value'] )
                 self.__stop( )
@@ -1293,7 +1319,8 @@ class CubeMask:
 
 
             self._pipe['control'].register( self._ids['done'], receive_return_value )
-            self._image_source = ImageDataSource( image_source=self._pipe['image'] )
+            self._init_image_source( )
+
             ### fetch stokes labels for all stokes drop
             self._stokes_labels = self._image_source.stokes_labels( )
 
@@ -1388,7 +1415,7 @@ class CubeMask:
     def goto( self, **kw ):
         if self._goto is None:
             self._init_pipes( )
-            self._goto_txt = set_attributes( EvTextInput( value=self._slider.start if self._slider else '0',
+            self._goto_txt = set_attributes( EvTextInput( value=str(self._slider.start) if self._slider else '0',
                                                           stylesheets=[ InlineStyleSheet( css='''.bk-input { border-bottom-left-radius: 0; border-top-left-radius: 0; margin-left: -0.45em; }''' ) ],
                                                           width=85 ), **kw )
             self._goto_stokes = Dropdown( label="I Channel", menu=self._stokes_labels, stylesheets=[ InlineStyleSheet( css='''.bk-btn { background-color: rgb( 230, 230, 230 ); padding: 7px; padding-top: 8px; border-bottom-right-radius: 0; border-top-right-radius: 0; margin-right: -0.45em; }''' ) ], width=80 )
@@ -1396,7 +1423,7 @@ class CubeMask:
 
         return self._goto
 
-    def slider( self, callback=None, **kw ):
+    def slider( self, **kw ):
         '''Return slider that is used to change the image plane that is
         displayed on the 2D raster display.
 
@@ -1411,14 +1438,13 @@ class CubeMask:
             slider_end = shape[-1]-1
             self._slider = set_attributes( Slider( start=0, end=1 if slider_end == 0 else slider_end , value=0, step=1,
                                                    title="Channel" ), **kw )
-            self._slider_callback = callback
             if slider_end == 0:
                 # for a cube with one channel, a slider is of no use
                 self._slider.disabled = True
 
         return self._slider
 
-    def tapedeck( self ):
+    def tapedeck( self, **kw ):
         if self._slider is None:
             raise RuntimeError( "tapedeck can only be created after the slider has been created" )
 
@@ -1430,16 +1456,16 @@ class CubeMask:
         end = 3
         fwd = 2
         bck = 1
-        self._tapedeck = [ TipButton( icon=svg_icon([ '20px', 'fast-backward']), button_type='light',
+        self._tapedeck = [ TipButton( icon=svg_icon( [ '20px', 'fast-backward'], **kw ), button_type='light',
                                       tooltip=Tooltip( content=HTML( 'move to first channel' ), position='bottom' ),
                                       stylesheets=stylesheets, name='tofront' ),
-                           TipButton( icon=svg_icon([ '20px', 'step-backward']), button_type='light',
+                           TipButton( icon=svg_icon( [ '20px', 'step-backward'], **kw ), button_type='light',
                                       tooltip=Tooltip( content=HTML( 'move to previous channel' ), position='bottom' ),
                                       stylesheets=stylesheets, name='back' ),
-                           TipButton( icon=svg_icon([ '20px', 'step-forward']), button_type='light',
+                           TipButton( icon=svg_icon( [ '20px', 'step-forward'], **kw ), button_type='light',
                                       tooltip=Tooltip( content=HTML( 'move to next channel' ), position='bottom' ),
                                       stylesheets=stylesheets, name='forw' ),
-                           TipButton( icon=svg_icon([ '20px', 'fast-forward']), button_type='light',
+                           TipButton( icon=svg_icon( [ '20px', 'fast-forward'], **kw ), button_type='light',
                                       tooltip=Tooltip( content=HTML( 'move to last channel' ), position='bottom' ),
                                       stylesheets=stylesheets, name='toend' ) ]
 
@@ -1454,7 +1480,7 @@ class CubeMask:
 
         return row( *self._tapedeck )
 
-    def spectrum( self, **kw ):
+    def spectrum( self, orient='horizontal', **kw ):
         '''Return the line graph of spectrum from the image cube which is updated
         in response to moving the cursor within the 2D raster display.
 
@@ -1473,21 +1499,21 @@ class CubeMask:
                 raise RuntimeError('spectrum( ) requires an image cube display, but one has not yet been created')
 
             nelem = self._pipe['image'].shape[-1]
-            self._image_spectrum = ColumnDataSource( data={ 'x': list(range(nelem)), 'y': [0] * nelem } )
+            self._image_spectrum = ColumnDataSource( data={ 'chan': list(range(nelem)), 'pixel': [0] * nelem } )
 
             self._sp_span = Span( location=-1,
-                                  dimension='height',
+                                  dimension='width' if orient == 'vertical' else 'height',
                                   line_color='slategray',
                                   line_width=2,
                                   visible=False )
 
-            self._cb['sppos'] = CustomJS( args=dict(span=self._sp_span),
+            self._cb['sppos'] = CustomJS( args=dict( span=self._sp_span,vertical=orient != 'vertical' ),
                                           code = """var geometry = cb_data['geometry'];
                                                             var x_pos = Math.round(geometry.x);
                                                             var y_pos = Math.round(geometry.y);
                                                             if ( isFinite(x_pos) && isFinite(y_pos) ) {
                                                                 span.visible = true
-                                                                span.location = x_pos
+                                                                span.location = vertical ? x_pos : y_pos
                                                             } else {
                                                                 span.visible = false
                                                                 span.location = -1
@@ -1495,12 +1521,11 @@ class CubeMask:
 
             self._hover['spectrum'] = HoverTool( callback=self._cb['sppos'] )
 
-            self._spectrum = set_attributes( figure( height=180, width=800,
-                                                    tools=[ self._hover['spectrum'] ] ), **kw )
+            self._spectrum = set_attributes( figure( tools=[ self._hover['spectrum'] ] ), **kw )
             self._spectrum.add_layout(self._sp_span)
 
             self._spectrum.x_range.range_padding = self._spectrum.y_range.range_padding = 0
-            self._spectrum.line( x='x', y='y', source=self._image_spectrum )
+            self._spectrum.line( x='pixel' if orient == 'vertical' else 'chan', y='chan' if orient == 'vertical' else 'pixel', source=self._image_spectrum )
             self._spectrum.grid.grid_line_width = 0.5
 
         return self._spectrum
@@ -1652,16 +1677,23 @@ class CubeMask:
                                                 description="Reset pan/zoom and extents" )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
                                          tools=[ self._cm_adjust['reset'],
+                                                 # see https://github.com/bokeh/bokeh/pull/13593
+                                                 # and https://github.com/bokeh/bokeh/issues/12486
+                                                 #WheelZoomTool(toggleable=False), PanTool(toggleable=False),
+                                                 #WheelZoomTool(visible=False), PanTool(toggleable=False),
                                                  'wheel_zoom', 'pan',
                                                  ResetTool( icon=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'zoom-to-fit.png' )),
-                                                            description="Reset pan/zoom but preserve extents" ) ] )
+                                                            description="Reset pan/zoom but preserve extents" ) ],
+                                        sizing_mode="scale_width" )
 
         self._cm_adjust['fig'].toolbar.active_scroll = self._cm_adjust['fig'].select_one(WheelZoomTool)
 
         ###
         ### remove bokeh logo from toolbar
+        ### due to a bokeh bug, currently removing the bokeh logo pushes one of the tools into
+        ### the ellipsis at the right of the GUI... Mon Jul  8 14:54:01 EDT 2024
         ###
-        self._cm_adjust['fig'].toolbar.logo = None
+        #self._cm_adjust['fig'].toolbar.logo = None
 
         # Create a new BasicTickFormatter
         formatter = BasicTickFormatter()
@@ -1867,7 +1899,8 @@ class CubeMask:
                                                    position="top" ) ),
                             Tip( self._cm_adjust['gamma-value'],
                                   tooltip=Tooltip( content=HTML('set gamma value as indicated in the equation'),
-                                                   position="top" ) ) ) )
+                                                   position="top" ) ) ),
+                       sizing_mode="scale_width" )
 
     def bitmask_controls( self, **kw ):
 
@@ -1968,13 +2001,16 @@ class CubeMask:
 
         return self._coord_ctrl_group
 
-    def status_text( self, text='', **kw ):
-        self._status_div =  set_attributes( Div( text=text ), **kw )
+    def status_text( self, text='', reuse=None, **kw ):
+        if reuse is None:
+            self._status_div = set_attributes( Div( text=text ), **kw )
+        else:
+            self._status_div = reuse
         return self._status_div
 
-    def pixel_tracking_text( self ):
+    def pixel_tracking_text( self, **kw ):
 
-        self._pixel_tracking_text = Div( text='', min_width=200 )
+        self._pixel_tracking_text = Div( text='', min_width=200, **kw )
 
         async def fetch_spectrum( msg, self=self ):
             if msg['action'] == 'spectrum':
@@ -2050,7 +2086,7 @@ class CubeMask:
                                                       span1=self._cm_adjust['span one'],
                                                       span2=self._cm_adjust['span two'],
                                                       histogram=self._cm_adjust['histogram'],
-                                                      go_to=self._goto_txt, cb=self._slider_callback,
+                                                      go_to=self._goto_txt,
                                                       ids=self._ids, ctrl=self._pipe['control'], pix_wrld=self._coord_ctrl_dropdown ),
                                            code=self._js['pixel-update-func'] + (self._js['slider_w_stats'] if self._statistics_source else self._js['slider_wo_stats']) )
 
@@ -2155,7 +2191,8 @@ class CubeMask:
                                                        '''casalib.hotkeys.setScope( )''' ) )
 
         self._image_source.js_on_change( 'cur_chan', CustomJS( args=dict( slider=self._slider, label=self._channel_ctrl,
-                                                                          stokes_label=self._channel_ctrl_stokes_dropdown ),
+                                                                          stokes_label=self._channel_ctrl_stokes_dropdown,
+                                                                          cb=self._channel_callback ),
                                                                ### the label manipulation portion of 'code' is '' when self._channel_ctrl is None
                                                                ### so stokes_label.label and label.text will not be updated when they are not used
                                                                code=( ( '''label.text = `Channel ${cb_obj.cur_chan[1]}`
@@ -2166,7 +2203,7 @@ class CubeMask:
                                                                       ( ( '''if ( casalib.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
                                                                           self._slider else '') +
                                                                         (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
-                                                                        if self._mask_path is None else '' ) ) ) )
+                                                                        if self._mask_path is None else '' ) + ''';if ( cb ) cb.execute( cb_obj )''' ) ) )
 
         if self._channel_ctrl:
             ###
@@ -2240,7 +2277,7 @@ class CubeMask:
                                                             update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
                                                                              ( spec ) => {
                                                                                  refresh_pixel_display( spec.index,
-                                                                                                        spec.spectrum.y[spec.chan[1]],
+                                                                                                        spec.spectrum.pixel[spec.chan[1]],
                                                                                                         'mask' in spec && spec.mask[spec.chan[1]],
                                                                                                         pix_wrld && pix_wrld.label == 'pixel' ? false : true )
                                                                              } )
@@ -2268,7 +2305,8 @@ class CubeMask:
                                                               mask_region_icons=self._mask_icons_,
                                                               mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                               contour_ds=self._bitmask_contour_ds,
-                                                              status=self._status_div, statprec=7 ),
+                                                              status=self._status_div, statprec=7,
+                                                              user_init_script = self._user_init_script ),
                                                               code='''let source = cb_obj;''' +
                                                                    ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
                                                                      self._js['contour-maskmod'] +
@@ -2276,7 +2314,7 @@ class CubeMask:
                                                                      if self._mask_path is None else self._js['contour-maskmod'] + self._js['setup-key-mgmt'] ) +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
-                                                                      source.done = ( ) => {
+                                                                      document._done = ( final_polys=null ) => {
                                                                           function done_close_window( msg ) {
                                                                               if ( msg.result === 'stopped' ) {""" +
                                                                             # Don't close tab if running in a jupyter notebook
@@ -2289,14 +2327,14 @@ class CubeMask:
                                                                           }
                                                                           ctrl.send( ids['done'],
                                                                                      { action: 'done',
-                                                                                       value: typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] } },
+                                                                                       value: final_polys ? final_polys : { } },
                                                                                      done_close_window )
                                                                       }
                                                                       // exported functions -- enable/disable masking, retrieve masks etc.
                                                                       source._masking_enabled = true
                                                                       source.disable_masking = ( ) => source._masking_enabled = false
                                                                       source.enable_masking = ( ) => source._masking_enabled = true
-                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : null
+                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
                                                                       source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
                                                                       source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
                                                                       source.update_statistics = ( data ) => {
@@ -2307,7 +2345,8 @@ class CubeMask:
                                                                               } } )
                                                                           stats_source.data = data
                                                                       }
-                                                                      source.update_statistics( stats_source.data ) /*** round floats ***/
+                                                                      if ( stats_source ) source.update_statistics( stats_source.data ) /*** round floats ***/
+                                                                      if ( user_init_script ) { user_init_script.execute(this) }
                                                                    """ )
 
         ###
@@ -2371,8 +2410,7 @@ class CubeMask:
             disable_masking( )
             enable_masking( )
         '''
-        if not self._image_source:
-            raise RuntimeError('an image widget must be created (with CubeMask.image) before js_obj( ) can be called')
+        self._init_image_source( )
         return self._image_source
 
     def result( self ):
@@ -2397,12 +2435,15 @@ class CubeMask:
         '''Retrieve the help Bokeh object. When this button is clicked, a tab/window
         containing the help information is opened or receives focus.
         '''
+        tip_parameters = ['position']
+        kw_args = { 'position': 'bottom', **kw }
         if self._help_button is None:
             self._help_button = set_attributes( TipButton( label="", max_width=35, max_height=35, name='help',
                                                            button_type='light', hover_wait=0, margin=(-1, 0, 0, 0),
                                                            tooltip=Tooltip( content=HTML( '''<b>Click</b> here for image command key help.
                                                                                              <b>Hover</b> over some widgets for 1.5 seconds for other help''' ),
-                                                                            position="bottom" ) ), **kw )
+                                                                            **{ k: v for k,v in kw_args.items( ) if k in tip_parameters} ) ),
+                                                **{ k: v for k,v in kw_args.items( ) if k not in tip_parameters} )
             self._help_button.js_on_click( CustomJS( args=dict( text=self.__help_string( ) ),
                                                      code='''if ( window._iclean_help && ! window._iclean_help.closed ) {
                                                                  window._iclean_help.focus( )
@@ -2419,6 +2460,7 @@ class CubeMask:
         async with websockets.serve( self._pipe['image'].process_messages, self._pipe['image'].address[0], self._pipe['image'].address[1] ) as im, \
              websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl:
             yield { 'im': im, 'ctrl': ctrl }
+            #pass
 
     def __help_string( self, rows=[ ] ):
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
