@@ -2371,7 +2371,8 @@ class InteractiveClean:
                                                                                     'residual': v['converge-data']['residual'],
                                                                                     'navi': { 'slider': v['gui']['slider'],
                                                                                               'goto': v['gui']['goto'],
-                                                                                              'tracking': v['gui']['cursor-pixel-text'],
+                                                                                              ## it doesn't seem like pixel tracking must be disabled
+                                                                                              ##'tracking': v['gui']['cursor-pixel-text'],
                                                                                               'stokes': v['gui']['channel-ctrl'][1] } }
                                                                                for k,v in self._clean_targets.items( ) },
                                                                 ctrl={ 'converge': self._clean['converge'] },
@@ -2392,8 +2393,9 @@ class InteractiveClean:
                                                              if ( v < 0 ) return 'niter cannot be negative'
                                                              if ( isNaN(v) ) return 'niter must be an integer'
                                                          }
+                                                         const itobj = Object.entries(images_state)[0][1].iteration
                                                          if ( ! state.stopped && cb_obj.origin.name == 'finish' ) {
-                                                             let invalid = invalid_niter(niter.value)
+                                                             let invalid = invalid_niter(itobj.niter.value)
                                                              if ( invalid ) update_status( invalid )
                                                              else {
                                                                  state.mode = 'continuous'
@@ -2409,7 +2411,7 @@ class InteractiveClean:
                                                          }
                                                          if ( ! state.stopped && state.mode === 'interactive' &&
                                                               cb_obj.origin.name === 'continue' ) {
-                                                             let invalid = invalid_niter(niter.value)
+                                                             let invalid = invalid_niter(itobj.niter.value)
                                                              if ( invalid ) update_status( invalid )
                                                              else {
                                                                  update_status( 'Running one set of deconvolution iterations' )
@@ -2810,6 +2812,7 @@ class InteractiveClean:
                                            }''',
 
                      'clean-refresh':   '''function refresh( clean_msg ) {
+                                               const itobj = Object.entries(images_state)[0][1].iteration
                                                let stokes = 0    // later we will receive the polarity
                                                                  // from some widget mechanism...
                                                //img_src.refresh( msg => { if ( 'stats' in msg ) { //  -- this should happen within CubeMask
@@ -2818,20 +2821,20 @@ class InteractiveClean:
                                                //                        } )
                                                if ( clean_msg !== undefined ) {
                                                    if ( 'iterleft' in clean_msg ) {
-                                                       niter.value = '' + clean_msg['iterleft']
+                                                       itobj.niter.value = '' + clean_msg['iterleft']
                                                    } else if ( clean_msg !== undefined && 'iterdone' in clean_msg ) {
-                                                       const remaining = parseInt(niter.value) - parseInt(clean_msg['iterdone'])
-                                                       niter.value = '' + (remaining < 0 ? 0 : remaining)
+                                                       const remaining = parseInt(itobj.niter.value) - parseInt(clean_msg['iterdone'])
+                                                       itobj.niter.value = '' + (remaining < 0 ? 0 : remaining)
                                                    }
 
                                                    if ( 'majorleft' in clean_msg ) {
-                                                       nmajor.value = '' + clean_msg['majorleft']
+                                                       itobj.nmajor.value = '' + clean_msg['majorleft']
                                                    } else if ( 'majordone' in clean_msg ) {
-                                                       const nm = parseInt(nmajor.value)
+                                                       const nm = parseInt(itobj.nmajor.value)
                                                        if ( nm != -1 ) {
                                                            const remaining = nm - parseInt(clean_msg['majordone'])
-                                                           nmajor.value = '' + (remaining < 0 ? 0 : remaining)
-                                                       } else nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
+                                                           itobj.nmajor.value = '' + (remaining < 0 ? 0 : remaining)
+                                                       } else itobj.nmajor.value = '' + nm          // nmajor == -1 implies do not consider nmajor in stop decision
                                                    }
 
                                                    if ( hasprop(clean_msg,'convergence') && clean_msg.convergence != null ) {
@@ -2955,6 +2958,7 @@ class InteractiveClean:
                                                }
                                            }
                                            function update_gui( msg ) {
+                                               const itobj = Object.entries(images_state)[0][1].iteration
                                                if ( msg.result === 'error' ) {
                                                    // ************************************************************************************
                                                    // ******** error occurs and is signaled by _gclean, e.g. exception in gclean  ********
@@ -3004,7 +3008,7 @@ class InteractiveClean:
                                                            disable( false )
                                                        }
                                                    } else if ( state.mode === 'continuous' && ! state.awaiting_stop ) {
-                                                       if ( ! state.stopped && niter.value > 0 && (nmajor.value > 0 || nmajor.value == -1) ) {
+                                                       if ( ! state.stopped && itobj.niter.value > 0 && (itobj.nmajor.value > 0 || itobj.nmajor.value == -1) ) {
                                                            // *******************************************************************************************
                                                            // ******** 'niter.value > 0 so continue with one more iteration                      ********
                                                            // ******** 'nmajor.value' == -1 implies do not consider nmajor in stop consideration ********
