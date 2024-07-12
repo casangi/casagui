@@ -2230,11 +2230,12 @@ class CubeMask:
             ### channel was selected, but I think this update was broken when the oscillation problem
             ### we fixed, see above)
             ###
-            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source, slider=self._slider ),
-                                          code = '''if ( span.location >= 0 ) {
+            self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source,
+                                                     slider=self._slider, specfig=self._spectrum ),
+                                          code = '''if ( span.location >= 0 && ! specfig.disabled ) {
                                                         if ( slider ) slider.value = span.location
                                                         else source.channel( span.location, source.cur_chan[0] )
-                                                             //      chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
+                                                        //           chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
                                                     }''' )
 
             self._spectrum.js_on_event('tap', self._cb['sptap'])
@@ -2272,7 +2273,7 @@ class CubeMask:
                                                     var y_pos = Math.floor(geometry.y)
                                                     if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
                                                         isource._current_pos = [ x_pos, y_pos ]
-                                                        if ( ! pixlabel.disabled ) {
+                                                        if ( ! specfig.disabled ) {
                                                             /* SEGV: cannot fetch pixels while tclean may be modifying the image */
                                                             update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
                                                                              ( spec ) => {
