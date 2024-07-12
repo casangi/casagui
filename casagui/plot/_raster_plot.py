@@ -7,16 +7,19 @@ import hvplot.xarray
 import hvplot.pandas
 import numpy as np
 import os.path
-from bokeh.models import HoverTool
+import xarray as xr
 
-from ..data._xds_utils import fix_coordinate_units
-from ..data._vis_data import get_axis_data
+from xradio.vis._processing_set import processing_set
+
+from ..data._ps_utils import concat_ps_xds
+from ..data._vis_data import get_vis_data_var, get_axis_data
+from ..data._vis_stats import calculate_coord_min
 from ._plot_axes import get_coordinate_label, get_axis_labels, get_vis_axis_labels
 
-def raster_plot(xds, x_axis, y_axis, vis_axis, selection, vis_path, color_limits):
+def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path, color_limits, logger):
     '''
     Create raster plot y_axis vs x_axis for vis axis in ddi.
-        xds (xarray Dataset): concat of msv4 xarray Datasets containing vis data
+        ps (xradio processing set): dict of msv4 xarray Datasets containing vis data
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
         vis_axis (str): visibility component to plot (amp, phase, real, imag)
@@ -26,171 +29,169 @@ def raster_plot(xds, x_axis, y_axis, vis_axis, selection, vis_path, color_limits
 
     Returns: holoviews Image or Overlay (if flagged data)
     '''
-    # Check x and y axes, vis axis
-    x_axis, y_axis = _check_axes(xds, x_axis, y_axis)
-    vis_axis = _check_vis_axis(xds, vis_axis)
+    vis_data = get_vis_data_var(vis_axis)
+    vis_dims = ps.get(0)[vis_data].dims
+    selected_ps = _apply_selection(ps, vis_dims, selection, vis_path, logger)
 
-    # xradio sets unit as list not string
-    fix_coordinate_units(xds)
+    # Select raster plane (first index) if user did not
+    select_dims = _get_non_axis_dims(vis_dims, x_axis, y_axis)
+    raster_ps, selection = _select_raster_plane(selected_ps, select_dims, selection, vis_path, logger)
 
-    # Calculate complex component
-    xds['VISIBILITY'] = get_axis_data(xds, vis_axis)
+    # xds for raster plot
+    raster_xds = concat_ps_xds(raster_ps, logger)
 
-    # Sort xds
-    xds = xds.sortby('time')
+    # Set title for all plots
+    title = _get_plot_title(raster_xds, select_dims, selection, os.path.basename(vis_path))
 
-    # Get dimensions before selection
-    vis_dims = xds.VISIBILITY.dims
+    # Calculate complex component of vis data
+    raster_xds[vis_data] = get_axis_data(raster_xds, vis_axis)
 
-    # Check plot selection: exception if fails
-    xds = _apply_xds_selection(xds, x_axis, y_axis, selection)
+    # Axes for plot (replaced with index for regular spacing where needed)
+    raster_xds, x_axis_labels = get_axis_labels(raster_xds, x_axis)
+    raster_xds, y_axis_labels = get_axis_labels(raster_xds, y_axis)
+    c_axis_labels = get_vis_axis_labels(raster_xds, vis_data, vis_axis)
 
-    # Title for plot
-    title = _get_plot_title(xds, x_axis, y_axis, vis_dims, selection, os.path.basename(vis_path))
+    return _plot_xds(raster_xds, vis_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
 
-    # Axes for plot (indexed for regular spacing where needed)
-    xds, x_axis_labels = get_axis_labels(xds, x_axis)
-    xds, y_axis_labels = get_axis_labels(xds, y_axis)
-    c_axis_labels = get_vis_axis_labels(xds.VISIBILITY, vis_axis)
+def _get_non_axis_dims(vis_dims, x_axis, y_axis):
+    dims = list(vis_dims)
+    dims.remove(x_axis)
+    dims.remove(y_axis)
+    return dims
 
-    # Plot unflagged data
-    unflagged_xda = xds.VISIBILITY.where(xds.FLAG == 0.0).rename(c_axis_labels[0])
-    overlay = _create_plot(unflagged_xda, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
-
-    # Overlay flagged data plot
-    #flagged_xda = xds.VISIBILITY.where(xds.FLAG == 1.0).rename(c_axis_labels[0])
-    #if flagged_xda.count().values > 0:
-    #    flagged_plot = _create_plot(flagged_xda, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, True)
-    #    overlay = overlay * flagged_plot if overlay else flagged_plot
-
-    return overlay
-
-def _check_axes(xds, x_axis, y_axis):
-    '''
-    Check plot axes are dimensions of visibility data.
-    Return renamed axes or raise exception.
-    '''
-    # Check x and y axes
-    valid_axes = list(xds.VISIBILITY.dims)
-    valid_axes.append('ddi')
-    if x_axis not in valid_axes or y_axis not in valid_axes:
-        raise RuntimeError(f"Invalid x or y axis, please select from {valid_axes}")
-    return x_axis, y_axis
-
-def _check_vis_axis(xds, vis_axis):
-    ''' Check valid vis axis string. Use visibility data if requested type does not exist. '''
-    #TODO: model data, single dish float data ???
-    # Check value
-    vis_axes = [
-        'amp', 'phase', 'real', 'imag',
-        'amp_corrected', 'phase_corrected', 'real_corrected', 'imag_corrected'
-    ]
-    if vis_axis not in vis_axes:
-        raise RuntimeError(f"Invalid vis axis. Select from {vis_axes}")
-
-    # Check type
-    if 'corrected' in vis_axis and 'VISIBILITY_CORRECTED' not in xds.data_vars.keys():
-        print(f"No corrected data, using visibility data.")
-        vis_axis = vis_axis.split('_')[0]
-    return vis_axis
-
-def _apply_xds_selection(xds, x_axis, y_axis, selection):
-    ''' Return selected xds if no selection exception. '''
+def _apply_selection(ps, vis_dims, selection, vis_path, logger):
+    ''' Apply dimension selection, metadata selection done previously '''
     if selection is None:
-        selection = {}
+        return ps
 
-    vis_dims = xds.VISIBILITY.dims
-    index_selection = {}
-    value_selection = {}
-    for dim in vis_dims:
-        if dim not in (x_axis, y_axis):
-            if dim not in selection.keys():
-                selection[dim] = 0
+    dim_selection = {}
+    for key in selection:
+        if key in vis_dims:
+            value = selection[key]
+            if isinstance(value, int): # convert index selection to value
+                value = _get_value_for_index(ps, vis_path, key, value)
+            dim_selection[key] = value
+    if not dim_selection:
+        return ps
 
-            value = selection[dim]
-            if isinstance(value, int):
-                index_selection[dim] = value
-            elif isinstance(value, str) or isinstance(value, float):
-                value_selection[dim] = value
-            else:
-                print("Ignoring invalid selection:", dim, value)
-
-    if index_selection:
+    logger.info(f"Applying user selection to data dimensions: {dim_selection}")
+    selected_ps = {}
+    for key in ps:
         try:
-            xds = xds.isel(index_selection)
-        except IndexError as e:
-            raise RuntimeError(f"Plot selection failed: {index_selection}") from e
-    if value_selection:
-        try:
-            xds = xds.sel(value_selection)
+            selected_ps[key] = ps[key].sel(dim_selection)
         except KeyError as e:
-            raise RuntimeError(f"Plot selection failed: {value_selection}") from e
-    return xds
+            pass
+    if not selected_ps:
+        raise RuntimeError("User selection yielded empty processing set.")
+    return processing_set(selected_ps)
 
-def _get_plot_title(xds, x_axis, y_axis, vis_dims, selection, vis_name):
+def _select_raster_plane(ps, select_dims, selection, vis_path, logger):
+    ''' Select first index of unselected raster plane dims, add to selection '''
+    dim_selection = {}
+    for dim in select_dims:
+        if dim not in selection:
+            # select first
+            selection[dim] = 0
+            dim_selection[dim] = _get_value_for_index(ps, vis_path, dim, 0)
+    if not dim_selection:
+        return ps, selection
+
+    logger.info(f"Applying raster plane selection (first index of unselected dimensions): {dim_selection}")
+    selected_ps = {}
+    for key in ps:
+        try:
+            selected_ps[key] = ps[key].sel(dim_selection)
+        except KeyError as e:
+            pass
+    if not selected_ps:
+        raise RuntimeError("Raster plane selection yielded empty processing set. Please select dimensions.")
+    return processing_set(selected_ps), selection
+
+def _get_value_for_index(ps, vis_path, dim, index):
+    dim_list = []
+    for key in ps:
+        dim_list.append(ps[key][dim])
+    dim_xda = xr.concat(dim_list, dim=dim)
+
+    try:
+        return np.unique(np.sort(dim_xda.values))[index]
+    except IndexError:
+        raise IndexError(f"{dim} selection {index} out of range")
+
+def _get_plot_title(xds, selected_dims, selection, vis_name):
     ''' Form string containing vis name and selected values '''
     title = f"{vis_name}\n"
 
     # Add processing set selection: ddi, field, and intent
     if selection:
-        ddi_label = f"ddi={selection['ddi']} " if 'ddi' in selection.keys() else ''
-        field_label = ''
+        if 'ddi' in selection.keys():
+            title += f"ddi: {selection['ddi']} "
         if 'field' in selection.keys():
             field = selection['field']
-            field_label = f"field={xds.VISIBILITY.attrs['field_info']['name']} ({field}) " if isinstance(field, int) else f"field={field} "
-        intent_label = f"intent={selection['intent']}" if 'intent' in selection.keys() else ''
-        if ddi_label or field_label or intent_label:
-            title += ddi_label + field_label + intent_label + "\n"
-
-    # Add selected dimensions to title: name and index
-    for dim in vis_dims:
-        if dim not in (x_axis, y_axis) and xds[dim].size == 1:
-            label = get_coordinate_label(xds, dim)
-            index = selection[dim] if (selection and dim in selection.keys()) else None
-
-            if dim == 'baseline_id':
-                title += f"baseline={label} "
+            if isinstance(field, int):
+                title += f"field: {xds.VISIBILITY.attrs['field_info']['name']} ({field}) "
             else:
-                title += f"{dim}={label} "
+                title += f"field: {field} "
+        if 'intent' in selection.keys():
+            title += f"intent: {selection['intent']} "
+        if title[-1] != '\n':
+            title += '\n'
 
-            if isinstance(index, int):
-                title += f"({index}) "
+    # Add selected dimensions to title: name (index)
+    for dim in selected_dims:
+        label = get_coordinate_label(xds, dim)
+        index = selection[dim] if (dim in selection.keys() and isinstance(selection[dim], int)) else None
+        title += f"{dim}: {label}"
+
+        if index is not None:
+            index_label = f" (ch {index}) " if dim == 'frequency' else f" ({index}) "
+            title += index_label
+        title += "\n"
+
     return title
 
-def _create_plot(xda, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, is_flagged = False):
+def _plot_xds(xds, vis_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):
     # create holoviews.element.raster.Image
     x_axis, x_label, x_ticks = x_axis_labels
     y_axis, y_label, y_ticks = y_axis_labels
     c_axis, c_label = c_axis_labels
 
-    # Colormap for vis axis
-    colormap = "Viridis" # "Plasma" "Magma"
-    cb_position = 'left'
-    if is_flagged:
-        colormap = "kr" # black to reds, "kb" blues
-        c_label = "Flagged " + c_label
-        cb_position = 'right'
+    flagged_xda = xds[vis_data].where(xds.FLAG == 1.0).rename(c_axis)
+    unflagged_xda = xds[vis_data].where(xds.FLAG == 0.0).rename(c_axis)
 
-    # Labels for hover
-    xda[x_axis] = xda[x_axis].assign_attrs(long_name=x_axis.capitalize())
-    xda[y_axis] = xda[y_axis].assign_attrs(long_name=y_axis.capitalize())
-    xda['baseline_antenna1_id'] = xda['baseline_antenna1_id'].assign_attrs(long_name='Antenna1_id')
-    xda['baseline_antenna2_id'] = xda['baseline_antenna2_id'].assign_attrs(long_name='Antenna2_id')
+    # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
+    flagged_colormap = "kr"
+    unflagged_colormap = "viridis"
+
+    # Plot flagged data
+    flagged = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, "Flagged " + c_label, title, x_label, y_label, x_ticks, y_ticks, flagged_colormap)
+    # Plot unflagged data (hover shows values in last plot)
+    unflagged = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, c_label, title, x_label, y_label, x_ticks, y_ticks, unflagged_colormap)
+
+    if flagged and unflagged:
+        return flagged * unflagged.opts(colorbar_position='left')
+    elif unflagged:
+        return unflagged
+    else:
+        return flagged
+
+def _plot_xda(xda, x_axis, y_axis, color_limits, c_label, title, x_label, y_label, x_ticks, y_ticks, colormap):
+    if xda.count() == 0:
+        return None
 
     if xda.coords[x_axis].size > 1 and xda.coords[y_axis].size > 1:
         # Raster 2D data
-        return xda.hvplot(x=x_axis, y=y_axis, c=c_axis, width=900, height=600,
+        return xda.hvplot.quadmesh(x=x_axis, y=y_axis, width=900, height=600,
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
             rot=90, xticks=x_ticks, yticks=y_ticks,
-            #hover_cols=['baseline_antenna1_id', 'Antenna1_name', 'baseline_antenna2_id', 'Antenna2_name'] # only works with time and baseline axes
-        ).opts(colorbar_position=cb_position)
+        )
     else:
         # Cannot raster 1D data, use scatter
         df = xda.to_dataframe().reset_index() # convert x and y axis from index to column
         return df.hvplot.scatter(
-            x=x_axis, y=y_axis, c=c_axis, width=600, height=600,
+            x=x_axis, y=y_axis, c=xda.name, width=600, height=600,
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
-            xticks=x_ticks, yticks=y_ticks, marker='s'
+            rot=90, xticks=x_ticks, yticks=y_ticks, marker='s'
         )

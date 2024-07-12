@@ -8,9 +8,12 @@ import holoviews as hv
 import os.path
 import time
 
+from graphviper.utils.logger import setup_logger
+
 from ..data._ps_utils import apply_ps_selection, concat_ps_xds
-from ..data._xds_utils import set_name_dims
+from ..data._vis_data import is_vis_axis, get_vis_data_var
 from ..data._vis_stats import calculate_vis_stats 
+from ..data._xds_utils import set_coordinates
 from ..io import get_processing_set
 from ..plot import raster_plot
 
@@ -29,22 +32,24 @@ class VisRaster:
         vr.save('myplot.png')
     '''
 
-    def __init__(self, vis):
+    def __init__(self, vis, log_level="INFO"):
+        # Processing set
         self._ps, self._vis_path = get_processing_set(vis)
-        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
         n_datasets = len(self._ps.keys())
         if n_datasets == 0:
             raise RuntimeError("Failed to read visibility file into processing set")
-        print(f"Processing {n_datasets} msv4 datasets")
 
-        # Set baseline names as dimension, add ant1 and ant2 names
-        #start = time.time()
+        # Logger
+        self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
+        self._logger.info(f"Processing set contains {n_datasets} msv4 datasets.")
+
+        # Set baseline names and units for plotting
         for key in self._ps:
-            self._ps[key] = set_name_dims(self._ps[key])
-        #print(f"Setting baseline names took {time.time() - start} s")
+            self._ps[key] = set_coordinates(self._ps[key])
 
+        # Vis name (no path) for plot title and save filename
+        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
         self._plot = None
-        self._ddi_color_limits = {}
 
 
     def summary(self):
@@ -58,63 +63,49 @@ class VisRaster:
             print(f"field: {field_name} ({field_id})")
             print(f"field coordinates: {field_coords[1]} {field_coords[2]} ({field_coords[0]})")
             print(f"frequency range: {start_freq:e} - {end_freq:e}")
+        print("-----")
 
 
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None):
         '''
-        Create a y_axis vs x_axis raster plot of visibilities.
+        Create a static y_axis vs x_axis raster plot of visibilities after applying selection.
         Plot axes include ddi, time, baseline, channel, and polarization.  The axes not set as plot axes can be selected, else the first will be used.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline'.
             y_axis (str): Plot y-axis. Default 'time'.
-            vis_axis (str): Visibility component. Default 'amp'.
+            vis_axis (str): Visibility component and type (corrected, model). Default 'amp'.
             selection (dict): selected data to plot. Options include:
               Metadata selection:
                 field (int or str):  Default '', all fields in ddi.
                 intent (str): Default '', all intents in ddi.
               Plot selection:
                 ddi, time, baseline, channel, polarization: select dimensions not being plotted. Default is index 0.
+
+        If plotting is successful, use show() or save() to view/save the plot.
         '''
-        select_ddi = 'ddi' not in (x_axis, y_axis)
-        selected_ps, selection = apply_ps_selection(self._ps, selection, select_ddi)
-        #color_limits = self._set_ddi_color_limits(selected_ps, selection, vis_axis)
-        color_limits = None
-        plot_xds = concat_ps_xds(selected_ps)
+        start_plot = time.time()
+        self._check_plot_inputs(x_axis, y_axis, vis_axis, selection)
 
-        # Describe plot xds
-        shape = plot_xds.sizes
-        vis_desc = "Plotting visibilities with "
-        if 'ddi' in shape:
-            vis_desc += f"{shape['ddi']} ddis, "
-        else:
-            vis_desc += "1 ddi, "
-        vis_desc += f"{shape['time']} times, {shape['baseline']} baselines, {shape['frequency']} channels, {shape['polarization']} polarizations"
-        print(vis_desc)
+        # Select ddi if needed
+        selection = self._select_ddi(x_axis, y_axis, selection)
 
-        # Plot xds
-        self._plot = raster_plot(plot_xds, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits)
+        # Apply metadata (ddi, field, intent) selection to processing set.
+        selected_ps = apply_ps_selection(self._ps, selection, self._logger)
+        self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
+        self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
+
+        # For amplitude, limit colorbar range using visibility stats
+        # TODO: save and reuse color limits?
+        color_limits = self._amp_color_limits(selected_ps, vis_axis)
+
+        # Plot selected processing set
+        self._plot = raster_plot(selected_ps, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits, self._logger)
         if self._plot is None:
             raise RuntimeError("Plot failed.")
+        plot_time = time.time() - start_plot
+        self._logger.debug(f"Plot elapsed time: {plot_time:.2f}s.")
 
-    def waterfall_plot(self, vis_axis='amp', selection=None, baselines=None):
-        selected_ps, selection = apply_ps_selection(self._ps, selection, True)
-        plot_xds = concat_ps_xds(selected_ps)
-        if not baselines:
-            baselines = (0, min(4, plot_xds.sizes['baseline']))
-
-        #color_limits = self._set_ddi_color_limits(selected_ps, selection, vis_axis)
-        color_limits = None
-        plot_list = []
-
-        for i in range(baselines[0], baselines[1]):
-            print("Plotting baseline", i)
-            selection['baseline'] = i
-            plot = raster_plot(plot_xds, "frequency", 'time', vis_axis, selection, self._vis_path, color_limits)
-            if plot:
-                plot_list.append(plot)
-        self._plot = hv.Layout(plot_list).cols(2)
- 
     def show(self):
         ''' 
         Show interactive Bokeh plot in a browser.
@@ -123,7 +114,7 @@ class VisRaster:
         '''
         if self._plot is None:
             raise RuntimeError("No plot to show.  Run plot() to create plot.")
-        hvplot.show(self._plot, title="VisRaster " + self._vis_basename)
+        hvplot.show(self._plot, title="VisRaster " + self._vis_basename, threaded=True)
 
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
@@ -147,31 +138,65 @@ class VisRaster:
             filename = f"{self._vis_basename}_raster.png"
         resources = 'inline' if resources == 'offline' else 'cdn'
 
-        print(f"Saving plot to {filename}")
         start = time.time()
         if hist:
             hvplot.save(self._plot.hist(), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
         else:
             hvplot.save(self._plot, filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
-        print(f"Saving plot took {time.time() - start} s")
+        self._logger.info(f"Saved plot to {filename}.")
+        self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
 
 
-    def _set_ddi_color_limits(self, selected_ps, selection, vis_axis):
-        if 'amp' not in vis_axis or 'ddi' not in selection:
+    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, selection):
+        if not is_vis_axis(vis_axis):
+            raise ValueError(f"Invalid vis_axis {vis_axis}")
+
+        # TODO: are vis types in all xds in ps? Checking first one
+        first_xds = self._ps.get(0)
+
+        vis_data = get_vis_data_var(vis_axis)
+        if vis_data not in first_xds.data_vars:
+            raise ValueError(f"vis_axis {vis_axis} does not exist in dataset")
+
+        valid_axes = list(first_xds[vis_data].dims)
+        valid_axes.append('ddi')
+        if x_axis not in valid_axes or y_axis not in valid_axes:
+            raise ValueError(f"Invalid x or y axis, please select from {valid_axes}")
+
+        if selection and not isinstance(selection, dict):
+            raise RuntimeError("selection must be dictionary")
+
+
+    def _select_ddi(self, x_axis, y_axis, selection):
+        ''' Add ddi selection if not plot axis and not selected '''
+        # ddi selection exists or is not needed when a plot axis
+        if (selection and 'ddi' in selection.keys()) or 'ddi' in (x_axis, y_axis):
+            return selection
+
+        # Select first ddi
+        selection = {} if selection is None else selection
+        selection['ddi'] = min(self._ps.summary()['ddi'].tolist())
+        return selection
+
+
+    def _amp_color_limits(self, ps, vis_axis):
+        # Calculate colorbar limits from amplitude stats
+        if 'amp' not in vis_axis:
             return None
 
-        ddi = selection['ddi']
-        if ddi in self._ddi_color_limits:
-            return self._ddi_color_limits[ddi]
-
-        print("Calculating colorbar limits for amplitude...")
-        vis_type = 'corrected' if 'corrected' in vis_axis else 'data'
-        min_val, max_val, mean, std = calculate_vis_stats(selected_ps, self._vis_path, vis_type)
+        self._logger.info("Calculating stats for colorbar limits.")
+        start = time.time()
+        min_val, max_val, mean, std = self._get_vis_stats(ps, vis_axis)
         data_min = min(0.0, min_val)
         clip_min = max(data_min, mean - (3.0 * std))
         data_max = max(0.0, max_val)
         clip_max = min(data_max, mean + (3.0 * std))
         color_limits = (clip_min, clip_max)
-        self._ddi_color_limits[ddi] = color_limits
-        print(f"Setting colorbar limits ({clip_min:.4f}, {clip_max:.4f})")
+        self._logger.debug(f"Stats elapsed time: {time.time() - start:.2f} s.")
+        self._logger.info(f"Setting colorbar limits: ({clip_min:.4f}, {clip_max:.4f}).")
         return color_limits
+
+
+    def _get_vis_stats(self, ps, vis_axis):
+        # Calculate stats (min, max, mean, std) for visibility axis in processing set
+        return calculate_vis_stats(ps, self._vis_path, vis_axis, self._logger)

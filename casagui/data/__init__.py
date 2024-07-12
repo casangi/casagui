@@ -6,8 +6,7 @@ from ._ps_utils import (
 )
 
 from ._xds_utils import (
-    set_name_dims,
-    fix_coordinate_units,
+    set_coordinates,
 )
 
 from ._vis_stats import (

@@ -1,6 +1,23 @@
 import numpy as np
 from astropy.constants import c
 
+def is_vis_axis(axis):
+    vis_axes = ['amp', 'phase', 'real', 'imag']
+    return axis.split('_')[0] in vis_axes
+
+
+def get_vis_data_var(vis_axis):
+    ''' Returns name of xds data_var or raise exception '''
+    vis_type = vis_axis.split('_')[1] if '_' in vis_axis else 'data'
+    data_vars = {
+        'data': 'VISIBILITY',
+        'corrected': 'VISIBILITY_CORRECTED',
+        'model': 'VISIBILITY_MODEL'
+    }
+    if vis_type not in data_vars:
+        raise ValueError(f"Invalid vis axis type: {vis_type}")
+    return data_vars[vis_type]
+
 def get_axis_data(xds, axis):
     ''' Get requested axis data from xarray dataset.
     xds (dict): msv4 xarray.Dataset
@@ -24,79 +41,57 @@ def get_axis_data(xds, axis):
         'intent': 'intent',
         #'feed1':  not in xradio (single dish?)
         #'feed2':  not in xradio (single dish?)
-        # VISIBILITIES and FLAGS
-        'amp': 'VISIBILITY',
-        'phase': 'VISIBILITY',
-        'real': 'VISIBILITY',
-        'imag': 'VISIBILITY',
-        'amp_corrected': 'VISIBILITY_CORRECTED',
-        'phase_corrected': 'VISIBILITY_CORRECTED',
-        'real_corrected': 'VISIBILITY_CORRECTED',
-        'imag_corrected': 'VISIBILITY_CORRECTED',
         #'weight': not in xradio
         #'wtxamp': not in xradio
         #'wtsp': not in xradio
         #'sigma': 'not in xradio
         #'sigmasp': 'not in xradio
         'flag': 'FLAG',
-        # OBSERVATIONAL GEOMETRY
-        'u': 'UVW',
-        'v': 'UVW',
-        'w': 'UVW',
-        'uvdist': 'UVW',
     }
 
-    wave_axis_to_xds = {
-        'uwave': ('u', 'frequency'),
-        'vwave': ('v', 'frequency'),
-        'wwave': ('w', 'frequency'),
-        'uvwave': ('uvdist', 'frequency')
-    }
-
-    if axis in wave_axis_to_xds.keys():
-        xda_list = []
-        for axis_component in wave_axis_to_xds[axis]:
-            xda_list.append(get_vis_axis_data(xds, axis_component))
-        data_xda = _calc_wave_axis(xda_list, axis)
-    else:
-        if axis not in axis_to_xds.keys():
-            raise RuntimeError(f"axis {axis_component} invalid for dataset")
+    if is_vis_axis(axis):
+        return _calc_vis_axis(xds, axis)
+    elif axis in ['u', 'v', 'w', 'uvdist']:
+        return _calc_uvw_axis(xds, axis)
+    elif 'wave' in axis:
+        return _calc_wave_axis(xds, axis)
+    elif axis in axis_to_xds.keys():
         location = axis_to_xds[axis]
-        if isinstance(location, str):
-            if location in xds.attrs.keys():
-                xda = xds.attrs[location[0]]
-            else:
-                xda = xds[location]
-        else: # tuple
-            xda = xds[location[0]].attrs[location[1]]
-            if len(location) == 3:
-                xda = value[location[2]]
-
-        if axis in ['amp', 'phase', 'real', 'imag']:
-            data_xda = _calc_vis_axis(xda, axis)
-        elif axis == 'chan':
-            data_xda = xr.DataArray(np.array(range(xda.size)), dtype=np.int32)
-        elif axis in ['u', 'v', 'w', 'uvdist']:
-            data_xda = _calc_uvw_axis(xda, axis)
+        if location in xds.attrs.keys():
+            xda = xds.attrs[location]
         else:
-            data_xda = xda
+            xda = xds[location]
 
-    return data_xda
+        if axis == 'chan':
+            return xr.DataArray(np.array(range(xda.size)), dtype=np.int32)
+        else:
+            return xda
+    else:
+        raise ValueError(f"Invalid/unsupported axis {axis}")
 
-def _calc_vis_axis(vis_xda, axis):
+
+def _calc_vis_axis(xds, axis):
     ''' Calculate axis from VISIBILITY xarray DataArray '''
-    if axis == 'amp':
-        return np.absolute(vis_xda).assign_attrs(units='Jy')
-    elif axis == 'phase':
-        # np.angle(vis_xda) returns ndarray not xr.DataArray
-        return (np.arctan2(vis_xda.imag, vis_xda.real) * 180/np.pi).assign_attrs(units="deg")
-    elif axis == 'real':
-        return np.real(vis_xda.assign_attrs(units='Jy'))
-    elif axis == 'imag':
-        return np.imag(vis_xda.assign_attrs(units='Jy'))
+    data_var = get_vis_data_var(axis)
+    if data_var not in xds.data_vars:
+        raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
+    xda = xds[data_var]
 
-def _calc_uvw_axis(uvw_xda, axis):
+    if 'amp' in axis:
+        return np.absolute(xda).assign_attrs(units='Jy')
+    elif 'phase' in axis:
+        # np.angle(xda) returns ndarray not xr.DataArray
+        return (np.arctan2(xda.imag, xda.real) * 180.0/np.pi).assign_attrs(units="deg")
+    elif 'real' in axis:
+        return np.real(xda.assign_attrs(units='Jy'))
+    elif 'imag' in axis:
+        return np.imag(xda.assign_attrs(units='Jy'))
+    return None
+    
+
+def _calc_uvw_axis(xds, axis):
     ''' Calculate axis from UVW xarray DataArray '''
+    uvw_xda = xds['UVW']
     if axis == 'u':
         return uvw_xda.isel(uvw_label=0)
     elif axis == 'v':
@@ -108,12 +103,22 @@ def _calc_uvw_axis(uvw_xda, axis):
         v_xda = uvw_xda.isel(uvw_label=1)
         return np.sqrt(u_xda**2 + v_xda**2)
 
-def _calc_wave_axis(xda_list, axis):
-    ''' Calculate axis from multiple xarray DataArrays '''
-    uvwdist_array = xda_list[0].values / c  # u, v, w, or uvdist, depending on axis
-    freq_array = xda_list[1].values
 
+def _calc_wave_axis(xds, axis):
+    wave_axes = {
+        'uwave': ('u', 'frequency'),
+        'vwave': ('v', 'frequency'),
+        'wwave': ('w', 'frequency'),
+        'uvwave': ('uvdist', 'frequency')
+    }
+    if axis not in wave_axes:
+        raise ValueError(f"Invalid/unsupported axis {axis}")
+    components = wave_axes[axis]
+
+    uvwdist_array = components[0].values / c
+    freq_array = components[1].values
     wave = np.zeros(shape=(len(freq_array), len(uvwdist_array)), dtype=np.double)
+
     for i in range(len(uvwdist_array)):
         wave[:, i] = uvwdist_array[i] * freq_array
 

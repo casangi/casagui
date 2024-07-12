@@ -3,18 +3,19 @@ Functions for plot axes labels
 '''
 import numpy as np
 from pandas import to_datetime
+import xarray as xr
 
 def get_coordinate_label(xds, coordinate):
     ''' Return single coordinate value as string '''
-    label = get_coordinate_labels(xds, coordinate)
+    label = _get_coordinate_labels(xds, coordinate)
     if coordinate == 'time':
-        date = _get_date_string(xds.time)
-        label = f"{date} {label}"
+        start_date, end_date = _get_date_range(xds.time)
+        label = f"{start_date} {label}"
     elif coordinate == 'frequency':
         label = f"{label} {xds.frequency.attrs['units']}"
     return label
 
-def get_coordinate_labels(xds, coordinate):
+def _get_coordinate_labels(xds, coordinate):
     ''' Return coordinate values as list of string labels or None if numeric '''
     if coordinate == 'time':
         return _get_time_labels(xds.time)
@@ -29,16 +30,20 @@ def get_coordinate_labels(xds, coordinate):
 
 def _get_time_labels(time_xda):
     ''' Return time string or list of time strings '''
-    times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
+    start_date, end_date = _get_date_range(time_xda)
+    if start_date == end_date:
+        times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
+    else:
+        times = to_datetime(time_xda, unit='s').strftime("%F %H:%M:%S")
     if isinstance(times, str):
         return times
     return list(times.values)
 
 def _get_baseline_labels(baseline_xda):
-    ''' Return baseline string or list of strings '''
-    if baseline_xda.size == 1: # string
+    ''' Return baseline pair string or list of strings '''
+    if baseline_xda.size == 1:
         return baseline_xda.values
-    return list(baseline_xda.values) # array of strings
+    return baseline_xda.values.ravel().tolist()
 
 def _get_polarization_labels(polarization_xda):
     ''' Return polarization string or list of polarization strings '''
@@ -49,7 +54,7 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
     if frequency_xda.size == 1: # float
-        return f"{frequency_xda.values:.5f}"
+        return f"{frequency_xda.values:.4f}"
     else:
         return None # auto ticks from frequency values
 
@@ -60,61 +65,73 @@ def _get_ddi_labels(ddi_xda):
     else:
         return None # auto ticks from ddi values
 
-def get_vis_axis_labels(xda, axis):
+def get_vis_axis_labels(xds, data_var, axis):
     ''' Get vis axis label for colorbar '''
-    name = axis.capitalize()
-    label = name
-    if 'units' in xda.attrs:
-        unit = xda.attrs['units']
-        label += f" ({unit})"
+    try:
+        name, data_type = axis.split('_')
+    except ValueError:
+        name = axis
+        data_type = None
+
+    label = f"{data_type.capitalize()} " if data_type else ''
+    label += name.capitalize()
+
+    if 'units' in xds[data_var].attrs:
+        label += f" ({xds[data_var].attrs['units']})"
     return (name, label)
 
 def get_axis_labels(xds, axis):
     ''' Return axis name, label and ticks, reindex for regular axis '''
-    labels = get_coordinate_labels(xds, axis)
+    labels = _get_coordinate_labels(xds, axis)
     ticks = list(enumerate(labels)) if labels is not None else None
 
     if axis == "time":
-        date = _get_date_string(xds.time) 
-        label =  f"Time ({date})"
+        start_date, end_date = _get_date_range(xds.time)
+        label =  f"Time ({start_date})"
         if xds.time.size > 1:
             tick_inc = int(len(ticks) / 10)
             ticks = ticks[::tick_inc]
-        xds = xds.assign_coords(timestamp=("time", np.array(labels)))
-        xds['time'] = np.array(range(xds.time.size)) # index
+        # Set time axis as time index
+        xds['time'] = np.array(range(xds.time.size))
+        xds['timestamp'] = xr.DataArray(np.array(labels), dims=xds.time.dims)
     elif axis == "baseline":
         label = "Baseline Antenna1"
-        # Use only ticks with new antenna1 and minimum increment of 3
-        ticks = _get_baseline_ant1_ticks(ticks, 3)
-        xds['baseline'] = np.array(range(xds.baseline.size)) # index
+        ticks = _get_baseline_ant1_ticks(ticks)
+        xds['baseline'] = np.array(range(xds.baseline.size))
     elif axis == "frequency":
         unit = xds.frequency.frequency.attrs['units']
         label =  f"Frequency ({unit})"
     elif axis == "polarization":
         label =  "Polarization"
-        xds['polarization'] = np.array(range(xds.polarization.size)) # index
+        # replace axis with index for plot range
+        xds['polarization'] = np.array(range(xds.polarization.size))
     elif axis == "ddi":
         label =  "DDI"
     return xds, (axis, label, ticks)
 
-def _get_date_string(time_xda):
+def _get_date_range(time_xda):
     ''' Return date as dd-Mon-yyyy e.g. 23-Aug-2010 '''
     if time_xda.size == 1:
-        return to_datetime(time_xda.values, unit=time_xda.units[0]).strftime("%d-%b-%Y")
+        date = time_xda.values.astype('datetime64[s]').item().strftime("%d-%b-%Y")
+        return (date, date)
     else:
-        return to_datetime(time_xda.values[0], unit=time_xda.units[0]).strftime("%d-%b-%Y")
+        start_date = time_xda.values[0].astype('datetime64[s]').item().strftime("%d-%b-%Y")
+        end_date = time_xda.values[time_xda.size - 1].astype('datetime64[s]').item().strftime("%d-%b-%Y")
+        return (start_date, end_date)
 
-def _get_baseline_ant1_ticks(baselines, min_increment):
-    ''' Return labels for each new ant1 name, spaced by minimum increment '''
-    baseline_ticks = []
+def _get_baseline_ant1_ticks(baseline_ticks):
+    ''' Return labels for each new ant1 name '''
+    # space by minimum increment to avoid overlapping tick labels
+    min_increment = max(int(len(baseline_ticks) / 50), 1)
+    ant1_ticks = []
     last_ant1 = None
     last_idx = None
 
-    for idx, baseline in baselines:
-        ant1_name = baseline.split(' & ')[0]
+    for idx, tick in baseline_ticks:
+        ant1_name = tick.split(' & ')[0]
         if ant1_name != last_ant1:
             last_ant1 = ant1_name
             if last_idx is None or ((idx - last_idx) >= min_increment):
-                baseline_ticks.append((idx, ant1_name))
+                ant1_ticks.append((idx, ant1_name))
                 last_idx = idx
-    return baseline_ticks
+    return ant1_ticks
