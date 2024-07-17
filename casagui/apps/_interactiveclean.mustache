@@ -361,7 +361,7 @@ class InteractiveClean:
                         </div>
                         <div>
                             <span style="font-weight: bold; font-size: 10px">cycle threshold</span>
-                            <span>@threshold</span>
+                            <span>@cyclethreshold</span>
                         </div>
                         <div>
                             <span style="font-weight: bold; font-size: 10px">stop</span>
@@ -376,8 +376,8 @@ class InteractiveClean:
         if orient == 'vertical':
             imdetails['gui']['convergence'].yaxis.axis_label='Iteration (cycle threshold dotted red)'
             imdetails['gui']['convergence'].xaxis.axis_label='Peak Residual'
-            imdetails['gui']['convergence'].extra_x_ranges = { 'residual_range': DataRange1d( ),
-                                                               'flux_range': DataRange1d( ) }
+            imdetails['gui']['convergence'].extra_x_ranges = { 'residual_range': DataRange1d( follow='end' ),
+                                                               'flux_range': DataRange1d( follow='end' ) }
             imdetails['gui']['convergence'].step( 'values', 'iterations', source=imdetails['converge-data']['cyclethreshold'],
                                                   line_color='red', x_range_name='residual_range', line_dash='dotted', line_width=2 )
             imdetails['gui']['convergence'].line(   'values', 'iterations',   source=imdetails['converge-data']['residual'],
@@ -579,11 +579,11 @@ class InteractiveClean:
             convergence = imdetails['converge']['chan'][0][stokes]
             imdetails['converge-data'] = { }
             imdetails['converge-data']['flux']     = ColumnDataSource( data=dict( values=convergence['modelFlux'], iterations=convergence['iterations'],
-                                                               threshold=convergence['cycleThresh'],
+                                                               cyclethreshold=convergence['cycleThresh'],
                                                                stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
                                                                type=['flux'] * len(convergence['iterations']) ) )
             imdetails['converge-data']['residual'] = ColumnDataSource( data=dict( values=convergence['peakRes'],   iterations=convergence['iterations'],
-                                                               threshold=convergence['cycleThresh'],
+                                                               cyclethreshold=convergence['cycleThresh'],
                                                                stopDesc=list( map( ImagingDict.get_summaryminor_stopdesc, convergence['stopCode'] ) ),
                                                                type=['residual'] * len(convergence['iterations'])) )
             imdetails['converge-data']['cyclethreshold'] = ColumnDataSource( data=dict( values=convergence['cycleThresh'], iterations=convergence['iterations'] ) )
