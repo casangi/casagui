@@ -1908,8 +1908,7 @@ class InteractiveClean:
         ###
         ### create clean interface -- final version will have only one gclean object
         ###
-        convergence = { }
-        cyclethreshold = { }
+        convergence_state={ 'convergence': {}, 'cyclethreshold': {} }
         self._clean['gclean'] = None
         self._clean['masks'] = { }
         self._clean['imid'] = [ ]
@@ -1923,17 +1922,14 @@ class InteractiveClean:
             if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
                 self._clean['gclean'] = _gclean( **imdetails['args'] )
-
-
                 stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
-
                 clean_cmds = self._clean['gclean'].cmds( )
 
                 if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
                     raise RuntimeError(stopdesc)
 
-                convergence[self._clean['imid'][0]] = imdetails['converge']['chan']
-                cyclethreshold[self._clean['imid'][0]] = imdetails['converge']['major']['cyclethreshold']
+                convergence_state['convergence'][imid] = imdetails['converge']['chan']
+                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
 
                 self._clean['masks'][imid] = self._clean['gclean'].mask( )
 
@@ -1946,14 +1942,13 @@ class InteractiveClean:
             else:
                 next_gclean =  _gclean( **imdetails['args'] )
                 stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
-
                 clean_cmds = self._clean['gclean'].cmds( )
 
                 if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
                     raise RuntimeError(stopdesc)
 
-                convergence[self._clean['imid'][0]] = imdetails['converge']['chan']
-                cyclethreshold[self._clean['imid'][0]] = imdetails['converge']['major']['cyclethreshold']
+                convergence_state['convergence'][imid] = imdetails['converge']['chan']
+                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
 
                 self._clean['masks'][imid] = next_gclean.mask( )
 
@@ -1965,11 +1960,10 @@ class InteractiveClean:
                 self._clean['gclean_rest'].append(next_gclean)
 
         self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
-                                            convergence=convergence,
+                                            convergence=convergence_state['convergence'],
                                             iterdone=0, iterleft=iterleft,
-                                            majordone=majordone, majorleft=majorleft, cyclethreshold=cyclethreshold, stopdesc=stopdesc )
+                                            majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
 
-        initial_convergence_state={ }
         for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
 
@@ -1981,10 +1975,8 @@ class InteractiveClean:
             ###
             ### Only the first image should initialize the initial convergence state
             ###
-            initial_convergence_state[imid] = { 'chan': self._clean['last-success']['convergence'],
-                                                'cyclethreshold': self._clean['last-success']['cyclethreshold'] }
             imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=self._clean['masks'][imid], abort=self._abort_handler,
-                                                 init_script=CustomJS( args=dict( initial_convergence_state=initial_convergence_state, name=imid ),
+                                                 init_script=CustomJS( args=dict( initial_convergence_state=convergence_state, name=imid ),
                                                                        code='''document._casa_convergence_data = initial_convergence_state''' )
                                                              if idx == 0 else None )
 
@@ -2141,8 +2133,7 @@ class InteractiveClean:
                 ###
                 ### In the final implementation, there will only be one gclean object...
                 ###
-                convergence = { }
-                cyclethreshold = { }
+                convergence_state={ 'convergence': {}, 'cyclethreshold': {} }
                 err,errmsg = self._clean['gclean'].update( dict( **msg['value']['iteration'],
                                                                  **msg['value']['automask'] ) )
 
@@ -2157,10 +2148,10 @@ class InteractiveClean:
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
 
-                convergence[self._clean['imid'][0]] = self._convergence_data['chan']
-                cyclethreshold[self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
+                convergence_state['convergence'][self._clean['imid'][0]] = self._convergence_data['chan']
+                convergence_state['cyclethreshold'][self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
 
-                for g in zip(self._clean['imid'][0][1:],self._clean['gclean_rest']):
+                for g in zip(self._clean['imid'][1:],self._clean['gclean_rest']):
                     e,em = g[1].update( dict( **msg['value']['iteration'],
                                               **msg['value']['automask'] ) )
                     sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
@@ -2168,19 +2159,19 @@ class InteractiveClean:
                     clean_cmds = clean_cmds + g[1].cmds( )
 
                     if len(cvg['chan']) == 0 or scode == -1:
-                        convergence[g[0]] = { }
-                        cyclethreshold[g[0]] = { }
+                        convergence_state['convergence'][g[0]] = { }
+                        convergence_state['cyclethreshold'][g[0]] = { }
                     else:
-                        convergence[g[0]] = cvg['chan']
-                        cyclethreshold[g[0]] = cvg['major']['cyclethreshold']
+                        convergence_state['convergence'][g[0]] = cvg['chan']
+                        convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
 
                 ### stopcode != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
                 ###               (so 'converged' isn't quite right...)
                 self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
-                                                   convergence=convergence,
+                                                   convergence=convergence_state['convergence'],
                                                    iterdone=iteration_limit - iterleft, iterleft=iterleft,
-                                                   majordone=majordone, majorleft=majorleft, cyclethreshold=cyclethreshold, stopdesc=stopdesc )
+                                                   majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
                 return self._clean['last-success']
 
             elif msg['action'] == 'stop':
