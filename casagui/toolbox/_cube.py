@@ -200,7 +200,7 @@ class CubeMask:
                                                           /* if the src mask on disk has changed the maskmod region is no longer valid */
                                                           maskmod_region_clear( )
                                                       }
-                                                      source.refresh( msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
@@ -639,7 +639,7 @@ class CubeMask:
                                               }''',
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
                                                isource.channel( slider.value, isource.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { isource.update_statistics( msg.stats ) }
+                                                               msg => { if ( 'stats' in msg ) { isource._update_statistics( msg.stats ) }
                                                                         if ( 'hist' in msg ) {
                                                                             %s
                                                                             %s
@@ -679,7 +679,7 @@ class CubeMask:
                                              source.channel( source.cur_chan[1], %s,
                                                              msg => { stokes.label = cb_obj.item
                                                                       if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
-                                                                      if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
+                                                                      if ( 'stats' in msg ) { source._update_statistics( msg.stats ) }
                                                              } )
                                          }''',
                      ### function to return mask state for current channel, the 'source' (image_data_source) object
@@ -2176,7 +2176,7 @@ class CubeMask:
                                                                                 { action: 'use mask', value: masking_on },
                                                                                 (msg) => { cb_obj.origin.label = cb_obj.item
                                                                                            source.channel( source.cur_chan[1], source.cur_chan[0],
-                                                                                                           msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } ) } ) }
+                                                                                                           msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } ) } ) }
                                                          ''' ) )
 
         self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source,
@@ -2232,7 +2232,7 @@ class CubeMask:
             ###
             self._cb['sptap'] = CustomJS( args=dict( span=self._sp_span, source=self._image_source,
                                                      slider=self._slider, specfig=self._spectrum ),
-                                          code = '''if ( span.location >= 0 && ! specfig.disabled ) {
+                                          code = '''if ( span.location >= 0 && ! specfig?.disabled ) {
                                                         if ( slider ) slider.value = span.location
                                                         else source.channel( span.location, source.cur_chan[0] )
                                                         //           chan----^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^-----stokes
@@ -2250,7 +2250,7 @@ class CubeMask:
                                                        var y_pos = Math.floor(geometry.y)
                                                        if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
                                                            isource._current_pos = [ x_pos, y_pos ]
-                                                           if ( ! specfig.disabled && ! imagefig.disabled ) {
+                                                           if ( specfig && ! specfig.disabled ) {
                                                                /* SEGV: cannot fetch pixels while tclean may be modifying the image */
                                                                update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
                                                                                 ( spec ) => specds.data = spec.spectrum )
@@ -2266,29 +2266,41 @@ class CubeMask:
             ### code for updating pixel value due to cursor movements
             ###
             movement_code_pixel_update = self._js['pixel-update-func'] + '''
-                                            if ( cb_obj.event_type === 'move' ) {
-                                                if ( ctrl._freeze_cursor_update == false ) {
-                                                    var geometry = cb_data['geometry']
-                                                    var x_pos = Math.floor(geometry.x)
-                                                    var y_pos = Math.floor(geometry.y)
-                                                    if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
-                                                        isource._current_pos = [ x_pos, y_pos ]
-                                                        if ( ! specfig.disabled ) {
-                                                            /* SEGV: cannot fetch pixels while tclean may be modifying the image */
-                                                            update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
-                                                                             ( spec ) => {
-                                                                                 refresh_pixel_display( spec.index,
-                                                                                                        spec.spectrum.pixel[spec.chan[1]],
-                                                                                                        'mask' in spec && spec.mask[spec.chan[1]],
-                                                                                                        pix_wrld && pix_wrld.label == 'pixel' ? false : true )
-                                                                             } )
+                                         if ( cb_obj.event_type === 'move' ) {
+                                             if ( ctrl._freeze_cursor_update == false ) {
+                                                 var geometry = cb_data['geometry']
+                                                 var x_pos = Math.floor(geometry.x)
+                                                 var y_pos = Math.floor(geometry.y)
+                                                 if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                     isource._current_pos = [ x_pos, y_pos ]
+                                                     if ( specfig && ! specfig.disabled ) {
+                                                         /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                         update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                          ( spec ) => {
+                                                                              refresh_pixel_display( spec.index,
+                                                                                                     spec.spectrum.pixel[spec.chan[1]],
+                                                                                                     'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                                     pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                          } )
+                                                     } else if ( isource._pixel_update_enabled ) {
+                                                         /* no spectrum to update */
+                                                         ctrl.send( ids['fetch-spectrum'],
+                                                                       { action: 'spectrum',
+                                                                         value: { chan: isource.cur_chan,
+                                                                                  index: isource._current_pos } },
+                                                                       ( msg ) => {
+                                                                           const spec = msg.update
+                                                                           refresh_pixel_display( spec.index,
+                                                                                                  spec.spectrum.pixel[spec.chan[1]],
+                                                                                                  'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                                  pix_wrld && pix_wrld.label == 'pixel' ? false : true ) }, true )
                                                         }
                                                     }
                                                 }
                                             }'''
 
         if movement_code_spectrum_update or movement_code_pixel_update:
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum, imagefig=self._image,
+            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum,
                                                      isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
                                                      pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown ),
                                           code = movement_code_spectrum_update + movement_code_pixel_update )
@@ -2333,12 +2345,15 @@ class CubeMask:
                                                                       }
                                                                       // exported functions -- enable/disable masking, retrieve masks etc.
                                                                       source._masking_enabled = true
+                                                                      source._pixel_update_enabled = true
                                                                       source.disable_masking = ( ) => source._masking_enabled = false
                                                                       source.enable_masking = ( ) => source._masking_enabled = true
+                                                                      source.disable_pixel_update = ( ) => source._pixel_update_enabled = false
+                                                                      source.enable_pixel_update = ( ) => source._pixel_update_enabled = true
                                                                       source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
                                                                       source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
                                                                       source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
-                                                                      source.update_statistics = ( data ) => {
+                                                                      source._update_statistics = ( data ) => {
                                                                           data.values.forEach( (item, index) => {
                                                                               /** round floats **/
                                                                               if ( typeof item == 'number' && ! Number.isInteger(item) ) {
@@ -2346,7 +2361,7 @@ class CubeMask:
                                                                               } } )
                                                                           stats_source.data = data
                                                                       }
-                                                                      if ( stats_source ) source.update_statistics( stats_source.data ) /*** round floats ***/
+                                                                      if ( stats_source ) source._update_statistics( stats_source.data ) /*** round floats ***/
                                                                       if ( user_init_script ) { user_init_script.execute(this) }
                                                                    """ )
 
@@ -2408,8 +2423,14 @@ class CubeMask:
         object should contain a ``done`` function which will cause the
         masking GUI to exit and return the masks that have been drawn
         Also provides JavaScript functions:
-            disable_masking( )
-            enable_masking( )
+            disable_masking( )      - disable mask drawing (e.g. interactive clean)
+            enable_masking( )       - enable mask drawing
+            disable_pixel_update( ) - disable pixel text updates, which requires
+                                      fetching the spectrum (e.g. interactive clean)
+            enable_pixel_update( )  - enable pixel text updates
+            breadcrumbs( )          - fetch breadcrumb trail (MAYBE used to
+                                      determine when the mask state has changed)
+            drop_breadcrumb( code ) - add string to the breadcrumb trail
         '''
         self._init_image_source( )
         return self._image_source

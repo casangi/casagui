@@ -1781,26 +1781,6 @@ class InteractiveClean:
         ###
         self._error_result = None
 
-        ###
-        ### Create image cube display for each field
-        ###
-        for i, (imid, imdetails) in enumerate(self._clean_targets.items( )):
-            imdetails['mask-history'] = [ ]
-            imdetails['gui'] = { 'params': { 'iteration': { }, 'automask': { } },
-                                 'image': { },
-                                 'image-adjust': { } }
-
-            ###
-            ### Only the first image should initialize the initial convergence state
-            ###
-            imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=self._clean['masks'][imid], abort=self._abort_handler,
-                                                 init_script=CustomJS( args=dict( initial_convergence_state={
-                                                                                      'chan': self._clean['last-success']['convergence'],
-                                                                                      'cyclethreshold': self._clean['last-success']['cyclethreshold']
-                                                                                  } ),
-                                                                       code='''document._casa_convergence_data = initial_convergence_state''' )
-                                                             if i == 0 else None )
-
     '''
         _gen_port_fwd_cmd()
 
@@ -1936,6 +1916,11 @@ class InteractiveClean:
         self._clean['gclean_rest'] = [ ]
         for imid, imdetails in self._clean_targets.items( ):
             self._clean['imid'].append(imid)
+
+            ###
+            ### Residual path...
+            ###
+            if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
                 self._clean['gclean'] = _gclean( **imdetails['args'] )
 
@@ -1952,8 +1937,6 @@ class InteractiveClean:
 
                 self._clean['masks'][imid] = self._clean['gclean'].mask( )
 
-
-                if 'path' not in imdetails: imdetails['path'] = { }
                 if deconvolver == 'mtmfs':
                     imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
                 else:
@@ -1973,10 +1956,12 @@ class InteractiveClean:
                 cyclethreshold[self._clean['imid'][0]] = imdetails['converge']['major']['cyclethreshold']
 
                 self._clean['masks'][imid] = next_gclean.mask( )
+
                 if deconvolver == 'mtmfs':
                     imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
                 else:
                     imdetails['path']['residual'] = ("%s.residual" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
+
                 self._clean['gclean_rest'].append(next_gclean)
 
         self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
@@ -1984,8 +1969,24 @@ class InteractiveClean:
                                             iterdone=0, iterleft=iterleft,
                                             majordone=majordone, majorleft=majorleft, cyclethreshold=cyclethreshold, stopdesc=stopdesc )
 
-        for imid, imdetails in self._clean_targets.items( ):
+        initial_convergence_state={ }
+        for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
+
+            imdetails['mask-history'] = [ ]
+            imdetails['gui'] = { 'params': { 'iteration': { }, 'automask': { } },
+                                 'image': { },
+                                 'image-adjust': { } }
+
+            ###
+            ### Only the first image should initialize the initial convergence state
+            ###
+            initial_convergence_state[imid] = { 'chan': self._clean['last-success']['convergence'],
+                                                'cyclethreshold': self._clean['last-success']['cyclethreshold'] }
+            imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=self._clean['masks'][imid], abort=self._abort_handler,
+                                                 init_script=CustomJS( args=dict( initial_convergence_state=initial_convergence_state, name=imid ),
+                                                                       code='''document._casa_convergence_data = initial_convergence_state''' )
+                                                             if idx == 0 else None )
 
             ###
             ### Iteration Parameters
@@ -2799,8 +2800,8 @@ class InteractiveClean:
                                                    if ( ! recurse ) {
                                                        ctrl.converge.pipe.send( ctrl.converge.id, { action: 'retrieve' },
                                                                                 (msg) => { if ( hasprop( msg.result, 'convergence' ) ) {
-                                                                                               document._convergence_data = { chan: msg.result.convergence,
-                                                                                                                              cyclethreshold: msg.result.cyclethreshold }
+                                                                                               document._casa_convergence_data = { chan: msg.result.convergence,
+                                                                                                                                   cyclethreshold: msg.result.cyclethreshold }
                                                                                                update_convergence(true)
                                                                                            } } )
                                                    } else { console.log( 'INTERNAL ERROR: fetching convergence data failed' ) }
@@ -2867,6 +2868,7 @@ class InteractiveClean:
                                                        v.img.disabled = true
                                                        if ( v.spectrum ) v.spectrum.disabled = true
                                                        v.src.disable_masking( )
+                                                       v.src.disable_pixel_update( )
                                                        Object.entries(v.navi).map(
                                                            ([k1,v1],i1) => { if ( hasprop(v1,'disabled') ) v1.disabled = true }
                                                        )
@@ -2889,6 +2891,7 @@ class InteractiveClean:
                                                        v.img.disabled = false
                                                        if ( v.spectrum ) v.spectrum.disabled = false
                                                        v.src.enable_masking( )
+                                                       v.src.enable_pixel_update( )
                                                        Object.entries(v.navi).map(
                                                            ([k1,v1],i) => { if ( hasprop(v1,'disabled') ) v1.disabled = false } )
                                                    } )
