@@ -59,7 +59,10 @@ from ..utils import ContextMgrChain as CMC
 
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
-from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+try:
+    from casagui.private._gclean import gclean as _gclean
+except:
+    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
 
