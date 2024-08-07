@@ -1116,54 +1116,6 @@ class InteractiveClean:
                                       end of the band at its location. As a guideline, the artificial spectral
                                       index due to the PB is -1.4 at the 0.5 gain level and less than -0.2
                                       at the 0.9 gain level at the middle frequency )
-    outlierfile          Name of outlier-field image definitions
-
-                         A text file containing sets of parameter=value pairs,
-                         one set per outlier field.
-
-                         Example :   outlierfile='outs.txt'
-
-                                            Contents of outs.txt :
-
-                                                      imagename=tst1
-                                                      nchan=1
-                                                      imsize=[80,80]
-                                                      cell=[8.0arcsec,8.0arcsec]
-                                                      phasecenter=J2000 19:58:40.895 +40.55.58.543
-                                                      mask=circle[[40pix,40pix],10pix]
-
-                                                      imagename=tst2
-                                                      nchan=1
-                                                      imsize=[100,100]
-                                                      cell=[8.0arcsec,8.0arcsec]
-                                                      phasecenter=J2000 19:58:40.895 +40.56.00.000
-                                                      mask=circle[[60pix,60pix],20pix]
-
-                            The following parameters are currently allowed to be different between
-                            the main field and the outlier fields (i.e. they will be recognized if found
-                            in the outlier text file). If a parameter is not listed, the value is picked from
-                            what is defined in the main task input.
-
-                                imagename, imsize, cell, phasecenter, startmodel, mask
-                                specmode, nchan, start, width, nterms, reffreq,
-                                gridder, deconvolver, wprojplanes
-
-                            Note : 'specmode' is an option, so combinations of mfs and cube
-                                       for different image fields, for example, are supported.
-                                      'deconvolver' and 'gridder' are also options that allow different
-                                       imaging or deconvolution algorithm per image field.
-
-                                       For example, multiscale with wprojection and 16 w-term planes
-                                       on the main field and mtmfs with nterms=3 and wprojection
-                                       with 64 planes on a bright outlier source for which the frequency
-                                       dependence of the primary beam produces a strong effect that
-                                       must be modeled.   The traditional alternative to this approach is
-                                       to first image the outlier, subtract it out of the data (uvsub) and
-                                       then image the main field.
-
-                            Note : If you encounter a use-case where some other parameter needs
-                                      to be allowed in the outlier file (and it is logical to do so), please
-                                      send us feedback. The above is an initial list.
     weighting            Weighting scheme (natural,uniform,briggs,superuniform,radial, briggsabs, briggsbwtaper)
 
                                  During gridding of the dirty or residual image, each visibility value is
@@ -1811,7 +1763,7 @@ class InteractiveClean:
         cmd += ' ' + str(hostname)
         return cmd
 
-    def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, outlierfile='', weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False ):
+    def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False ):
 
         ###
         ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
@@ -1886,18 +1838,22 @@ class InteractiveClean:
         self._pipe = { 'control': None }
         self._clean = { 'converge': { 'state': { } }, 'last-success': None }
 
-        self._clean_targets = { imagename: { 'args': {'vis': vis, 'selectdata': selectdata, 'field': field, 'spw': spw, 'timerange': timerange, 'uvrange': uvrange, 'antenna': antenna, 'scan': scan, 'observation': observation, 'intent': intent, 'datacolumn': datacolumn, 'imagename': imagename, 'imsize': imsize, 'cell': cell, 'phasecenter': phasecenter, 'stokes': stokes, 'projection': projection, 'startmodel': startmodel, 'specmode': specmode, 'reffreq': reffreq, 'nchan': nchan, 'start': start, 'width': width, 'outframe': outframe, 'veltype': veltype, 'restfreq': restfreq, 'interpolation': interpolation, 'perchanweightdensity': perchanweightdensity, 'gridder': gridder, 'facets': facets, 'psfphasecenter': psfphasecenter, 'wprojplanes': wprojplanes, 'vptable': vptable, 'mosweight': mosweight, 'aterm': aterm, 'psterm': psterm, 'wbawp': wbawp, 'conjbeams': conjbeams, 'cfcache': cfcache, 'usepointing': usepointing, 'computepastep': computepastep, 'rotatepastep': rotatepastep, 'pointingoffsetsigdev': pointingoffsetsigdev, 'pblimit': pblimit, 'normtype': normtype, 'deconvolver': deconvolver, 'scales': scales, 'nterms': nterms, 'smallscalebias': smallscalebias, 'fusedthreshold': fusedthreshold, 'largestscale': largestscale, 'restoration': restoration, 'restoringbeam': restoringbeam, 'pbcor': pbcor, 'outlierfile': outlierfile, 'weighting': weighting, 'robust': robust, 'noise': noise, 'npixels': npixels, 'uvtaper': uvtaper, 'niter': niter, 'gain': gain, 'threshold': threshold, 'nsigma': nsigma, 'cycleniter': cycleniter, 'cyclefactor': cyclefactor, 'minpsffraction': minpsffraction, 'maxpsffraction': maxpsffraction, 'nmajor': nmajor, 'usemask': usemask, 'mask': mask, 'pbmask': pbmask, 'sidelobethreshold': sidelobethreshold, 'noisethreshold': noisethreshold, 'lownoisethreshold': lownoisethreshold, 'negativethreshold': negativethreshold, 'smoothfactor': smoothfactor, 'minbeamfrac': minbeamfrac, 'cutthreshold': cutthreshold, 'growiterations': growiterations, 'dogrowprune': dogrowprune, 'minpercentchange': minpercentchange, 'verbose': verbose, 'fastnoise': fastnoise, 'restart': restart, 'savemodel': savemodel, 'calcres': calcres, 'calcpsf': calcpsf, 'psfcutoff': psfcutoff, 'parallel': parallel} } }
+        self._clean_targets = { imagename: { 'args': {'vis': vis, 'selectdata': selectdata, 'field': field, 'spw': spw, 'timerange': timerange, 'uvrange': uvrange, 'antenna': antenna, 'scan': scan, 'observation': observation, 'intent': intent, 'datacolumn': datacolumn, 'imagename': imagename, 'imsize': imsize, 'cell': cell, 'phasecenter': phasecenter, 'stokes': stokes, 'projection': projection, 'startmodel': startmodel, 'specmode': specmode, 'reffreq': reffreq, 'nchan': nchan, 'start': start, 'width': width, 'outframe': outframe, 'veltype': veltype, 'restfreq': restfreq, 'interpolation': interpolation, 'perchanweightdensity': perchanweightdensity, 'gridder': gridder, 'facets': facets, 'psfphasecenter': psfphasecenter, 'wprojplanes': wprojplanes, 'vptable': vptable, 'mosweight': mosweight, 'aterm': aterm, 'psterm': psterm, 'wbawp': wbawp, 'conjbeams': conjbeams, 'cfcache': cfcache, 'usepointing': usepointing, 'computepastep': computepastep, 'rotatepastep': rotatepastep, 'pointingoffsetsigdev': pointingoffsetsigdev, 'pblimit': pblimit, 'normtype': normtype, 'deconvolver': deconvolver, 'scales': scales, 'nterms': nterms, 'smallscalebias': smallscalebias, 'fusedthreshold': fusedthreshold, 'largestscale': largestscale, 'restoration': restoration, 'restoringbeam': restoringbeam, 'pbcor': pbcor, 'weighting': weighting, 'robust': robust, 'noise': noise, 'npixels': npixels, 'uvtaper': uvtaper, 'niter': niter, 'gain': gain, 'threshold': threshold, 'nsigma': nsigma, 'cycleniter': cycleniter, 'cyclefactor': cyclefactor, 'minpsffraction': minpsffraction, 'maxpsffraction': maxpsffraction, 'nmajor': nmajor, 'usemask': usemask, 'mask': mask, 'pbmask': pbmask, 'sidelobethreshold': sidelobethreshold, 'noisethreshold': noisethreshold, 'lownoisethreshold': lownoisethreshold, 'negativethreshold': negativethreshold, 'smoothfactor': smoothfactor, 'minbeamfrac': minbeamfrac, 'cutthreshold': cutthreshold, 'growiterations': growiterations, 'dogrowprune': dogrowprune, 'minpercentchange': minpercentchange, 'verbose': verbose, 'fastnoise': fastnoise, 'restart': restart, 'savemodel': savemodel, 'calcres': calcres, 'calcpsf': calcpsf, 'psfcutoff': psfcutoff, 'parallel': parallel} } }
         self._parameters = ImagerParameters( **{ k:v for k,v in self._clean_targets[imagename]['args'].items( )
                                                  if k in ImagerParameters.__init__.__code__.co_varnames[1:] } )
         self._clean_targets[imagename]['args']['outlierfile'] = ''		### >>HERE>> outlierfile TEMPORARILY handled in _interactiveclean.py
-        if outlierfile and exists(outlierfile):
+        ###
+        ### For 6.6.5, outliers are not yet completely implemented so the
+        ### 'outlierfile' parameter may not be present.
+        ###
+        if 'outlierfile' in locals( ) and outlierfile and exists(outlierfile):
             outliers, err = self._parameters.parseOutlierFile(outlierfile)
             if err: raise RuntimeError( f'''outlierfile error: {err}''' )
             for image in outliers:
                 if 'impars' in image and 'imagename' in image['impars']:
                     name = image['impars']['imagename']
                     self._clean_targets[name] = { }
-                    args = {'vis': vis, 'selectdata': selectdata, 'field': field, 'spw': spw, 'timerange': timerange, 'uvrange': uvrange, 'antenna': antenna, 'scan': scan, 'observation': observation, 'intent': intent, 'datacolumn': datacolumn, 'imagename': imagename, 'imsize': imsize, 'cell': cell, 'phasecenter': phasecenter, 'stokes': stokes, 'projection': projection, 'startmodel': startmodel, 'specmode': specmode, 'reffreq': reffreq, 'nchan': nchan, 'start': start, 'width': width, 'outframe': outframe, 'veltype': veltype, 'restfreq': restfreq, 'interpolation': interpolation, 'perchanweightdensity': perchanweightdensity, 'gridder': gridder, 'facets': facets, 'psfphasecenter': psfphasecenter, 'wprojplanes': wprojplanes, 'vptable': vptable, 'mosweight': mosweight, 'aterm': aterm, 'psterm': psterm, 'wbawp': wbawp, 'conjbeams': conjbeams, 'cfcache': cfcache, 'usepointing': usepointing, 'computepastep': computepastep, 'rotatepastep': rotatepastep, 'pointingoffsetsigdev': pointingoffsetsigdev, 'pblimit': pblimit, 'normtype': normtype, 'deconvolver': deconvolver, 'scales': scales, 'nterms': nterms, 'smallscalebias': smallscalebias, 'fusedthreshold': fusedthreshold, 'largestscale': largestscale, 'restoration': restoration, 'restoringbeam': restoringbeam, 'pbcor': pbcor, 'outlierfile': outlierfile, 'weighting': weighting, 'robust': robust, 'noise': noise, 'npixels': npixels, 'uvtaper': uvtaper, 'niter': niter, 'gain': gain, 'threshold': threshold, 'nsigma': nsigma, 'cycleniter': cycleniter, 'cyclefactor': cyclefactor, 'minpsffraction': minpsffraction, 'maxpsffraction': maxpsffraction, 'nmajor': nmajor, 'usemask': usemask, 'mask': mask, 'pbmask': pbmask, 'sidelobethreshold': sidelobethreshold, 'noisethreshold': noisethreshold, 'lownoisethreshold': lownoisethreshold, 'negativethreshold': negativethreshold, 'smoothfactor': smoothfactor, 'minbeamfrac': minbeamfrac, 'cutthreshold': cutthreshold, 'growiterations': growiterations, 'dogrowprune': dogrowprune, 'minpercentchange': minpercentchange, 'verbose': verbose, 'fastnoise': fastnoise, 'restart': restart, 'savemodel': savemodel, 'calcres': calcres, 'calcpsf': calcpsf, 'psfcutoff': psfcutoff, 'parallel': parallel}
+                    args = {'vis': vis, 'selectdata': selectdata, 'field': field, 'spw': spw, 'timerange': timerange, 'uvrange': uvrange, 'antenna': antenna, 'scan': scan, 'observation': observation, 'intent': intent, 'datacolumn': datacolumn, 'imagename': imagename, 'imsize': imsize, 'cell': cell, 'phasecenter': phasecenter, 'stokes': stokes, 'projection': projection, 'startmodel': startmodel, 'specmode': specmode, 'reffreq': reffreq, 'nchan': nchan, 'start': start, 'width': width, 'outframe': outframe, 'veltype': veltype, 'restfreq': restfreq, 'interpolation': interpolation, 'perchanweightdensity': perchanweightdensity, 'gridder': gridder, 'facets': facets, 'psfphasecenter': psfphasecenter, 'wprojplanes': wprojplanes, 'vptable': vptable, 'mosweight': mosweight, 'aterm': aterm, 'psterm': psterm, 'wbawp': wbawp, 'conjbeams': conjbeams, 'cfcache': cfcache, 'usepointing': usepointing, 'computepastep': computepastep, 'rotatepastep': rotatepastep, 'pointingoffsetsigdev': pointingoffsetsigdev, 'pblimit': pblimit, 'normtype': normtype, 'deconvolver': deconvolver, 'scales': scales, 'nterms': nterms, 'smallscalebias': smallscalebias, 'fusedthreshold': fusedthreshold, 'largestscale': largestscale, 'restoration': restoration, 'restoringbeam': restoringbeam, 'pbcor': pbcor, 'weighting': weighting, 'robust': robust, 'noise': noise, 'npixels': npixels, 'uvtaper': uvtaper, 'niter': niter, 'gain': gain, 'threshold': threshold, 'nsigma': nsigma, 'cycleniter': cycleniter, 'cyclefactor': cyclefactor, 'minpsffraction': minpsffraction, 'maxpsffraction': maxpsffraction, 'nmajor': nmajor, 'usemask': usemask, 'mask': mask, 'pbmask': pbmask, 'sidelobethreshold': sidelobethreshold, 'noisethreshold': noisethreshold, 'lownoisethreshold': lownoisethreshold, 'negativethreshold': negativethreshold, 'smoothfactor': smoothfactor, 'minbeamfrac': minbeamfrac, 'cutthreshold': cutthreshold, 'growiterations': growiterations, 'dogrowprune': dogrowprune, 'minpercentchange': minpercentchange, 'verbose': verbose, 'fastnoise': fastnoise, 'restart': restart, 'savemodel': savemodel, 'calcres': calcres, 'calcpsf': calcpsf, 'psfcutoff': psfcutoff, 'parallel': parallel}
                     args['outlierfile'] = ''					### >>HERE>> outlierfile TEMPORARILY handled in _interactiveclean.py
                     for _,arg_mods in image.items( ):
                         for k,v in arg_mods.items( ):
@@ -1997,7 +1953,8 @@ class InteractiveClean:
             ### Auto Masking Parameters
             ###
             imdetails['params']['am'] = { }
-            imdetails['params']['am']['usemask'] = usemask
+            #imdetails['params']['am']['usemask'] = usemask
+            imdetails['params']['am']['usemask'] = None
             imdetails['params']['am']['noisethreshold'] = noisethreshold
             imdetails['params']['am']['sidelobethreshold'] = sidelobethreshold
             imdetails['params']['am']['lownoisethreshold'] = lownoisethreshold
