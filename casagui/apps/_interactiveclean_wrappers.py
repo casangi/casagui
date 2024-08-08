@@ -11,109 +11,112 @@ from ..utils import static_vars
 ###
 ### Functions for creating GUI element providing the tclean iteration parameters...
 ###
-@static_vars(reuse=None)
-def nmajor( *args, **kwargs ):
-    if nmajor.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        nmajor.reuse = TextInput( *args, **kwargs )
-    return nmajor.reuse
+class SharedWidgets:
+    def __init__( self ):
+        self._nmajor = None
+        self._niter = None
+        self._cycleniter = None
+        self._threshold = None
+        self._cyclefactor = None
+        self._gain = None
+        self._nsigma = None
+        self._noisethreshold = None
+        self._sidelobethreshold = None
+        self._lownoisethreshold = None
+        self._minbeamfrac = None
+        self._negativethreshold = None
+        self._dogrowprune = None
 
-@static_vars(reuse=None)
-def niter( *args, **kwargs ):
-    if niter.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        niter.reuse = TextInput( *args, **kwargs )
-    return niter.reuse
+    def nmajor( self, *args, **kwargs ):
+        if self._nmajor is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._nmajor = TextInput( *args, **kwargs )
+        return self._nmajor
 
-@static_vars(reuse=None)
-def cycleniter( *args, **kwargs ):
-    if cycleniter.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        cycleniter.reuse = TextInput( *args, **kwargs )
-    return cycleniter.reuse
+    def niter( self, *args, **kwargs ):
+        if self._niter is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._niter = TextInput( *args, **kwargs )
+        return self._niter
 
-@static_vars(reuse=None)
-def threshold( *args, **kwargs ):
-    if threshold.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        threshold.reuse = TextInput( *args, **kwargs )
-    return threshold.reuse
+    def cycleniter( self, *args, **kwargs ):
+        if self._cycleniter is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._cycleniter = TextInput( *args, **kwargs )
+        return self._cycleniter
 
-@static_vars(reuse=None)
-def cyclefactor( *args, **kwargs ):
-    if cyclefactor.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        cyclefactor.reuse = TextInput( *args, **kwargs )
-    return cyclefactor.reuse
+    def threshold( self, *args, **kwargs ):
+        if self._threshold is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._threshold = TextInput( *args, **kwargs )
+        return self._threshold
 
-@static_vars(reuse=None)
-def gain( *args, **kwargs ):
-    if gain.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        gain.reuse = TextInput( *args, **kwargs )
-    return gain.reuse
+    def cyclefactor( self, *args, **kwargs ):
+        if self._cyclefactor is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._cyclefactor = TextInput( *args, **kwargs )
+        return self._cyclefactor
 
-@static_vars(reuse=None)
-def nsigma( *args, **kwargs ):
-    if nsigma.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        nsigma.reuse = TextInput( *args, **kwargs )
-    return nsigma.reuse
+    def gain( self, *args, **kwargs ):
+        if self._gain is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._gain = TextInput( *args, **kwargs )
+        return self._gain
 
-###
-### Wrappers providing GUI for auto-masking parameters...
-###
-@static_vars(reuse=None)
-def noisethreshold( *args, **kwargs ):
-    if noisethreshold.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        noisethreshold.reuse = TextInput( *args, **kwargs )
-    return noisethreshold.reuse
+    def nsigma( self, *args, **kwargs ):
+        if self._nsigma is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._nsigma = TextInput( *args, **kwargs )
+        return self._nsigma
 
-@static_vars(reuse=None)
-def sidelobethreshold( *args, **kwargs ):
-    if sidelobethreshold.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        sidelobethreshold.reuse = TextInput( *args, **kwargs )
-    return sidelobethreshold.reuse
+    ###
+    ### Wrappers providing GUI for auto-masking parameters...
+    ###
+    def noisethreshold( self, *args, **kwargs ):
+        if self._noisethreshold is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._noisethreshold = TextInput( *args, **kwargs )
+        return self._noisethreshold
 
-@static_vars(reuse=None)
-def lownoisethreshold( *args, **kwargs ):
-    if lownoisethreshold.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        lownoisethreshold.reuse = TextInput( *args, **kwargs )
-    return lownoisethreshold.reuse
+    def sidelobethreshold( self, *args, **kwargs ):
+        if self._sidelobethreshold is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._sidelobethreshold = TextInput( *args, **kwargs )
+        return self._sidelobethreshold
 
-@static_vars(reuse=None)
-def minbeamfrac( *args, **kwargs ):
-    if minbeamfrac.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        minbeamfrac.reuse = TextInput( *args, **kwargs )
-    return minbeamfrac.reuse
+    def lownoisethreshold( self, *args, **kwargs ):
+        if self._lownoisethreshold is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._lownoisethreshold = TextInput( *args, **kwargs )
+        return self._lownoisethreshold
 
-@static_vars(reuse=None)
-def negativethreshold( *args, **kwargs ):
-    if negativethreshold.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        negativethreshold.reuse = TextInput( *args, **kwargs )
-    return negativethreshold.reuse
+    def minbeamfrac( self, *args, **kwargs ):
+        if self._minbeamfrac is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._minbeamfrac = TextInput( *args, **kwargs )
+        return self._minbeamfrac
 
-@static_vars(reuse=None)
-def dogrowprune( *args, **kwargs ):
-    if dogrowprune.reuse is None:
-        if len(args) == 0 and len(kwargs) == 0:
-            raise RuntimeError('No widget is available...')
-        dogrowprune.reuse = Checkbox( *args, **kwargs )
-    return dogrowprune.reuse
+    def negativethreshold( self, *args, **kwargs ):
+        if self._negativethreshold is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._negativethreshold = TextInput( *args, **kwargs )
+        return self._negativethreshold
+
+    def dogrowprune( self, *args, **kwargs ):
+        if self._dogrowprune is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._dogrowprune = Checkbox( *args, **kwargs )
+        return self._dogrowprune

@@ -71,7 +71,7 @@ from casagui.bokeh.utils import svg_icon
 from casagui.bokeh.sources import DataPipe
 from ..utils import DocEnum
 
-from . import _interactiveclean_wrappers as icw
+from ._interactiveclean_wrappers import SharedWidgets
 
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
@@ -2181,6 +2181,10 @@ class InteractiveClean:
         ###
         status_line = None
 
+        ###
+        ### Manage the widgets which are shared between tabs...
+        ###
+        icw = SharedWidgets( )
         for imid, imdetails in self._clean_targets.items( ):
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
 
