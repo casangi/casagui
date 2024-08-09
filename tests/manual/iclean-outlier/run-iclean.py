@@ -34,7 +34,7 @@ if not os.path.isdir(ms_path):
 
 #print("Result = " + str( repr( run_iclean( vis=ms_path, imagename=img,
 print("Result = " + str( repr( iclean( vis=ms_path, imagename=img,
-                                       imsize=512,
+                                       imsize=100,
                                        cell='8.0arcsec',
                                        phasecenter="J2000 19:59:28.500 +40.44.01.50",
                                        outlierfile='test_outlier.txt',
