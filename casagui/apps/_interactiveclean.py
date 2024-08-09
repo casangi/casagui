@@ -1928,8 +1928,18 @@ class InteractiveClean:
             ###
             if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
+
                 self._clean['gclean'] = _gclean( **imdetails['args'] )
                 stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
+
+                if imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
+                    ###
+                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
+                    ### but currently gclean can be initialized with bad arguments and it is not known until
+                    ### the initial calls to tclean/deconvolve
+                    ###
+                    raise RuntimeError('gclean failure "%s" not returned' % ('major' if imdetails['converge']['major'] is None else 'chan'))
+
                 clean_cmds = self._clean['gclean'].cmds( )
 
                 if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
