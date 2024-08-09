@@ -622,7 +622,7 @@ class InteractiveClean:
 
 
             imdetails['gui']['image']['src'] = imdetails['gui']['cube'].js_obj( )
-            imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( height_policy='max', width_policy='max',
+            imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( grid=False, height_policy='max', width_policy='max',
                                                                                channelcb=CustomJS( args=dict( img_state={ 'src': imdetails['gui']['image']['src'],
                                                                                                                           'flux': imdetails['converge-data']['flux'],
                                                                                                                           'residual': imdetails['converge-data']['residual'],

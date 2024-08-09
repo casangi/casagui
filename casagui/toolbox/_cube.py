@@ -1179,7 +1179,7 @@ class CubeMask:
             self._init_pipes( )
             self._image_source = ImageDataSource( image_source=self._pipe['image'] )
 
-    def image( self, maxanno=50, channelcb=None, **kw ):
+    def image( self, maxanno=50, grid=True, channelcb=None, **kw ):
         '''Create the 2D raster display which displays image planes. This widget is should be
         created for all ``cube_mask`` objects because this is the GUI component that ties
         all of the other GUIs together.
@@ -1188,6 +1188,8 @@ class CubeMask:
         ----------
         maxanno: int
             maximum number of masks that can be drawn in each image channel
+        grid: Boolean
+            display grid lines on the image if True, do not display grid lines if False
         kw: keyword and value
             extra keyword/value paramaters passed on to ``figure``
         '''
@@ -1340,6 +1342,13 @@ class CubeMask:
                                                           self._mask_add_sub['sub'],
                                                           self._mask_add_sub['mask'] ],
                                                   tooltips=None ), **kw )
+
+            ###
+            ### Toggle off grid lines if parameter is False
+            ###
+            if grid == False:
+                self._image.xgrid.grid_line_color = None
+                self._image.ygrid.grid_line_color = None
 
             ###
             ### set tools that are active by default
