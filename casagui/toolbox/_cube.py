@@ -1585,7 +1585,7 @@ class CubeMask:
         else:
             return self._statistics
 
-    def palette( self, **kw ):
+    def palette( self, reuse=None, **kw ):
         '''retrieve a Select widget which allow for changing the pseudocolor palette
         '''
         if self._palette is None:
@@ -1605,8 +1605,12 @@ class CubeMask:
 
             self._pipe['control'].register( self._ids['palette'], fetch_palette )
 
-            self._palette = set_attributes( Dropdown( label=default_palette( ), button_type='light', margin=(-1, 0, 0, 0),
-                                                      sizing_mode='scale_height', menu=available_palettes( ) ), **kw )
+            if reuse:
+                self._palette = reuse.child
+            else:
+                self._palette = set_attributes( Dropdown( label=default_palette( ), button_type='light', margin=(-1, 0, 0, 0),
+                                                          sizing_mode='scale_height', menu=available_palettes( ) ), **kw )
+
             self._palette.js_on_click( CustomJS( args=dict( image=self._chan_image,
                                                             ids=self._ids,
                                                             ctrl=self._pipe['control'] ),

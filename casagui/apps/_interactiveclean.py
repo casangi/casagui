@@ -2536,6 +2536,16 @@ class InteractiveClean:
 
         show(self._fig['layout'])
 
+    def _create_colormap_adjust( self, imdetails ):
+        if not hasattr(self,'_cube_palette'):
+            palette = self._cube_palette = imdetails['gui']['cube'].palette( )
+        else:
+            palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
+
+        return column( row( Div(text="<div><b>Colormap:</b></div>",margin=(5,2,5,25)), palette ),
+                       imdetails['gui']['cube'].colormap_adjust( ), sizing_mode='stretch_both' )
+
+
     def _create_control_image_tab( self, imdetails ):
         return Tabs( tabs=[ TabPanel(child=column( row( Tip( imdetails['gui']['params']['iteration']['nmajor'],
                                                              tooltip=Tooltip( content=HTML( 'maximum number of major cycles to run before stopping'),
@@ -2562,7 +2572,7 @@ class InteractiveClean:
                                      title='Iteration' ) ] +
                           ( [ TabPanel( child=imdetails['gui']['spectrum'],
                                         title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
-                          [ TabPanel( child=imdetails['gui']['cube'].colormap_adjust( ),
+                          [ TabPanel( child=self._create_colormap_adjust(imdetails),
                                       title='Colormap' ),
                             TabPanel( child=imdetails['gui']['cube'].statistics( ),
                                       title='Statistics' ) ] + imdetails['gui']['auto-masking-panel'],
@@ -2574,8 +2584,6 @@ class InteractiveClean:
 
 
         return TabPanel( child=column( row( *imdetails['gui']['channel-ctrl'], imdetails['gui']['cube'].coord_ctrl( ),
-                                            #Spacer( height=5, sizing_mode="scale_width" ),
-                                            imdetails['gui']['cube'].palette( ),
                                             imdetails['gui']['image-adjust']['mask-clean-notclean-pick'],
                                             imdetails['gui']['image-adjust']['mask-color-pick'],
                                             imdetails['gui']['image-adjust']['mask-alpha-pick'],
