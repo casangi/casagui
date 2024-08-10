@@ -2021,6 +2021,7 @@ class InteractiveClean:
             imdetails['params']['am']['minbeamfrac'] = minbeamfrac
             imdetails['params']['am']['negativethreshold'] = negativethreshold
             imdetails['params']['am']['dogrowprune'] = dogrowprune
+            imdetails['params']['am']['fastnoise'] = fastnoise
 
     def _init_pipes( self ):
         if not self.__pipes_initialized:
@@ -2058,7 +2059,7 @@ class InteractiveClean:
 
         hover = HoverTool( tooltips=TOOLTIPS )
         imdetails['gui']['convergence'] = figure( sizing_mode=sizing_mode, y_axis_location="right",
-                                                  tools=[ hover ], **kw )
+                                                  tools=[ hover ], toolbar_location=None, **kw )
 
         if orient == 'vertical':
             imdetails['gui']['convergence'].yaxis.axis_label='Iteration (cycle threshold dotted red)'
@@ -2300,12 +2301,13 @@ class InteractiveClean:
                 ### Currently automasking tab is only available when the user selects 'auto-multithresh'
                 ###
                 imdetails['gui']['params']['automask']['active'] = True
-                imdetails['gui']['params']['automask']['noisethreshold'] = icw.noisethreshold( title='noisethreshold', value="%s" % imdetails['params']['am']['noisethreshold'], width=90 )
-                imdetails['gui']['params']['automask']['sidelobethreshold'] = icw.sidelobethreshold( title='sidelobethreshold', value="%s" % imdetails['params']['am']['sidelobethreshold'], width=90 )
-                imdetails['gui']['params']['automask']['lownoisethreshold'] = icw.lownoisethreshold( title='lownoisethreshold', value="%s" % imdetails['params']['am']['lownoisethreshold'], width=90 )
+                imdetails['gui']['params']['automask']['noisethreshold'] = icw.noisethreshold( title='noisethreshold', value="%s" % imdetails['params']['am']['noisethreshold'], margin=( 5, 25, 5, 5 ), width=90 )
+                imdetails['gui']['params']['automask']['sidelobethreshold'] = icw.sidelobethreshold( title='sidelobethreshold', value="%s" % imdetails['params']['am']['sidelobethreshold'], margin=( 5, 25, 5, 5 ), width=90 )
+                imdetails['gui']['params']['automask']['lownoisethreshold'] = icw.lownoisethreshold( title='lownoisethreshold', value="%s" % imdetails['params']['am']['lownoisethreshold'], margin=( 5, 25, 5, 5 ), width=90 )
                 imdetails['gui']['params']['automask']['minbeamfrac'] = icw.minbeamfrac( title='minbeamfrac', value="%s" % imdetails['params']['am']['minbeamfrac'], width=90 )
-                imdetails['gui']['params']['automask']['negativethreshold'] = icw.negativethreshold( title='negativethreshold', value="%s" % imdetails['params']['am']['negativethreshold'], width=90 )
-                imdetails['gui']['params']['automask']['dogrowprune'] = icw.dogrowprune( label='dogrowprune', active=imdetails['params']['am']['dogrowprune'], margin=( 25, 5, 5, 5 ) )
+                imdetails['gui']['params']['automask']['negativethreshold'] = icw.negativethreshold( title='negativethreshold', value="%s" % imdetails['params']['am']['negativethreshold'], margin=( 5, 25, 5, 5 ), width=90 )
+                imdetails['gui']['params']['automask']['dogrowprune'] = icw.dogrowprune( label='dogrowprune', active=imdetails['params']['am']['dogrowprune'], margin=( 15, 25, 5, 5 ) )
+                imdetails['gui']['params']['automask']['fastnoise'] = icw.fastnoise( label='fastnoise', active=imdetails['params']['am']['fastnoise'], margin=( 15, 25, 5, 5 ) )
 
 
             imdetails['gui']['image']['src'] = imdetails['gui']['cube'].js_obj( )
@@ -2344,20 +2346,22 @@ class InteractiveClean:
                                                                                                               position='bottom' ) ),
                                                                                         Tip( imdetails['gui']['params']['automask']['sidelobethreshold'],
                                                                                              tooltip=Tooltip( content=HTML( 'sets a threshold based on the sidelobe level above which significant emission is masked during the initial round of mask creation' ),
-                                                                                                              position='bottom' ) ) ),
-                                                                                   row( Tip( imdetails['gui']['params']['automask']['minbeamfrac'],
+                                                                                                              position='bottom' ) ),
+                                                                                        Tip( imdetails['gui']['params']['automask']['minbeamfrac'],
                                                                                              tooltip=Tooltip( content=HTML( 'sets the minimum size a region must be to be retained in the mask' ),
-                                                                                                              position='bottom' ) ),
-                                                                                        Tip( imdetails['gui']['params']['automask']['lownoisethreshold'],
-                                                                                             tooltip=Tooltip( content=HTML( 'sets the threshold into which the initial mask (which is determined by either noisethreshold or sidelobethreshold) is expanded in order to include low signal-to-noise regions in the mask' ),
                                                                                                               position='bottom' ) ) ),
-                                                                                   row( Tip( imdetails['gui']['params']['automask']['negativethreshold'],
-                                                                                             tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold for absorption features to be masked' ),
+                                                                                   row( Tip( imdetails['gui']['params']['automask']['lownoisethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the threshold into which the initial mask (which is determined by either noisethreshold or sidelobethreshold) is expanded in order to include low signal-to-noise regions in the mask' ),
                                                                                                               position='bottom' ) ),
-                                                                                        column( Spacer( height=5, height_policy="fixed", width_policy="auto" ),
-                                                                                                Tip( imdetails['gui']['params']['automask']['dogrowprune'],
-                                                                                                     tooltip=Tooltip( content=HTML( 'allows you to turn off the pruning of the low signal-to-noise mask, which speeds up masking for images and cubes with complex low signal-to-noise emission' ),
-                                                                                                                      position='bottom' ) ) ) ) ),
+                                                                                        Tip( imdetails['gui']['params']['automask']['negativethreshold'],
+                                                                                             tooltip=Tooltip( content=HTML( 'sets the signal-to-noise threshold for absorption features to be masked' ),
+                                                                                                              position='bottom' ) ) ),
+                                                                                   row( Tip( imdetails['gui']['params']['automask']['dogrowprune'],
+                                                                                             tooltip=Tooltip( content=HTML( 'allows you to turn off the pruning of the low signal-to-noise mask, which speeds up masking for images and cubes with complex low signal-to-noise emission' ),
+                                                                                                              position='bottom' ) ),
+                                                                                        Tip( imdetails['gui']['params']['automask']['fastnoise'],
+                                                                                             tooltip=Tooltip( content=HTML( 'When set to True, a simpler but faster noise calucation is used' ),
+                                                                                                              position='bottom' ) ) ) ),
                                                                                    title='Automask' ) ]
             else:
                 imdetails['gui']['auto-masking-panel'] = [ ]
@@ -2954,6 +2958,7 @@ class InteractiveClean:
                                                                    Object.entries(amobj).reduce(
                                                                        (acc,[k1,v1]) => { if ( hasprop(v1,'value') ) acc[k1] = v1.value; return acc },
                                                                        { dogrowprune: amobj.dogrowprune.active,
+                                                                         fastnoise: amobj.fastnoise.active,
                                                                          active: true }
                                                                    ) : { }
                                                   const itobj = Object.entries(images_state)[0][1].iteration

@@ -26,6 +26,7 @@ class SharedWidgets:
         self._minbeamfrac = None
         self._negativethreshold = None
         self._dogrowprune = None
+        self._fastnoise = None
 
     def nmajor( self, *args, **kwargs ):
         if self._nmajor is None:
@@ -120,3 +121,10 @@ class SharedWidgets:
                 raise RuntimeError('No widget is available...')
             self._dogrowprune = Checkbox( *args, **kwargs )
         return self._dogrowprune
+
+    def fastnoise( self, *args, **kwargs ):
+        if self._fastnoise is None:
+            if len(args) == 0 and len(kwargs) == 0:
+                raise RuntimeError('No widget is available...')
+            self._fastnoise = Checkbox( *args, **kwargs )
+        return self._fastnoise
