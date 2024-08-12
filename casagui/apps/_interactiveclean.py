@@ -2533,11 +2533,21 @@ class InteractiveClean:
                                   height_policy='max', width_policy='max' )
 
         ###
-        ### Keep track of which image is currently active in document._casa_image (which is
-        ### initialized in self._js['initialize']
+        ### Keep track of which image is currently active in document._casa_image_name (which is
+        ### initialized in self._js['initialize']). Also, update the current control sub-tab
+        ### when the field main-tab is changed. An attempt to manage this all within the
+        ### control sub-tabs using a reference to self._image_control_tab_groups from
+        ### each control sub-tab failed with:
         ###
-        image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._clean_targets.items( ) ] ),
-                                                     code='''document._casa_image = names[cb_obj.active]''' ) )
+        ###     bokeh.core.serialization.SerializationError: circular reference
+        ###
+        image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._clean_targets.items( ) ],
+                                                                itergroups=self._image_control_tab_groups ),
+                                                     code='''if ( ! hasprop(document,'_casa_last_control_tab') ) {
+                                                                 document._casa_last_control_tab = 0
+                                                             }
+                                                             document._casa_image_name = names[cb_obj.active]
+                                                             itergroups[document._casa_image_name].active = document._casa_last_control_tab''' ) )
 
         # Change display type depending on runtime environment
         if self._is_notebook:
@@ -2560,8 +2570,8 @@ class InteractiveClean:
                        imdetails['gui']['cube'].colormap_adjust( ), sizing_mode='stretch_both' )
 
 
-    def _create_control_image_tab( self, imdetails ):
-        return Tabs( tabs=[ TabPanel(child=column( row( Tip( imdetails['gui']['params']['iteration']['nmajor'],
+    def _create_control_image_tab( self, imid, imdetails ):
+        result = Tabs( tabs=[ TabPanel(child=column( row( Tip( imdetails['gui']['params']['iteration']['nmajor'],
                                                              tooltip=Tooltip( content=HTML( 'maximum number of major cycles to run before stopping'),
                                                                               position='bottom' ) ),
                                                         Tip( imdetails['gui']['params']['iteration']['niter'],
@@ -2592,6 +2602,14 @@ class InteractiveClean:
                                       title='Statistics' ) ] + imdetails['gui']['auto-masking-panel'],
                      width=500, sizing_mode='stretch_height', tabs_location='below' )
 
+        if not hasattr(self,'_image_control_tab_groups'):
+            self._image_control_tab_groups = { }
+
+        self._image_control_tab_groups[imid] = result
+        result.js_on_change( 'active', CustomJS( args=dict( ),
+                                                 code='''document._casa_last_control_tab = cb_obj.active''' ) )
+        return result
+
     def _create_image_panel( self, imagetuple ):
         imid, imdetails = imagetuple
 
@@ -2611,7 +2629,7 @@ class InteractiveClean:
                                             column( row( imdetails['gui']['goto'],
                                                          imdetails['gui']['slider'],
                                                          width_policy='max' ) if imdetails['image-channels'] > 1 else Div( ),
-                                                    self._create_control_image_tab(imdetails), height_policy='max' ),
+                                                    self._create_control_image_tab(imid, imdetails), height_policy='max' ),
                                             height_policy='max', width_policy='max' ),
                                        height_policy='max', width_policy='max' ), title=imid )
 
@@ -2778,7 +2796,7 @@ class InteractiveClean:
                      ### -- document is used storing state                                                        --
                      ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
                      'initialize':      '''if ( ! document._casa_initialized ) {
-                                               document._casa_image = initial_image
+                                               document._casa_image_name = initial_image
                                                document._casa_initialized = true
                                                document._casa_window_closed = false
                                                window.addEventListener( 'beforeunload',
@@ -2938,19 +2956,19 @@ class InteractiveClean:
                                                                  'Stopping criteria encountered',
                                                                  'Unrecognized stop code' ]
                                                if ( typeof status === 'number' ) {
-                                                   images_state[document._casa_image]['status'].text =
+                                                   images_state[document._casa_image_name]['status'].text =
                                                        '<p>' +
                                                        stopstr[ status < 0 || status >= stopstr.length ?
                                                                 stopstr.length - 1 : status ] +
                                                        '</p>'
                                                } else {
-                                                   images_state[document._casa_image]['status'].text = `<p>${status}</p>`
+                                                   images_state[document._casa_image_name]['status'].text = `<p>${status}</p>`
                                                }
                                            }''',
 
                        'iter-gui-update': '''function get_update_dictionary( ) {
-                                                  //const amste = images_state[document._casa_image]['automask']
-                                                  //const clste = images_state[document._casa_image]['iteration']
+                                                  //const amste = images_state[document._casa_image_name]['automask']
+                                                  //const clste = images_state[document._casa_image_name]['iteration']
                                                   // Assumption is that there is ONE set of iteration and automask updates
                                                   // for ALL imaging fields...
                                                   const amobj = Object.entries(images_state)[0][1].automask
@@ -2969,7 +2987,7 @@ class InteractiveClean:
 
                                                   const masks = Object.entries(images_state).reduce( (acc,[k,v]) => { acc[k] = v.src.masks( ); return acc }, { } )
                                                   const breadcrumbs = Object.entries(images_state).reduce( (acc,[k,v]) => { acc[k] = v.src.breadcrumbs( ); return acc }, { } )
-                                                  return { iteration, automask, masks, breadcrumbs, current_image: document._casa_image }
+                                                  return { iteration, automask, masks, breadcrumbs, current_image: document._casa_image_name }
                                            }
                                            function update_log( log_lines ) {
                                                let b = logbutton
