@@ -29,6 +29,7 @@
 JavaScript libraries. The ``casalib`` library has Bokeh independent
 functions while the `casaguijs` library has the Bokeh extensions'''
 from ...utils import static_vars
+from ._initialize import initialize_bokeh
 from os import path
 
 @static_vars( library_path=None )
@@ -37,6 +38,8 @@ def casalib_url( ):
         casalib_url.library_path = path.join(path.dirname(path.dirname(path.dirname(__file__))), '__js__', 'casalib.min.js')
     if not path.isfile(casalib_url.library_path):
         raise RuntimeError( f''''casalib' JavaScript library not found at '{casalib_url.library_path}\'''' )
+    if not initialize_bokeh.initialized:
+        initialize_bokeh( )
     return f'''file://{casalib_url.library_path}'''
 
 @static_vars( library_path=None )
@@ -45,4 +48,6 @@ def casaguijs_url( ):
         casaguijs_url.library_path = path.join(path.dirname(path.dirname(path.dirname(__file__))), '__js__', 'casaguijs.min.js')
     if not path.isfile(casaguijs_url.library_path):
         raise RuntimeError( f''''casaguijs' JavaScript library not found at '{casaguijs_url.library_path}\'''' )
+    if not initialize_bokeh.initialized:
+        initialize_bokeh( )
     return f'''file://{casaguijs_url.library_path}'''
