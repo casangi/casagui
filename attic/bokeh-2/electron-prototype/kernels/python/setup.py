@@ -16,7 +16,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be addressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -52,7 +52,7 @@ setuptools.setup(
     name=name,
     version=version,
     author="CASA development team",
-    author_email="aips2-request@nrao.edu",
+    author_email="casa-feedback@nrao.edu",
     description="CASA visualization framework",
     long_description=long_description,
     long_description_content_type="text/markdown",

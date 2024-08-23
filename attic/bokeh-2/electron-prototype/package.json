@@ -13,7 +13,7 @@
   "keywords": [],
   "author": {
     "name": "CASA Group",
-    "email": "aips2-request@nrao.edu"
+    "email": "casa-feedback@nrao.edu"
   },
   "license": "LGPL-2.0-or-later",
   "devDependencies": {
