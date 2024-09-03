@@ -68,7 +68,7 @@ def initialize_bokeh( bokehjs_subst=None ):
     Example
     -------
     from casagui.bokeh.state import initialize_bokeh
-    initialize_bokeh( bokehjs_subst="/tmp/casaguijs.min.js" )
+    initialize_bokeh( bokehjs_subst="/tmp/bokeh-3.2.2.js" )
     """
 
     if initialize_bokeh.initialized:

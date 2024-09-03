@@ -136,7 +136,8 @@ class CubeMask:
                       'done': str(uuid4( )),
                       'config-statistics': str(uuid4( )),
                       'fetch-spectrum': str(uuid4( )),
-                      'colormap-adjust': str(uuid4( )) } # ids used for control messages
+                      'colormap-adjust': str(uuid4( )) }   # ids used for control messages
+        self._hotkey_state = { }                           # used to disambiguate multiple CubeMasks in browser
 
         ###########################################################################################################################
         ### JavaScript init script to be run early in the startup. Piggybacked off of the ImagePipe initialization              ###
@@ -183,880 +184,7 @@ class CubeMask:
         if self.__abort is not None and not callable(self.__abort):
             raise RuntimeError('abort function must be callable')
 
-
-        ###########################################################################################################################
-        ### Notes on States                                                                                                     ###
-        ###                                                                                                                     ###
-        ### Global state is tied to the ImageDataSource                                                                         ###
-        ###                                                                                                                     ###
-        ###    selection buffer:  tied to per-channel state                                                                     ###
-        ###    copy buffer:       global                                                                                        ###
-        ###########################################################################################################################
-        self._js_mode_code = {
-                   'bitmask-hotkey-setup-add-sub':    '''
-                                              function mask_mod_result( msg ) {
-                                                  if ( msg.result == 'success' ) {
-                                                      if ( 'update' in msg && 'clear_region' in msg.update && msg.update.clear_region ) {
-                                                          /* if the src mask on disk has changed the maskmod region is no longer valid */
-                                                          maskmod_region_clear( )
-                                                      }
-                                                      source.refresh( msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } )
-                                                  }
-                                              }
-                                              function mask_add_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'chan',
-                                                                   action: 'addition',
-                                                                   value: { chan: source.cur_chan,
-                                                                            xs: annotations[0].xs,
-                                                                            ys: annotations[0].ys } },
-                                                                 mask_mod_result )
-                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'chan',
-                                                                   action: 'addition',
-                                                                   value: { chan: source.cur_chan,
-                                                                            src: mask_region_ds._src_chan } },
-                                                                 mask_mod_result )
-                                                  } else if ( status ) status.text = '<p>no region found</p>'
-                                              }
-                                              function mask_sub_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'chan',
-                                                                   action: 'subtract',
-                                                                   value: { chan: source.cur_chan,
-                                                                            xs: annotations[0].xs,
-                                                                            ys: annotations[0].ys } },
-                                                                 mask_mod_result )
-                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys.length) ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'chan',
-                                                                   action: 'subtract',
-                                                                   value: { chan: source.cur_chan,
-                                                                            src: mask_region_ds._src_chan } },
-                                                                 mask_mod_result )
-                                                  } else if ( status ) status.text = '<p>no region found</p>'
-                                              }
-                                              function mask_add_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'cube',
-                                                                   action: 'addition',
-                                                                   value: { chan: source.cur_chan,
-                                                                            xs: annotations[0].xs,
-                                                                            ys: annotations[0].ys } },
-                                                                 mask_mod_result )
-                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'cube',
-                                                                   action: 'addition',
-                                                                   value: { chan: source.cur_chan,
-                                                                            src: mask_region_ds._src_chan } },
-                                                                 mask_mod_result )
-                                                  } else if ( status ) status.text = '<p>no region found</p>'
-                                              }
-                                              function mask_sub_cube( ) {
-                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'cube',
-                                                                   action: 'subtract',
-                                                                   value: { chan: source.cur_chan,
-                                                                            xs: annotations[0].xs,
-                                                                            ys: annotations[0].ys } },
-                                                                 mask_mod_result )
-                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
-                                                      ctrl.send( ids['mask-mod'],
-                                                                 { scope: 'cube',
-                                                                   action: 'subtract',
-                                                                   value: { chan: source.cur_chan,
-                                                                            src: mask_region_ds._src_chan } },
-                                                                 mask_mod_result )
-                                                  } else if ( status ) status.text = '<p>no region found</p>'
-                                              }''',
-                   'bitmask-hotkey-setup':    '''
-                                              function state_translate_selection( dx, dy ) {
-                                                  const shape = source.image_source.shape
-                                                  // regions can move out of image, later outlier images may be included
-                                                  if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
-                                                  if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
-                                              }
-                                              function freeze_cursor_update( ) {
-                                                  ctrl._freeze_cursor_update = true
-                                              }
-                                              casalib.hotkeys( 'escape', { scope: 'channel' },
-                                                               (e) => { e.preventDefault( )
-                                                                        maskmod_region_clear( ) } )
-                                              casalib.hotkeys( 'f', { scope: 'channel' },
-                                                               (e) => freeze_cursor_update( ) )
-                                              casalib.hotkeys( 'a', { scope: 'channel' },
-                                                               (e) => mask_add_chan( ) )
-                                              casalib.hotkeys( 's', { scope: 'channel' },
-                                                               (e) => mask_sub_chan( ) )
-                                              casalib.hotkeys( 'shift+a', { scope: 'channel' },
-                                                               (e) => { e.preventDefault( )
-                                                                        mask_add_cube( ) } )
-                                              casalib.hotkeys( 'shift+s', { scope: 'channel' },
-                                                               (e) => { e.preventDefault( )
-                                                                        mask_sub_cube( ) } )
-                                              casalib.hotkeys( 'shift+`', { scope: 'channel' },
-                                                               (e) => { e.preventDefault( )
-                                                                        ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'chan',
-                                                                                     action: 'not',
-                                                                                     value: { chan: source.cur_chan } },
-                                                                                   mask_mod_result ) } )
-                                              casalib.hotkeys( 'shift+1', { scope: 'channel' },
-                                                               (e) => { e.preventDefault( )
-                                                                        ctrl.send( ids['mask-mod'],
-                                                                                   { scope: 'cube',
-                                                                                     action: 'not',
-                                                                                     value: { chan: source.cur_chan } },
-                                                                                   mask_mod_result ) } )
-                                               // move selection set up one pixel  -- bitmask-cube mode
-                                               casalib.hotkeys( 'up', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 0, 1 ) } )
-                                               // move selection set up several pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'shift+up', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
-                                               // move selection set down one pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'down', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 0, -1 ) } )
-                                               // move selection set down several pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'shift+down', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
-                                               // move selection set left one pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'left', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( -1, 0 ) } )
-                                               // move selection set left several pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'shift+left', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
-                                               // move selection set right one pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'right', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 1, 0 ) } )
-                                               // move selection set right several pixel -- bitmask-cube mode
-                                               casalib.hotkeys( 'shift+right', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
-                                              ''',
-                   'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+]', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_next_cursor( )} )
-                                               // prev region -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+[', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_prev_cursor( )} )
-                                               // add region to selection -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+space, alt+/', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_cursor_to_selection( curmasks( ) ) } )
-                                               // clear selection -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+escape', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_clear_selection( ) } )
-                                               // delete region identified by cursor -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+del,alt+backspace', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_remove_mask( ) } )
-                                               // move selection set up one pixel  -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'up', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 0, 1 ) } )
-                                               // move selection set up several pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'shift+up', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
-                                               // move selection set down one pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'down', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 0, -1 ) } )
-                                               // move selection set down several pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'shift+down', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
-                                               // move selection set left one pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'left', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( -1, 0 ) } )
-                                               // move selection set left several pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'shift+left', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                         state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
-                                               // move selection set right one pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'right', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_translate_selection( 1, 0 ) } )
-                                               // move selection set right several pixel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'shift+right', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         const shape = source.image_source.shape
-                                                                    state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
-
-                                               // copy selection -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+c', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         state_copy_selection( )} )
-
-                                               // paste selection current channel -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+v', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         register_mask_change('v')
-                                                                         state_paste_selection( ) } )
-
-                                               // paste selection to all channels -- no-bitmask-cube mode
-                                               casalib.hotkeys( 'alt+shift+v', { scope: 'channel' },
-                                                                (e) => { e.preventDefault( )
-                                                                         register_mask_change('V')
-                                                                         for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
-                                                                             for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
-                                                                                 if ( stokes != source._copy_buffer[1][0] ||
-                                                                                      chan != source._copy_buffer[1][1] )
-                                                                                     state_paste_selection( curmasks( [ stokes, chan ] ) )
-                                                                             }
-                                                                         } } )
-
-                                               // initialize for cursor operations -- no-bitmask-cube mode
-                                               casalib.hotkeys( '*', { keyup: true, scope: 'channel' },
-                                                                (e,handler) => { if ( e.type === 'keydown' ) {
-                                                                                     if ( (e.key === 'Alt' || e.key == 'Meta') && ! casalib.hotkeys.control )
-                                                                                         state_initialize_cursor( )
-                                                                                     if ( e.key === 'Control' && casalib.hotkeys.option )
-                                                                                         state_clear_cursor( curmasks( ) )
-                                                                                 }
-                                                                                 if ( e.type === 'keyup' ) {
-                                                                                     if ( e.key === 'Alt' || e.key == 'Meta' )
-                                                                                         state_clear_cursor( )
-                                                                                     if ( e.key === 'Control' && casalib.hotkeys.option )
-                                                                                         state_initialize_cursor( )
-                                                                                 } } )''',
-            'no-bitmask-init':          '''if ( typeof(source._mask_breadcrumbs) === 'undefined' ) {
-                                               source._mask_breadcrumbs = ''
-                                           }
-                                           if ( typeof(source._cur_chan_prev) === 'undefined' ) {
-                                               source._cur_chan_prev = source.cur_chan
-                                           }
-                                           if ( typeof(source._polys) === 'undefined' ) {
-                                               source._polys = [ ]              //  [ { id: int,
-                                                                                //      type: string,
-                                                                                //      geometry: { xs: [ float, ... ], ys: [ float, ... ] } } ]
-                                               source._cursor_color = 'white'
-                                               source._default_color = 'black'
-                                               source._annotation_ids = annotations.reduce( (acc,c) => { acc.push(c.id); return acc }, [ ] )
-                                               source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
-                                                                                // OPT sets the cursor on the first poly
-                                               source._cursor = -1              // OPT-n or OPT-p move the _cursor through polys for current channel
-                                                                                // OPT-SPACE adds cursor to _selections
-                                                                                // OPT-c copies _selections to the _copy_buffer and clears _selections
-                                                                                // OPT-v pastes _copy_buffer to a new channel
-                                                                                // OPT-SHIFT-v pastes _copy_buffer to ALL channels
-                                                                                // OPT-up moves _selections up
-                                                                                // OPT-down moves _selections down
-                                                                                // OPT-left moves _selections left
-                                                                                // OPT-right moves _selections right
-                                                                                // OPT-delete removes mask highlighted by _cursor
-                                                                                // OPT-CTRL-up moves to next channel
-                                                                                // OPT-CTRL-down moves to previous channel
-                                                                                // OPT-CTRL-left moves to previous stokes channel
-                                                                                // OPT-CTRL-right moves to next stokes channel
-                                           }
-                                           if ( typeof(source._copy_buffer) === 'undefined' ) {
-                                               // Buffer that will contain copied selection so that the selection from one channel can be pasted
-                                               // into this channel, another channel, or multiple channels...
-                                               //              vvvvvvvvvv------------------------------------------- polygon index to be pasted
-                                               //        [ [ [ POLY-INDEX, [ dx, dy ] ], ... ], [ stokes, chan ] ]
-                                               //                          ^^^^^^^^^^           ^^^^^^^^^^^^^^^^---- image plane origin of copy
-                                               //                                   |
-                                               //                                   +------------------------------- x,y delta translation for the copied poly
-                                               // The poly index _copy_buffer[0][X] is the polygon that should be pasted and
-                                               // the translation _copy_buffer[1][X] is the translation that should be applied
-                                               // to the pasted polygon (using a newly aquired annotation from the cache)
-                                               source._copy_buffer = [ [ ], [ ] ]
-                                           }
-                                           if ( typeof(source._chanmasks) === 'undefined' ) {
-                                               // Primary axis:   stokes
-                                               // Secondary axis: frequency                vvvvvvvvvvvvvvvvvvv------ polygons drawn on this channel
-                                               //                 [ [ [ANNOTATION-ID, ... ], [ POLY-INDEX, ... ], [ [ dx, dy ], ... ], [ INDEX, ... ], CHAN ], ... ]
-                                               //                     ^^^^^^^^^^^^^^^^^^^^^                       ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^---- selection indexes
-                                               //                                         |                                         |                     (INDEX into previous 3 lists)
-                                               //                                         |                                         +------ x,y delta translation
-                                               //                                         |
-                                               //                                         +--------------------------- annotations in use for this channel
-                                               //                                                                      one for each polygon
-                                               //
-                                               //                 one-to-one correspondence between annotation and poly indexes
-                                               source._chanmasks = [ ]
-                                               let stokes = source.num_chans[0]
-                                               while(stokes-- > 0) {
-                                                   source._chanmasks[stokes] = [ ]
-                                                   let chan = source.num_chans[1]
-                                                   while(chan-- > 0) source._chanmasks[stokes][chan] = [ [ ], [ ], [ ], [ ], [ stokes, chan ] ]
-                                               }
-                                           }''',
-            'no-bitmask-tool-selection':'''if ( source._masking_enabled ) {
-                                                               let cm = curmasks( )
-                                                               const geometry = cb_obj['geometry']
-                                                               if ( geometry.type === 'rect' ) {
-                                                                   let poly = newpoly( cm )
-                                                                   if ( poly !== null ) {
-                                                                       register_mask_change('r')
-                                                                       poly[1].type = 'rect'
-                                                                       poly[1].geometry.xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
-                                                                       poly[1].geometry.ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
-                                                                       poly[0].xs = poly[1].geometry.xs
-                                                                       poly[0].ys = poly[1].geometry.ys
-                                                                       cm[2].push( [0,0] )                               // translation for this polygon
-                                                                   }
-                                                               } else if ( geometry.type === 'poly' && cb_obj.final ) {
-                                                                   let poly = newpoly( cm )
-                                                                   if ( poly !== null ) {
-                                                                       register_mask_change('p')
-                                                                       poly[1].type = 'poly'
-                                                                       poly[1].geometry.xs = [ ].slice.call(geometry.x)
-                                                                       poly[1].geometry.ys = [ ].slice.call(geometry.y)
-                                                                       poly[0].xs = poly[1].geometry.xs
-                                                                       poly[0].ys = poly[1].geometry.ys
-                                                                       cm[2].push( [0,0] )
-                                                                   }
-                                                               }
-                                                           }'''
-        }
-
-        def span_update( span1, span2 ):
-            return f'''if ( ! {span1}._edited ) {{
-                           {span1}._editing = true
-                           if ( {span1}.location <= {span2}.location ) {{
-                               {span1}.location = histogram.data_source.data.left[0]
-                               min.value = {span1}.location.toString( )
-                           }} else {{
-                               {span1}.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
-                               max.value = {span1}.location.toString( )
-                           }}
-                           {span1}._editing = false
-                       }}
-                       '''
-
-        self._js = { ### update stats in response to channel changes
-                     ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-                     ### The slider and the events from the update of the image source are
-                     ### coupled because the image cube channel can be changed outside of the
-                     ### slider context.
-                     ###
-                     ###   (1) moving the slider updates the channel
-                     ###   (2) when the channel is changed using a hotkey the slider must be updated
-                     ###
-                     ### to fix a problem where moving the slider very quickly caused oscillation between
-                     ### two slider values (slider would just cycle back and forth) these two related
-                     ### updates are separated by the hotkeys scope. When the scope is 'channel' then
-                     ### the cursor is inside, hotkeys are active (and slider is updated). When outside
-                     ### and the scope is not equal to 'channel', the slider updates the channel.
-                     ###
-                     'pixel-update-func': ''' function refresh_pixel_display( index, intensity, masked, world_coord=true ) {
-                                                  const digits = 5
-                                                  if ( world_coord ) {
-                                                      const pt = new casalib.coordtxl.Point2D( Number(index[0]), Number(index[1]) )
-                                                      isource.wcs( ).imageToWorldCoords(pt,false)
-                                                      let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
-                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
-                                                  } else {
-                                                      pixlabel.text = '<p ALIGN=RIGHT>' + index[0] + ', ' + Number(index[1]) +
-                                                                      "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
-                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
-                                                  }
-                                              }
-                                              function update_spectrum( _chan, _index, update_func ) {
-                                                  function array_equal( a1, a2 ) {
-                                                      return (a1.length == a2.length) && a1.every((element, index) => element === a2[index])
-                                                  }
-                                                  if ( isource._update_spectrum &&
-                                                       _chan[0] == isource._update_spectrum.chan[0] &&
-                                                       array_equal( _index, isource._update_spectrum.index ) ) {
-                                                      update_func( { ...isource._update_spectrum, chan: _chan } )
-                                                  } else {
-                                                      function _update_spectrum ( msg ) {
-                                                          if ( msg.update &&
-                                                               'spectrum' in msg.update &&
-                                                               'index' in msg.update &&
-                                                               'chan' in msg.update &&
-                                                               msg.update.index.length == 2 &&
-                                                               msg.update.index.length == 2 ) {
-                                                              const { spectrum, chan, index, mask } = msg.update
-                                                              isource._update_spectrum = { spectrum, mask, chan, index }
-                                                              update_func( isource._update_spectrum )
-                                                          } else console.log( 'Error: update of spectrum', msg )
-                                                      }
-                                                      if ( isource._current_pos )
-                                                          ctrl.send( ids['fetch-spectrum'],
-                                                                     { action: 'spectrum',
-                                                                       value: { chan: _chan, index: isource._current_pos } },
-                                                                     _update_spectrum, true )
-                                                  }
-                                              }''',
-                     'contour-maskmod': '''   function maskmod_region_clear( ) {
-                                                  annotations[0].xs = [ ]
-                                                  annotations[0].ys = [ ]
-                                                  mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
-                                                  mask_region_button.icon = mask_region_icons['off']
-                                              }
-                                              function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
-                                                  if ( xs.length > 0 && ys.length > 0 ) {
-                                                      annotations[0].xs = xs
-                                                      annotations[0].ys = ys
-                                                      mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
-                                                      mask_region_button.icon = mask_region_icons['off']
-                                                  } else if ( ! casalib.is_empty(contour_ds.data.xs) &&
-                                                              ! casalib.is_empty(contour_ds.data.ys) ) {
-                                                      annotations[0].xs = [ ]
-                                                      annotations[0].ys = [ ]
-                                                      mask_region_ds.data = contour_ds.data
-                                                      mask_region_ds._src_chan = source.cur_chan
-                                                      mask_region_button.icon = mask_region_icons['on']
-                                                  } else {
-                                                      if ( status ) status.text = '<p>no region found</p>'
-                                                      return
-                                                  }
-                                                  region.fill_color = 'rgba(0, 0, 0, 0)'
-                                                  region.line_width = 3
-                                                  region.line_alpha = 0.7
-                                                  region.line_dash = 'dashed'
-                                                  region.line_color = selector.color
-                                              }''',
-                     'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               isource.channel( slider.value, isource.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { isource._update_statistics( msg.stats ) }
-                                                                        if ( 'hist' in msg ) {
-                                                                            %s
-                                                                            %s
-                                                                        } } )
-                                               if ( isource._current_pos )
-                                                   update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
-                                                                    ( spec ) => {
-                                                                        refresh_pixel_display( spec.index,
-                                                                                               spec.spectrum.pixel[spec.chan[1]],
-                                                                                               'mask' in spec && spec.mask[spec.chan[1]],
-                                                                                               pix_wrld && pix_wrld.label == 'pixel' ? false : true )
-                                                                } )
-                                               if ( go_to && ! go_to._has_focus ) {
-                                                   go_to.value = String( slider.value )
-                                               }
-                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
-                     ###
-                     ### >>HERE>> This code has drifted out of date... so creating a display WITHOUT statistics
-                     ###          will result in errors without JavaScript
-                     ###
-                     'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== 'channel' ) {
-                                               source.channel( slider.value, source.cur_chan[0],
-                                                               msg => { if ( 'hist' in msg ) {
-                                                                            %s
-                                                                            %s
-                                                                        } } )
-                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
-                     ### initialize mask state
-                     ###
-                     ### mask breadcrumbs
-                     ###
-                     'mask-state-init': self._js_mode_code['no-bitmask-init'],
-                     ###
-                     ### code to update stokes after stokes selection from dropdown
-                     ###
-                     'stokes-change': '''if ( cb_obj.item != stokes.label ) {
-                                             source.channel( source.cur_chan[1], %s,
-                                                             msg => { stokes.label = cb_obj.item
-                                                                      if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
-                                                                      if ( 'stats' in msg ) { source._update_statistics( msg.stats ) }
-                                                             } )
-                                         }''',
-                     ### function to return mask state for current channel, the 'source' (image_data_source) object
-                     ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
-                     ### point to our 'source' object
-                     'func-curmasks': lambda source="source": '''
-                                           function register_mask_change( code ) {
-                                               source._mask_breadcrumbs += code
-                                           }
-                                           function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
-                                           function collect_channel_selection( cur=source.cur_chan ) {
-                                               if ( typeof(cur) == 'number' ) {
-                                                   cur = [ source.cur_chan[0], cur ]    // accept just channel (with stokes implied)
-                                               }
-                                               const cm = curmasks( cur )
-                                               var details = [ ]
-                                               var polys = new Set( )
-                                               cm[3].forEach( s => {
-                                                   details.push( { p: cm[1][s], d: [ ].slice.call(cm[2][s]) } )
-                                                   polys.add( cm[1][s] )
-                                               } )
-                                               return polys.size == 0 ? { masks: [ ], polys: [ ] } :
-                                                                        { masks: [ [ [ ].slice.call(cur), details ] ],
-                                                                          polys: Array.from(polys).reduce( (acc,p) => {
-                                                                              acc.push([ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ])
-                                                                              //            ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
-                                                                              return acc
-                                                                          }, [ ] ) }
-                                           }
-                                           function collect_masks( ) {
-                                               var polys = new Set( )
-                                               var details = [ ]
-                                               for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
-                                                   for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
-                                                       if ( source._chanmasks[stokes][chan][0].length == 0 ) continue
-                                                       let cur_chan_details = [ ]
-                                                       for ( var poly=0; poly < source._chanmasks[stokes][chan][1].length; ++poly ) {
-                                                           cur_chan_details.push( { p: source._chanmasks[stokes][chan][1][poly],
-                                                                                    d: [ ].slice.call(source._chanmasks[stokes][chan][2][poly]) } )
-                                                           polys.add( source._chanmasks[stokes][chan][1][poly] )
-                                                       }
-                                                       details.push( [[stokes,chan],cur_chan_details] )
-                                                   }
-                                               }
-                                               var poly_result = [ ]
-                                               polys.forEach( p => {
-                                                   poly_result.push( [ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ] )
-                                                   //                     ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
-                                               } )
-                                               return { masks: details, polys: poly_result }
-                                           }'''.replace('source',source),
-                     ### create a new polygon -- create state and establish a correspondence between the polygon and the
-                     ###                         annotation that will be used to represent it for this particular channel
-                     'func-newpoly':    '''function newpoly( cm ) {
-                                               let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) ) // find id not in use
-                                               if ( typeof(anno_id) != 'string') return null                         // is id reasonable
-                                               let poly_id = source._polys.length                                    // all polygons created
-                                               let poly = { id: poly_id,
-                                                            type: null,
-                                                            geometry: { } }
-                                               let result = [ source._annotations[anno_id], poly ]
-                                               source._polys.push(poly)                                              // all polygons created
-                                               cm[0].push(anno_id)                                                   // annotations in use by this channel
-                                               cm[1].push(poly_id)                                                   // polygons in use by this channel
-                                               return result
-                                           }''',
-                     ### functions for updating the polygon/annotation state in response to key presses
-                     ### ------------------------------------------------------------------------------------------
-                     ###   state_update_cursor       -- move cursor to specified polygon index
-                     ###   state_clear_cursor        -- unset cursor state (e.g. option release or control pressed)
-                     ###   state_next_cursor         -- move the cursor to the next (with wrapping) polygon index
-                     ###   state_prev_cursor         -- move the cursor to the previous (with wrapping) polygon index
-                     ###   state_nonselection_cursor -- move the cursor to another polygon index which is not in the
-                     ###                                selection set (avoid always picking the next index with the
-                     ###                                expectation that the user will be adding more polygons to the
-                     ###                                selection set (and avoiding always going to the one not desired)
-                     ###   state_cursor_to_selection -- add the current cursor polygon to the selection set
-                     ###   state_clear_selection     -- clear selection set
-                     ###   state_initialize_cursor   -- set cursor to its initial value
-                     ###   state_translate_selection -- move all polygons in the selection set by an x/y translation
-                     ###   state_copy_selection      -- replace copy buffer contents with the contents of the selection set
-                     ###   state_paste_selection     -- past the contents of the copy buffer into the current channel
-                     ###                                if the polygons in the copy buffer already exist in the current
-                     ###                                paste polygons with an x/y translation (to avoid pasting on top)
-                     'key-state-funcs': '''function state_update_cursor( index, cm = curmasks( ) ) {
-                                               if ( index >= 0 && index < cm[0].length ) {
-                                                   source._annotations[cm[0][index]].line_color = source._cursor_color
-                                                   source._cursor = index
-                                               } else source._cursor = -1
-                                           }
-                                           function state_clear_cursor( cm = curmasks( ) ) {
-                                               if ( source._cursor >= 0 && source._cursor < cm[0].length ) {
-                                                   const result = source._cursor
-                                                   source._annotations[cm[0][result]].line_color = null
-                                                   source._cursor = -1
-                                                   return result
-                                               } else {
-                                                   source._cursor = -1
-                                                   return cm[0].length >= 0 ? 0 : -1
-                                               }
-                                           }
-                                           function state_next_cursor( cm = curmasks( ) ) {
-                                               const cursor = state_clear_cursor( cm )
-                                               if ( cursor >= 0 && cursor + 1 < cm[0].length )
-                                                   state_update_cursor( cursor + 1, cm )
-                                               else
-                                                   state_update_cursor( 0, cm )
-                                           }
-                                           function state_prev_cursor( cm = curmasks( ) ) {
-                                               const cursor = state_clear_cursor( cm )
-                                               if ( cursor >= 0 && cursor - 1 >= 0 )
-                                                   state_update_cursor( cursor - 1, cm )
-                                               else
-                                                   state_update_cursor( cm[0].length - 1, cm )
-                                           }
-                                           function state_nonselection_cursor( cm = curmasks( ) ) {
-                                               let tried_indexes = [ ]
-                                               while ( tried_indexes.length < cm[0].length ) {
-                                                   // just looping through possible indexes results in always going to an
-                                                   // early index which is annoying if it is not one of the ones the user
-                                                   // is interested in changing...
-                                                   const index = Math.floor(Math.random()*cm[0].length)
-                                                   if ( ! tried_indexes.includes(index) ) {
-                                                       if ( ! cm[3].includes(index) ) {
-                                                           return index
-                                                       } else {
-                                                           tried_indexes.push(index)
-                                                       }
-                                                   }
-                                               }
-                                               return source._cursor
-                                           }
-                                           function state_cursor_to_selection( cm = curmasks( ) ) {
-                                               const cursor = state_clear_cursor( cm )
-                                               if ( cursor >= 0 && cursor < cm[0].length ) {
-                                                   const index = cm[3].indexOf(cursor);
-                                                   if ( index > -1 ) {
-                                                       const new_cursor = state_nonselection_cursor( cm )                    // find next cursor before removing from selection (to avoid current cursor)
-                                                       source._annotations[cm[0][cursor]].fill_color = source._default_color // remove selection background color
-                                                       cm[3].splice( index, 1 )                                              // remove cursor that is already in selection buffer
-                                                       if ( new_cursor >= 0 )
-                                                           state_update_cursor( new_cursor, cm )                             // advance cursor (for adding multiple mask regions)
-                                                       else
-                                                           state_update_cursor( cursor, cm )                                 // restore the old cursor (because no non-selected cursor is available)
-                                                   } else {
-                                                       source._annotations[cm[0][cursor]].fill_color = source._cursor_color  // background changes for masks in selection buffer
-                                                       cm[3].push(cursor)                                                    // add cursor to selection buffer
-                                                       const new_cursor = state_nonselection_cursor( cm )                    // find next cursor after adding to selection (to avoid current cursor)
-                                                       if ( new_cursor >= 0 )
-                                                           state_update_cursor( new_cursor, cm )                             // advance cursor (for adding multiple mask regions)
-                                                       else
-                                                           state_update_cursor( cursor, cm )                                 // restore the old cursor (because no non-selected cursor is available)
-                                                   }
-                                               }
-                                           }
-                                           function state_clear_selection( cm = curmasks( ) ) {
-                                               // reset selection backgrounds
-                                               cm[3].forEach( s => source._annotations[cm[0][s]].fill_color = source._default_color )
-                                               // clear selection buffer
-                                               cm[3].length = 0
-                                           }
-                                           function state_initialize_cursor( ) {
-                                               state_update_cursor( 0, curmasks( ) )
-                                           }
-                                           function state_remove_mask( cm = curmasks( ) ) {
-                                               register_mask_change('D')
-                                               const cursor = source._cursor
-                                               const index = cm[3].indexOf(cursor);
-                                               if ( index > -1 ) {
-                                                   cm[3].splice( index, 1 )                                              // remove cursor that is already in selection buffer
-                                                   source._annotations[cm[0][cursor]].fill_color = source._default_color // background changes for masks in selection buffer
-                                               }
-                                               source._annotations[cm[0][cursor]].xs = [ ]                               // reset x coordinates
-                                               source._annotations[cm[0][cursor]].ys = [ ]                               // reset y coordinates
-                                               source._annotations[cm[0][cursor]].fill_color = source._default_color     // reset background
-                                               source._annotations[cm[0][cursor]].line_color = null                      // remove line
-                                               cm[0].splice( cursor, 1 )
-                                               cm[1].splice( cursor, 1 )
-                                               state_initialize_cursor( )
-                                           }
-                                           function state_translate_selection( dx, dy, cm = curmasks( ) ) {
-                                               register_mask_change('T')
-                                               const shape = source.image_source.shape
-                                               for ( const s of cm[3] ) {
-                                                   if ( dx > 0 && (Math.ceil(Math.max( ...source._annotations[cm[0][s]].xs )) + dx) >= shape[0] ) return;
-                                                   if ( dy > 0 && (Math.ceil(Math.max( ...source._annotations[cm[0][s]].ys )) + dy) >= shape[1] ) return;
-                                                   if ( dx < 0 && (Math.floor(Math.min( ...source._annotations[cm[0][s]].xs )) + dx) <= 0 ) return;
-                                                   if ( dy < 0 && (Math.floor(Math.min( ...source._annotations[cm[0][s]].ys )) + dy) <= 0 ) return;
-                                               }
-                                               cm[3].forEach( s => {
-                                                   if ( dx !== 0 ) source._annotations[cm[0][s]].xs = source._annotations[cm[0][s]].xs.map( x => x + dx )
-                                                   if ( dy !== 0 ) source._annotations[cm[0][s]].ys = source._annotations[cm[0][s]].ys.map( y => y + dy )
-                                                   cm[2][s][0] += dx
-                                                   cm[2][s][1] += dy
-                                               } )
-                                           }
-                                           function state_copy_selection( cm = curmasks( ) ) {
-                                               source._copy_buffer = [ [ ], [ ].slice.call(source.cur_chan) ]
-                                               //    polygons----------^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----the channel polys were copied from
-                                               // loop over selection indexes and add polygon index + translation
-                                               cm[3].forEach( idx => { source._copy_buffer[0].push( [ cm[1][idx], [ ].slice.call(cm[2][idx]) ] ) } )
-                                           }
-                                           function state_paste_selection( cm = curmasks( ) ) {
-                                               function paste( c_indexes ) {
-                                                   c_indexes.forEach( idx => {
-                                                                          // idx[0]     --  index into the master polygon list
-                                                                          // idx[1][0]  --  x offset for this polygon
-                                                                          // idx[1][1]  --  y offset for this polygon
-                                                                          let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) )
-                                                                          if ( typeof(anno_id) == 'string') {          // is id reasonable
-                                                                              cm[0].push(anno_id)                      // claim this annotation
-                                                                              cm[3].push(cm[1].length)                 // add pasted poly to selected set
-                                                                                                                       //     (position in channel poly list)
-                                                                              cm[1].push(idx[0])                       // add poly index (index may occur
-                                                                                                                       //     more than once)
-                                                                              cm[2].push([].slice.call(idx[1]))        // store x/y translation
-                                                                              const poly = source._polys[idx[0]]
-                                                                              if ( cm[4][0] == source.cur_chan[0] && cm[4][1] == source.cur_chan[1] ) {
-                                                                                  const anno = source._annotations[anno_id]
-                                                                                  anno.xs = poly.geometry.xs.map( x => x + idx[1][0] )
-                                                                                  anno.ys = poly.geometry.ys.map( y => y + idx[1][1] )
-                                                                                  anno.fill_color = source._cursor_color   // change fill color for addition
-                                                                                                                           //     to selected set (above)
-                                                                              }
-                                                                          }
-                                                                      } )
-                                               }
-                                               function paste_with_offset( c_indexes ) {
-                                                   // find extent of the polygons to be pasted that already exist in this channel
-                                                   function calculate_offset( ) {
-                                                       function minmax( ) {
-                                                           return c_indexes.reduce( (acc,i) => {
-                                                                      // i[0]     --  index into the master polygon list
-                                                                      // i[1][0]  --  x offset for this polygon
-                                                                      // i[1][1]  --  y offset for this polygon
-                                                                      const min = [ Math.min(...source._polys[i[0]].geometry.xs) + i[1][0],
-                                                                                    Math.min(...source._polys[i[0]].geometry.ys) + i[1][1] ]
-                                                                      const max = [ Math.max(...source._polys[i[0]].geometry.xs) + i[1][0],
-                                                                                    Math.max(...source._polys[i[0]].geometry.ys) + i[1][1] ]
-                                                                      return acc[0] == null ? [ min, max ] :
-                                                                             [ [ Math.min( min[0], acc[0][0] ), Math.min( min[1], acc[1][1] ) ],
-                                                                             [ Math.max( max[0], acc[1][0] ), Math.max( max[1], acc[1][1] ) ] ]
-                                                                  }, [ null, null ] )
-                                                       }
-                                                       const offset = 35
-                                                       const shape = source.image_source.shape
-                                                       const [[xmin,ymin],[xmax,ymax]] = minmax( )
-                                                       if ( xmax + offset < shape[0] &&
-                                                           ymax + offset < shape[1] ) return [ offset, offset ]
-                                                       else if ( xmin - offset >= 0 &&
-                                                                 ymin - offset >= 0 ) return [ -offset, -offset ]
-                                                       else if ( xmin - offset >= 0 &&
-                                                                 ymax + offset < shape[1] ) return [ -offset, offset ]
-                                                       else if ( xmax + offset < shape[0] &&
-                                                                 ymin - offset >= 0 ) return [ offset, -offset ]
-                                                       else if ( xmax + offset < shape[0] ) return [ offset, 0 ]
-                                                       else if ( xmin - offset >= 0 ) return [ -offset, 0 ]
-                                                       else if ( ymax + offset < shape[1] ) return [ 0, offset ]
-                                                       else if ( ymin - offset >= 0 ) return [ 0, -offset ]
-                                                       else return [ 0, 0 ]
-                                                   }
-                                                   if ( c_indexes.length > 0 ) {
-                                                       const off = calculate_offset( )
-                                                       paste( c_indexes.map( e => [ e[0], [e[1][0]+off[0],e[1][1]+off[1]] ] ) )
-                                                   }
-                                               }
-                                               function groupby( source, predicate ) {
-                                                   return source.reduce( (acc,elem) => {
-                                                       if ( predicate(elem) ) acc[0].push(elem)
-                                                       else acc[1].push(elem)
-                                                       return acc }, [ [], [] ] )
-                                               }
-                                               function poly_already_exists( c_index ) {
-                                                   const c_geom = source._polys[c_index[0]].geometry
-                                                   const c_delta = c_index[1]
-                                                   const potential_matching_chan_polys = cm[1].reduce( (acc,i,cm_index) => {
-                                                       // first element of return is the index into the master list of polygons
-                                                       // the second is the index into the curmask masks
-                                                       if ( source._polys[i].geometry.xs.length == c_geom.xs.length ) acc.push([i,cm_index])
-                                                       return acc
-                                                   }, [ ] )
-                                                   return potential_matching_chan_polys.reduce( (acc,p) => {
-                                                       const match_delta = cm[2][p[1]]
-                                                       if ( c_geom.xs.every( (element, i) => element === source._polys[p[0]].geometry.xs[i] ) &&
-                                                            c_geom.ys.every( (element, i) => element === source._polys[p[0]].geometry.ys[i] ) &&
-                                                            c_delta[0] == match_delta[0] && c_delta[1] == match_delta[1] )
-                                                           acc.push(p)
-                                                       return acc}, [ ] ).length > 0
-                                               }
-                                               const addition = groupby( source._copy_buffer[0], poly_already_exists )
-                                               paste_with_offset( addition[0] )
-                                               paste( addition[1] )
-                                           }''',
-                     ### add a polygon after one is drawn by the user via the Bokeh annotation tools
-                     'add-polygon':     '''const cur_masks = curmasks( )
-                                           const prev_masks = curmasks(cb_obj._cur_chan_prev)
-                                           prev_masks[0].forEach( (i) => {                                  // RESET ANNOTATIONS FROM OLD CHANNEL
-                                               cb_obj._annotations[i].xs = [ ];                             // clear Xs for annotations used by prev
-                                               cb_obj._annotations[i].ys = [ ]                              // clear Ys for annotations used by prev
-                                               cb_obj._annotations[i].line_color = null                     // clear line color
-                                               cb_obj._annotations[i].fill_color = cb_obj._default_color    // set default mask fill
-                                           } )
-                                           cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
-                                               const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
-                                               const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
-                                               if ( mask_poly ) {                                           // sometimes this is undefined when
-                                                                                                            //    releasing the option key
-                                                   // set Xs for the current annotation add any X translation from current poly
-                                                   mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
-                                                   // set Ys for the current annotation add any Y translation from current poly
-                                                   mask_annotation.ys = mask_poly.geometry.ys.reduce(
-                                                                            (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
-                                                                            // restore selections for this channel
-                                                                            if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
-                                               } } )
-                                               cb_obj._cur_chan_prev = cb_obj.cur_chan''',
-                     ### invoke key state management functions in response to keyboard events in the document. this
-                     ### code manages the permitted key combinations while most of the state management is handled
-                     ### by the state management functions.
-                     'setup-key-mgmt':  '''if ( typeof(document._hotkeys_initialized) === 'undefined' ) {
-                                               document._hotkeys_initialized = true
-                                               //****************************************************
-                                               //*** NEED TO IMPLEMENT STOKES TRAVERSAL WITH      ***
-                                               //*** Alt+Shift+Up and Alt+Shift+Down when an      ***
-                                               //*** image with multiple stokes axes is available ***
-                                               //****************************************************
-
-                                               // next channel -- all modes
-                                               casalib.hotkeys( 'alt+up,ctrl+up,command+up', {scope: 'channel'},
-                                                                (e) => { e.preventDefault( )
-                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
-                                                                             // wrap round to the first channel
-                                                                             source.channel( 0, source.cur_chan[0] )
-                                                                             if ( chan_slider ) { chan_slider.value = 0 }
-                                                                         } else {
-                                                                             // advance to the next channel
-                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
-                                                                             if ( chan_slider ) { chan_slider.value = source.cur_chan[1] + 1 }
-                                                                         } } )
-                                               // previous channel -- all modes
-                                               casalib.hotkeys( 'alt+down,ctrl+down,command+down', { scope: 'channel'},
-                                                                (e) => { e.preventDefault( )
-                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
-                                                                             // advance to the prev channel
-                                                                             source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
-                                                                             if ( chan_slider ) { chan_slider.value = source.cur_chan[1] - 1 }
-                                                                         } else {
-                                                                             // wrap round to the last channel
-                                                                             source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
-                                                                             if ( chan_slider ) { chan_slider.value = source.num_chans[1] - 1 }
-                                                                         } } )
-
-                                               // next polarization/stokes -- all modes
-                                               casalib.hotkeys( 'alt+right,ctrl+right,command+right', {scope: 'channel'},
-                                                                (e) => { e.preventDefault( )
-                                                                         if ( source.cur_chan[0] + 1 >= source.num_chans[0] ) {
-                                                                             // wrap round to the first channel
-                                                                             source.channel( source.cur_chan[1], 0 )
-                                                                         } else {
-                                                                             // advance to the next channel
-                                                                             source.channel( source.cur_chan[1], source.cur_chan[0] + 1 )
-                                                                         } } )
-                                               // previous polarization/stokes -- all modes
-                                               casalib.hotkeys( 'alt+left,ctrl+left,command+left', { scope: 'channel'},
-                                                                (e) => { e.preventDefault( )
-                                                                         if ( source.cur_chan[0] - 1 >= 0 ) {
-                                                                             // advance to the prev channel
-                                                                             source.channel( source.cur_chan[1], source.cur_chan[0] - 1 )
-                                                                         } else {
-                                                                             // wrap round to the last channel
-                                                                             source.channel( source.cur_chan[1], source.num_chans[0] - 1)
-                                                                         } } )
-                                               %s
-
-                                           }''' % (  self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else
-                                                     self._js_mode_code['bitmask-hotkey-setup-add-sub'] + self._js_mode_code['bitmask-hotkey-setup'] )
-                        }
+        self.__init_js( )
 
     def __stop( self ):
         '''stop interactive masking
@@ -1067,6 +195,7 @@ class CubeMask:
     def _init_pipes( self ):
         '''set up websockets
         '''
+        self.__init_js( )
         if self._pipe['image'] is None:
             #######################################################################################################################
             ### init_script code sets up Ctrl key handling for switching the add/subtract plot tool actions from single channel ###
@@ -1077,42 +206,7 @@ class CubeMask:
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
                                              stats=True, abort=self.__abort, address=find_ws_address( ),
                                              init_script=CustomJS( args=self._mask_add_sub,
-                                                                   code='''add._mode = 'chan'
-                                                                           sub._mode = 'chan'
-                                                                           function is_empty( array ) {
-                                                                               return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
-                                                                           }
-                                                                           casalib.is_empty = is_empty
-                                                                           function cube_on( ) {
-                                                                               add._mode = 'cube'
-                                                                               add.icon = img['add']['cube']
-                                                                               sub._mode = 'cube'
-                                                                               sub.icon = img['sub']['cube']
-                                                                           }
-                                                                           function cube_off( ) {
-                                                                               add._mode = 'chan'
-                                                                               add.icon = img['add']['chan']
-                                                                               sub._mode = 'chan'
-                                                                               sub.icon = img['sub']['chan']
-                                                                           }
-                                                                           casalib.hotkeys( '*',
-                                                                                            { keyup: true, scope: 'all' },
-                                                                                            (e) => {
-                                                                                                if ( e.key == "Shift" ) {
-                                                                                                    if ( e.type == 'keyup' )
-                                                                                                        cube_off( )
-                                                                                                    else
-                                                                                                        cube_on( )
-                                                                                                } } )
-                                                                           casalib.hotkeys( '*',
-                                                                                            { keyup: true, scope: 'channel' },
-                                                                                            (e) => {
-                                                                                                if ( e.key == "Shift" ) {
-                                                                                                    if ( e.type == 'keyup' )
-                                                                                                        cube_off( )
-                                                                                                    else
-                                                                                                        cube_on( )
-                                                                                                } } )''' ) )
+                                                                   code=self._js['cube-init'] ) )
         if self._pipe['control'] is None:
             ### self._pipe['control']._freeze_cursor_update is used to keep track of whether pixel
             ### update has been "frozen" (by typing 'f')... for "specmode='mfs'" _freeze_cursor_update
@@ -1983,7 +1077,7 @@ class CubeMask:
         It will be updated as the channel or stokes axis changes.
         '''
         if self._image is None:
-            raise RuntimeError('cube image not in use')
+            raise RuntimeError('CubeMask: image must be retrieved with image(...) before calling this function')
         self._channel_ctrl = PreText( text='Channel 0', min_width=100 )
         self._channel_ctrl_stokes_dropdown = Dropdown( label='I', button_type='light', margin=(-1, 0, 0, 0), sizing_mode='scale_height', width=25 )
         self._channel_ctrl_group = ( self._channel_ctrl,
@@ -2196,7 +1290,7 @@ class CubeMask:
                                                                   stats_source=self._statistics_source ),
                                                                   code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
                                                                           if self._mask_path is None else "" ) +
-                                                       '''casalib.hotkeys.setScope('channel')''' ) )
+                                                       '''casalib.hotkeys.setScope(source._hotkeys.id)''' ) )
         self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source,
                                                                   stats_source=self._statistics_source ),
                                                                   code= ( self._js['func-curmasks']( ) + self._js['key-state-funcs']
@@ -2213,7 +1307,7 @@ class CubeMask:
                                                                         ( ' : '.join(map( lambda p: f'''cb_obj.cur_chan[0] == {p[0]} ? '{p[1]}' ''',
                                                                                           zip( range(len(self._stokes_labels)), self._stokes_labels )) ) + " : ''" ) if
                                                                         self._channel_ctrl else '' ) +
-                                                                      ( ( '''if ( casalib.hotkeys.getScope( ) === 'channel' ) slider.value = cb_obj.cur_chan[1]''' if
+                                                                      ( ( '''if ( casalib.hotkeys.getScope( ) === cb_obj._hotkeys.id ) slider.value = cb_obj.cur_chan[1]''' if
                                                                           self._slider else '') +
                                                                         (self._js['func-curmasks']('cb_obj') + self._js['add-polygon'])
                                                                         if self._mask_path is None else '' ) + ''';if ( cb ) cb.execute( cb_obj )''' ) ) )
@@ -2257,7 +1351,7 @@ class CubeMask:
             ### code for spectrum update due to cursor movement
             ###
             movement_code_spectrum_update = """if ( cb_obj.event_type === 'move' ) {
-                                                   if ( ctrl._freeze_cursor_update == false ) {
+                                                   if ( isource._freeze_cursor_update == false ) {
                                                        var geometry = cb_data['geometry']
                                                        var x_pos = Math.floor(geometry.x)
                                                        var y_pos = Math.floor(geometry.y)
@@ -2271,7 +1365,7 @@ class CubeMask:
                                                        }
                                                    }
                                                } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                   ctrl._freeze_cursor_update = false
+                                                   isource._freeze_cursor_update = false
                                                }"""
 
         if self._pixel_tracking_text:
@@ -2280,7 +1374,7 @@ class CubeMask:
             ###
             movement_code_pixel_update = self._js['pixel-update-func'] + '''
                                          if ( cb_obj.event_type === 'move' ) {
-                                             if ( ctrl._freeze_cursor_update == false ) {
+                                             if ( isource._freeze_cursor_update == false ) {
                                                  var geometry = cb_data['geometry']
                                                  var x_pos = Math.floor(geometry.x)
                                                  var y_pos = Math.floor(geometry.y)
@@ -2315,7 +1409,8 @@ class CubeMask:
         if movement_code_spectrum_update or movement_code_pixel_update:
             self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum,
                                                      isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
-                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown ),
+                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
+                                                     source=self._image_source ),
                                           code = movement_code_spectrum_update + movement_code_pixel_update )
 
             self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
@@ -2340,7 +1435,7 @@ class CubeMask:
                                                                      if self._mask_path is None else self._js['contour-maskmod'] + self._js['setup-key-mgmt'] ) +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
-                                                                      document._done = ( final_polys=null ) => {
+                                                                      document._done = ( final_polys=null, cb=null ) => {
                                                                           function done_close_window( msg ) {
                                                                               if ( msg.result === 'stopped' ) {""" +
                                                                             # Don't close tab if running in a jupyter notebook
@@ -2354,7 +1449,7 @@ class CubeMask:
                                                                           ctrl.send( ids['done'],
                                                                                      { action: 'done',
                                                                                        value: final_polys ? final_polys : { } },
-                                                                                     done_close_window )
+                                                                                     cb ? cb : done_close_window )
                                                                       }
                                                                       // exported functions -- enable/disable masking, retrieve masks etc.
                                                                       source._masking_enabled = true
@@ -2496,6 +1591,930 @@ class CubeMask:
              websockets.serve( self._pipe['control'].process_messages, self._pipe['control'].address[0], self._pipe['control'].address[1] ) as ctrl:
             yield { 'im': im, 'ctrl': ctrl }
             #pass
+
+    def __init_js( self ):
+        ###
+        ### Only initialize once...
+        ###
+        if 'id' in self._hotkey_state:
+            return
+
+        ###
+        ### manage multiple CubeMask objects loaded into browser at once
+        ###
+        self._hotkey_state['id'] = str(uuid4())
+
+        ###########################################################################################################################
+        ### Notes on States                                                                                                     ###
+        ###                                                                                                                     ###
+        ### Global state is tied to the ImageDataSource                                                                         ###
+        ###                                                                                                                     ###
+        ###    selection buffer:  tied to per-channel state                                                                     ###
+        ###    copy buffer:       global                                                                                        ###
+        ###########################################################################################################################
+        self._js_mode_code = {
+                   'bitmask-hotkey-setup-add-sub':    '''
+                                              function mask_mod_result( msg ) {
+                                                  if ( msg.result == 'success' ) {
+                                                      if ( 'update' in msg && 'clear_region' in msg.update && msg.update.clear_region ) {
+                                                          /* if the src mask on disk has changed the maskmod region is no longer valid */
+                                                          maskmod_region_clear( )
+                                                      }
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } )
+                                                  }
+                                              }
+                                              function mask_add_chan( ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
+                                              }
+                                              function mask_sub_chan( ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys.length) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'chan',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
+                                              }
+                                              function mask_add_cube( ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'addition',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
+                                              }
+                                              function mask_sub_cube( ) {
+                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            xs: annotations[0].xs,
+                                                                            ys: annotations[0].ys } },
+                                                                 mask_mod_result )
+                                                  } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
+                                                      ctrl.send( ids['mask-mod'],
+                                                                 { scope: 'cube',
+                                                                   action: 'subtract',
+                                                                   value: { chan: source.cur_chan,
+                                                                            src: mask_region_ds._src_chan } },
+                                                                 mask_mod_result )
+                                                  } else if ( status ) status.text = '<p>no region found</p>'
+                                              }''',
+                   'bitmask-hotkey-setup':    '''
+                                              function state_translate_selection( dx, dy ) {
+                                                  const shape = source.image_source.shape
+                                                  // regions can move out of image, later outlier images may be included
+                                                  if ( dx !== 0 ) annotations[0].xs = annotations[0].xs.map( x => x + dx )
+                                                  if ( dy !== 0 ) annotations[0].ys = annotations[0].ys.map( y => y + dy )
+                                              }
+                                              casalib.hotkeys( 'escape', { scope: source._hotkeys.id },
+                                                               (e) => { e.preventDefault( )
+                                                                        maskmod_region_clear( ) } )
+                                              casalib.hotkeys( 'f', { scope: source._hotkeys.id },
+                                                               (e) => { source._freeze_cursor_update = true } )
+                                              casalib.hotkeys( 'a', { scope: source._hotkeys.id },
+                                                               (e) => mask_add_chan( ) )
+                                              casalib.hotkeys( 's', { scope: source._hotkeys.id },
+                                                               (e) => mask_sub_chan( ) )
+                                              casalib.hotkeys( 'shift+a', { scope: source._hotkeys.id },
+                                                               (e) => { e.preventDefault( )
+                                                                        mask_add_cube( ) } )
+                                              casalib.hotkeys( 'shift+s', { scope: source._hotkeys.id },
+                                                               (e) => { e.preventDefault( )
+                                                                        mask_sub_cube( ) } )
+                                              casalib.hotkeys( 'shift+`', { scope: source._hotkeys.id },
+                                                               (e) => { e.preventDefault( )
+                                                                        ctrl.send( ids['mask-mod'],
+                                                                                   { scope: 'chan',
+                                                                                     action: 'not',
+                                                                                     value: { chan: source.cur_chan } },
+                                                                                   mask_mod_result ) } )
+                                              casalib.hotkeys( 'shift+1', { scope: source._hotkeys.id },
+                                                               (e) => { e.preventDefault( )
+                                                                        ctrl.send( ids['mask-mod'],
+                                                                                   { scope: 'cube',
+                                                                                     action: 'not',
+                                                                                     value: { chan: source.cur_chan } },
+                                                                                   mask_mod_result ) } )
+                                               // move selection set up one pixel  -- bitmask-cube mode
+                                               casalib.hotkeys( 'up', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 0, 1 ) } )
+                                               // move selection set up several pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'shift+up', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set down one pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'down', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 0, -1 ) } )
+                                               // move selection set down several pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'shift+down', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set left one pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'left', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( -1, 0 ) } )
+                                               // move selection set left several pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'shift+left', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
+                                               // move selection set right one pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'right', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 1, 0 ) } )
+                                               // move selection set right several pixel -- bitmask-cube mode
+                                               casalib.hotkeys( 'shift+right', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
+                                              ''',
+                   'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+]', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_next_cursor( )} )
+                                               // prev region -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+[', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_prev_cursor( )} )
+                                               // add region to selection -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+space, alt+/', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_cursor_to_selection( curmasks( ) ) } )
+                                               // clear selection -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+escape', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_clear_selection( ) } )
+                                               // delete region identified by cursor -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+del,alt+backspace', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_remove_mask( ) } )
+                                               // move selection set up one pixel  -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'up', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 0, 1 ) } )
+                                               // move selection set up several pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'shift+up', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( 0, Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set down one pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'down', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 0, -1 ) } )
+                                               // move selection set down several pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'shift+down', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( 0, -Math.floor(shape[1]/10 ) ) } )
+                                               // move selection set left one pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'left', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( -1, 0 ) } )
+                                               // move selection set left several pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'shift+left', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                         state_translate_selection( -Math.floor(shape[0]/10 ), 0 ) }  )
+                                               // move selection set right one pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'right', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_translate_selection( 1, 0 ) } )
+                                               // move selection set right several pixel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'shift+right', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         const shape = source.image_source.shape
+                                                                    state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
+
+                                               // copy selection -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+c', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         state_copy_selection( )} )
+
+                                               // paste selection current channel -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+v', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         register_mask_change('v')
+                                                                         state_paste_selection( ) } )
+
+                                               // paste selection to all channels -- no-bitmask-cube mode
+                                               casalib.hotkeys( 'alt+shift+v', { scope: source._hotkeys.id },
+                                                                (e) => { e.preventDefault( )
+                                                                         register_mask_change('V')
+                                                                         for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
+                                                                             for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
+                                                                                 if ( stokes != source._copy_buffer[1][0] ||
+                                                                                      chan != source._copy_buffer[1][1] )
+                                                                                     state_paste_selection( curmasks( [ stokes, chan ] ) )
+                                                                             }
+                                                                         } } )
+
+                                               // initialize for cursor operations -- no-bitmask-cube mode
+                                               casalib.hotkeys( '*', { keyup: true, scope: source._hotkeys.id },
+                                                                (e,handler) => { if ( e.type === 'keydown' ) {
+                                                                                     if ( (e.key === 'Alt' || e.key == 'Meta') && ! casalib.hotkeys.control )
+                                                                                         state_initialize_cursor( )
+                                                                                     if ( e.key === 'Control' && casalib.hotkeys.option )
+                                                                                         state_clear_cursor( curmasks( ) )
+                                                                                 }
+                                                                                 if ( e.type === 'keyup' ) {
+                                                                                     if ( e.key === 'Alt' || e.key == 'Meta' )
+                                                                                         state_clear_cursor( )
+                                                                                     if ( e.key === 'Control' && casalib.hotkeys.option )
+                                                                                         state_initialize_cursor( )
+                                                                                 } } )''',
+            'no-bitmask-init':          '''if ( typeof(source._mask_breadcrumbs) === 'undefined' ) {
+                                               source._mask_breadcrumbs = ''
+                                           }
+                                           if ( typeof(source._cur_chan_prev) === 'undefined' ) {
+                                               source._cur_chan_prev = source.cur_chan
+                                           }
+                                           if ( typeof(source._polys) === 'undefined' ) {
+                                               source._polys = [ ]              //  [ { id: int,
+                                                                                //      type: string,
+                                                                                //      geometry: { xs: [ float, ... ], ys: [ float, ... ] } } ]
+                                               source._cursor_color = 'white'
+                                               source._default_color = 'black'
+                                               source._annotation_ids = annotations.reduce( (acc,c) => { acc.push(c.id); return acc }, [ ] )
+                                               source._annotations = annotations.reduce( (acc,c) => { acc[c.id] = c; return acc }, { } )
+                                                                                // OPT sets the cursor on the first poly
+                                               source._cursor = -1              // OPT-n or OPT-p move the _cursor through polys for current channel
+                                                                                // OPT-SPACE adds cursor to _selections
+                                                                                // OPT-c copies _selections to the _copy_buffer and clears _selections
+                                                                                // OPT-v pastes _copy_buffer to a new channel
+                                                                                // OPT-SHIFT-v pastes _copy_buffer to ALL channels
+                                                                                // OPT-up moves _selections up
+                                                                                // OPT-down moves _selections down
+                                                                                // OPT-left moves _selections left
+                                                                                // OPT-right moves _selections right
+                                                                                // OPT-delete removes mask highlighted by _cursor
+                                                                                // OPT-CTRL-up moves to next channel
+                                                                                // OPT-CTRL-down moves to previous channel
+                                                                                // OPT-CTRL-left moves to previous stokes channel
+                                                                                // OPT-CTRL-right moves to next stokes channel
+                                           }
+                                           if ( typeof(source._copy_buffer) === 'undefined' ) {
+                                               // Buffer that will contain copied selection so that the selection from one channel can be pasted
+                                               // into this channel, another channel, or multiple channels...
+                                               //              vvvvvvvvvv------------------------------------------- polygon index to be pasted
+                                               //        [ [ [ POLY-INDEX, [ dx, dy ] ], ... ], [ stokes, chan ] ]
+                                               //                          ^^^^^^^^^^           ^^^^^^^^^^^^^^^^---- image plane origin of copy
+                                               //                                   |
+                                               //                                   +------------------------------- x,y delta translation for the copied poly
+                                               // The poly index _copy_buffer[0][X] is the polygon that should be pasted and
+                                               // the translation _copy_buffer[1][X] is the translation that should be applied
+                                               // to the pasted polygon (using a newly aquired annotation from the cache)
+                                               source._copy_buffer = [ [ ], [ ] ]
+                                           }
+                                           if ( typeof(source._chanmasks) === 'undefined' ) {
+                                               // Primary axis:   stokes
+                                               // Secondary axis: frequency                vvvvvvvvvvvvvvvvvvv------ polygons drawn on this channel
+                                               //                 [ [ [ANNOTATION-ID, ... ], [ POLY-INDEX, ... ], [ [ dx, dy ], ... ], [ INDEX, ... ], CHAN ], ... ]
+                                               //                     ^^^^^^^^^^^^^^^^^^^^^                       ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^---- selection indexes
+                                               //                                         |                                         |                     (INDEX into previous 3 lists)
+                                               //                                         |                                         +------ x,y delta translation
+                                               //                                         |
+                                               //                                         +--------------------------- annotations in use for this channel
+                                               //                                                                      one for each polygon
+                                               //
+                                               //                 one-to-one correspondence between annotation and poly indexes
+                                               source._chanmasks = [ ]
+                                               let stokes = source.num_chans[0]
+                                               while(stokes-- > 0) {
+                                                   source._chanmasks[stokes] = [ ]
+                                                   let chan = source.num_chans[1]
+                                                   while(chan-- > 0) source._chanmasks[stokes][chan] = [ [ ], [ ], [ ], [ ], [ stokes, chan ] ]
+                                               }
+                                           }''',
+            'no-bitmask-tool-selection':'''if ( source._masking_enabled ) {
+                                                               let cm = curmasks( )
+                                                               const geometry = cb_obj['geometry']
+                                                               if ( geometry.type === 'rect' ) {
+                                                                   let poly = newpoly( cm )
+                                                                   if ( poly !== null ) {
+                                                                       register_mask_change('r')
+                                                                       poly[1].type = 'rect'
+                                                                       poly[1].geometry.xs = [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ]
+                                                                       poly[1].geometry.ys = [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ]
+                                                                       poly[0].xs = poly[1].geometry.xs
+                                                                       poly[0].ys = poly[1].geometry.ys
+                                                                       cm[2].push( [0,0] )                               // translation for this polygon
+                                                                   }
+                                                               } else if ( geometry.type === 'poly' && cb_obj.final ) {
+                                                                   let poly = newpoly( cm )
+                                                                   if ( poly !== null ) {
+                                                                       register_mask_change('p')
+                                                                       poly[1].type = 'poly'
+                                                                       poly[1].geometry.xs = [ ].slice.call(geometry.x)
+                                                                       poly[1].geometry.ys = [ ].slice.call(geometry.y)
+                                                                       poly[0].xs = poly[1].geometry.xs
+                                                                       poly[0].ys = poly[1].geometry.ys
+                                                                       cm[2].push( [0,0] )
+                                                                   }
+                                                               }
+                                                           }'''
+        }
+
+        def span_update( span1, span2 ):
+            return f'''if ( ! {span1}._edited ) {{
+                           {span1}._editing = true
+                           if ( {span1}.location <= {span2}.location ) {{
+                               {span1}.location = histogram.data_source.data.left[0]
+                               min.value = {span1}.location.toString( )
+                           }} else {{
+                               {span1}.location = histogram.data_source.data.right[histogram.data_source.data.right.length-1]
+                               max.value = {span1}.location.toString( )
+                           }}
+                           {span1}._editing = false
+                       }}
+                       '''
+
+        self._js = { ### ImagePipe initialization code which manages the shift-key behavior which swiches between
+                     ### addition/subtraction to a single channel VS add/sub from all channels of the cube...
+                     'cube-init': '''add._mode = 'chan'
+                                     sub._mode = 'chan'
+                                     function is_empty( array ) {
+                                         return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
+                                     }
+                                     casalib.is_empty = is_empty
+                                     function cube_on( ) {
+                                         add._mode = 'cube'
+                                         add.icon = img['add']['cube']
+                                         sub._mode = 'cube'
+                                         sub.icon = img['sub']['cube']
+                                     }
+                                     function cube_off( ) {
+                                         add._mode = 'chan'
+                                         add.icon = img['add']['chan']
+                                         sub._mode = 'chan'
+                                         sub.icon = img['sub']['chan']
+                                     }
+                                     casalib.hotkeys( '*',
+                                                      { keyup: true, scope: 'all' },
+                                                      (e) => {
+                                                          if ( e.key == "Shift" ) {
+                                                              if ( e.type == 'keyup' )
+                                                                  cube_off( )
+                                                              else
+                                                                  cube_on( )
+                                                              } } )
+                                     casalib.hotkeys( '*',
+                                                      { keyup: true, scope: '%s' },
+                                                      (e) => {
+                                                          if ( e.key == "Shift" ) {
+                                                              if ( e.type == 'keyup' )
+                                                                  cube_off( )
+                                                              else
+                                                                  cube_on( )
+                                                              } } )''' % self._hotkey_state['id'],
+                     ### update stats in response to channel changes
+                     ### -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+                     ### The slider and the events from the update of the image source are
+                     ### coupled because the image cube channel can be changed outside of the
+                     ### slider context.
+                     ###
+                     ###   (1) moving the slider updates the channel
+                     ###   (2) when the channel is changed using a hotkey the slider must be updated
+                     ###
+                     ### to fix a problem where moving the slider very quickly caused oscillation between
+                     ### two slider values (slider would just cycle back and forth) these two related
+                     ### updates are separated by the hotkeys scope. When the scope is source._hotkeys.id then
+                     ### the cursor is inside, hotkeys are active (and slider is updated). When outside
+                     ### and the scope is not equal to source._hotkeys.id, the slider updates the channel.
+                     ###
+                     'pixel-update-func': ''' function refresh_pixel_display( index, intensity, masked, world_coord=true ) {
+                                                  const digits = 5
+                                                  if ( world_coord ) {
+                                                      const pt = new casalib.coordtxl.Point2D( Number(index[0]), Number(index[1]) )
+                                                      isource.wcs( ).imageToWorldCoords(pt,false)
+                                                      let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  } else {
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + index[0] + ', ' + Number(index[1]) +
+                                                                      "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                  }
+                                              }
+                                              function update_spectrum( _chan, _index, update_func ) {
+                                                  function array_equal( a1, a2 ) {
+                                                      return (a1.length == a2.length) && a1.every((element, index) => element === a2[index])
+                                                  }
+                                                  if ( isource._update_spectrum &&
+                                                       _chan[0] == isource._update_spectrum.chan[0] &&
+                                                       array_equal( _index, isource._update_spectrum.index ) ) {
+                                                      update_func( { ...isource._update_spectrum, chan: _chan } )
+                                                  } else {
+                                                      function _update_spectrum ( msg ) {
+                                                          if ( msg.update &&
+                                                               'spectrum' in msg.update &&
+                                                               'index' in msg.update &&
+                                                               'chan' in msg.update &&
+                                                               msg.update.index.length == 2 &&
+                                                               msg.update.index.length == 2 ) {
+                                                              const { spectrum, chan, index, mask } = msg.update
+                                                              isource._update_spectrum = { spectrum, mask, chan, index }
+                                                              update_func( isource._update_spectrum )
+                                                          } else console.log( 'Error: update of spectrum', msg )
+                                                      }
+                                                      if ( isource._current_pos )
+                                                          ctrl.send( ids['fetch-spectrum'],
+                                                                     { action: 'spectrum',
+                                                                       value: { chan: _chan, index: isource._current_pos } },
+                                                                     _update_spectrum, true )
+                                                  }
+                                              }''',
+                     'contour-maskmod': '''   function maskmod_region_clear( ) {
+                                                  annotations[0].xs = [ ]
+                                                  annotations[0].ys = [ ]
+                                                  mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                  mask_region_button.icon = mask_region_icons['off']
+                                              }
+                                              function maskmod_region_set( region, xs=[ ], ys=[ ] ) {
+                                                  if ( xs.length > 0 && ys.length > 0 ) {
+                                                      annotations[0].xs = xs
+                                                      annotations[0].ys = ys
+                                                      mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                      mask_region_button.icon = mask_region_icons['off']
+                                                  } else if ( ! casalib.is_empty(contour_ds.data.xs) &&
+                                                              ! casalib.is_empty(contour_ds.data.ys) ) {
+                                                      annotations[0].xs = [ ]
+                                                      annotations[0].ys = [ ]
+                                                      mask_region_ds.data = contour_ds.data
+                                                      mask_region_ds._src_chan = source.cur_chan
+                                                      mask_region_button.icon = mask_region_icons['on']
+                                                  } else {
+                                                      if ( status ) status.text = '<p>no region found</p>'
+                                                      return
+                                                  }
+                                                  region.fill_color = 'rgba(0, 0, 0, 0)'
+                                                  region.line_width = 3
+                                                  region.line_alpha = 0.7
+                                                  region.line_dash = 'dashed'
+                                                  region.line_color = selector.color
+                                              }''',
+                     'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== isource._hotkeys.id ) {
+                                               isource.channel( slider.value, isource.cur_chan[0],
+                                                               msg => { if ( 'stats' in msg ) { isource._update_statistics( msg.stats ) }
+                                                                        if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        } } )
+                                               if ( isource._current_pos )
+                                                   update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
+                                                                    ( spec ) => {
+                                                                        refresh_pixel_display( spec.index,
+                                                                                               spec.spectrum.pixel[spec.chan[1]],
+                                                                                               'mask' in spec && spec.mask[spec.chan[1]],
+                                                                                               pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                } )
+                                               if ( go_to && ! go_to._has_focus ) {
+                                                   go_to.value = String( slider.value )
+                                               }
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
+                     ###
+                     ### >>HERE>> This code has drifted out of date... so creating a display WITHOUT statistics
+                     ###          will result in errors without JavaScript
+                     ###
+                     'slider_wo_stats': '''if ( casalib.hotkeys.getScope( ) !== isource._hotkeys.id ) {
+                                               isource.channel( slider.value, isource.cur_chan[0],
+                                                                msg => { if ( 'hist' in msg ) {
+                                                                            %s
+                                                                            %s
+                                                                        } } )
+                                           }''' % ( span_update( 'span1', 'span2' ), span_update( 'span2', 'span1' ) ),
+                     ### initialize mask state
+                     ###
+                     ### mask breadcrumbs
+                     ###
+                     'mask-state-init': self._js_mode_code['no-bitmask-init'],
+                     ###
+                     ### code to update stokes after stokes selection from dropdown
+                     ###
+                     'stokes-change': '''if ( cb_obj.item != stokes.label ) {
+                                             source.channel( source.cur_chan[1], %s,
+                                                             msg => { stokes.label = cb_obj.item
+                                                                      if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
+                                                                      if ( 'stats' in msg ) { source._update_statistics( msg.stats ) }
+                                                             } )
+                                         }''',
+                     ### function to return mask state for current channel, the 'source' (image_data_source) object
+                     ### is parameterized so that this can be used in callbacks where 'cb_obj' is set by Bokeh to
+                     ### point to our 'source' object
+                     'func-curmasks': lambda source="source": '''
+                                           function register_mask_change( code ) {
+                                               source._mask_breadcrumbs += code
+                                           }
+                                           function curmasks( cur=source.cur_chan ) { return source._chanmasks[cur[0]][cur[1]] }
+                                           function collect_channel_selection( cur=source.cur_chan ) {
+                                               if ( typeof(cur) == 'number' ) {
+                                                   cur = [ source.cur_chan[0], cur ]    // accept just channel (with stokes implied)
+                                               }
+                                               const cm = curmasks( cur )
+                                               var details = [ ]
+                                               var polys = new Set( )
+                                               cm[3].forEach( s => {
+                                                   details.push( { p: cm[1][s], d: [ ].slice.call(cm[2][s]) } )
+                                                   polys.add( cm[1][s] )
+                                               } )
+                                               return polys.size == 0 ? { masks: [ ], polys: [ ] } :
+                                                                        { masks: [ [ [ ].slice.call(cur), details ] ],
+                                                                          polys: Array.from(polys).reduce( (acc,p) => {
+                                                                              acc.push([ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ])
+                                                                              //            ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
+                                                                              return acc
+                                                                          }, [ ] ) }
+                                           }
+                                           function collect_masks( ) {
+                                               var polys = new Set( )
+                                               var details = [ ]
+                                               for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
+                                                   for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
+                                                       if ( source._chanmasks[stokes][chan][0].length == 0 ) continue
+                                                       let cur_chan_details = [ ]
+                                                       for ( var poly=0; poly < source._chanmasks[stokes][chan][1].length; ++poly ) {
+                                                           cur_chan_details.push( { p: source._chanmasks[stokes][chan][1][poly],
+                                                                                    d: [ ].slice.call(source._chanmasks[stokes][chan][2][poly]) } )
+                                                           polys.add( source._chanmasks[stokes][chan][1][poly] )
+                                                       }
+                                                       details.push( [[stokes,chan],cur_chan_details] )
+                                                   }
+                                               }
+                                               var poly_result = [ ]
+                                               polys.forEach( p => {
+                                                   poly_result.push( [ p, (({ type, geometry }) => ({ type, geometry }))(source._polys[p]) ] )
+                                                   //                     ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
+                                               } )
+                                               return { masks: details, polys: poly_result }
+                                           }'''.replace('source',source),
+                     ### create a new polygon -- create state and establish a correspondence between the polygon and the
+                     ###                         annotation that will be used to represent it for this particular channel
+                     'func-newpoly':    '''function newpoly( cm ) {
+                                               let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) ) // find id not in use
+                                               if ( typeof(anno_id) != 'string') return null                         // is id reasonable
+                                               let poly_id = source._polys.length                                    // all polygons created
+                                               let poly = { id: poly_id,
+                                                            type: null,
+                                                            geometry: { } }
+                                               let result = [ source._annotations[anno_id], poly ]
+                                               source._polys.push(poly)                                              // all polygons created
+                                               cm[0].push(anno_id)                                                   // annotations in use by this channel
+                                               cm[1].push(poly_id)                                                   // polygons in use by this channel
+                                               return result
+                                           }''',
+                     ### functions for updating the polygon/annotation state in response to key presses
+                     ### ------------------------------------------------------------------------------------------
+                     ###   state_update_cursor       -- move cursor to specified polygon index
+                     ###   state_clear_cursor        -- unset cursor state (e.g. option release or control pressed)
+                     ###   state_next_cursor         -- move the cursor to the next (with wrapping) polygon index
+                     ###   state_prev_cursor         -- move the cursor to the previous (with wrapping) polygon index
+                     ###   state_nonselection_cursor -- move the cursor to another polygon index which is not in the
+                     ###                                selection set (avoid always picking the next index with the
+                     ###                                expectation that the user will be adding more polygons to the
+                     ###                                selection set (and avoiding always going to the one not desired)
+                     ###   state_cursor_to_selection -- add the current cursor polygon to the selection set
+                     ###   state_clear_selection     -- clear selection set
+                     ###   state_initialize_cursor   -- set cursor to its initial value
+                     ###   state_translate_selection -- move all polygons in the selection set by an x/y translation
+                     ###   state_copy_selection      -- replace copy buffer contents with the contents of the selection set
+                     ###   state_paste_selection     -- past the contents of the copy buffer into the current channel
+                     ###                                if the polygons in the copy buffer already exist in the current
+                     ###                                paste polygons with an x/y translation (to avoid pasting on top)
+                     'key-state-funcs': '''function state_update_cursor( index, cm = curmasks( ) ) {
+                                               if ( index >= 0 && index < cm[0].length ) {
+                                                   source._annotations[cm[0][index]].line_color = source._cursor_color
+                                                   source._cursor = index
+                                               } else source._cursor = -1
+                                           }
+                                           function state_clear_cursor( cm = curmasks( ) ) {
+                                               if ( source._cursor >= 0 && source._cursor < cm[0].length ) {
+                                                   const result = source._cursor
+                                                   source._annotations[cm[0][result]].line_color = null
+                                                   source._cursor = -1
+                                                   return result
+                                               } else {
+                                                   source._cursor = -1
+                                                   return cm[0].length >= 0 ? 0 : -1
+                                               }
+                                           }
+                                           function state_next_cursor( cm = curmasks( ) ) {
+                                               const cursor = state_clear_cursor( cm )
+                                               if ( cursor >= 0 && cursor + 1 < cm[0].length )
+                                                   state_update_cursor( cursor + 1, cm )
+                                               else
+                                                   state_update_cursor( 0, cm )
+                                           }
+                                           function state_prev_cursor( cm = curmasks( ) ) {
+                                               const cursor = state_clear_cursor( cm )
+                                               if ( cursor >= 0 && cursor - 1 >= 0 )
+                                                   state_update_cursor( cursor - 1, cm )
+                                               else
+                                                   state_update_cursor( cm[0].length - 1, cm )
+                                           }
+                                           function state_nonselection_cursor( cm = curmasks( ) ) {
+                                               let tried_indexes = [ ]
+                                               while ( tried_indexes.length < cm[0].length ) {
+                                                   // just looping through possible indexes results in always going to an
+                                                   // early index which is annoying if it is not one of the ones the user
+                                                   // is interested in changing...
+                                                   const index = Math.floor(Math.random()*cm[0].length)
+                                                   if ( ! tried_indexes.includes(index) ) {
+                                                       if ( ! cm[3].includes(index) ) {
+                                                           return index
+                                                       } else {
+                                                           tried_indexes.push(index)
+                                                       }
+                                                   }
+                                               }
+                                               return source._cursor
+                                           }
+                                           function state_cursor_to_selection( cm = curmasks( ) ) {
+                                               const cursor = state_clear_cursor( cm )
+                                               if ( cursor >= 0 && cursor < cm[0].length ) {
+                                                   const index = cm[3].indexOf(cursor);
+                                                   if ( index > -1 ) {
+                                                       const new_cursor = state_nonselection_cursor( cm )                    // find next cursor before removing from selection (to avoid current cursor)
+                                                       source._annotations[cm[0][cursor]].fill_color = source._default_color // remove selection background color
+                                                       cm[3].splice( index, 1 )                                              // remove cursor that is already in selection buffer
+                                                       if ( new_cursor >= 0 )
+                                                           state_update_cursor( new_cursor, cm )                             // advance cursor (for adding multiple mask regions)
+                                                       else
+                                                           state_update_cursor( cursor, cm )                                 // restore the old cursor (because no non-selected cursor is available)
+                                                   } else {
+                                                       source._annotations[cm[0][cursor]].fill_color = source._cursor_color  // background changes for masks in selection buffer
+                                                       cm[3].push(cursor)                                                    // add cursor to selection buffer
+                                                       const new_cursor = state_nonselection_cursor( cm )                    // find next cursor after adding to selection (to avoid current cursor)
+                                                       if ( new_cursor >= 0 )
+                                                           state_update_cursor( new_cursor, cm )                             // advance cursor (for adding multiple mask regions)
+                                                       else
+                                                           state_update_cursor( cursor, cm )                                 // restore the old cursor (because no non-selected cursor is available)
+                                                   }
+                                               }
+                                           }
+                                           function state_clear_selection( cm = curmasks( ) ) {
+                                               // reset selection backgrounds
+                                               cm[3].forEach( s => source._annotations[cm[0][s]].fill_color = source._default_color )
+                                               // clear selection buffer
+                                               cm[3].length = 0
+                                           }
+                                           function state_initialize_cursor( ) {
+                                               state_update_cursor( 0, curmasks( ) )
+                                           }
+                                           function state_remove_mask( cm = curmasks( ) ) {
+                                               register_mask_change('D')
+                                               const cursor = source._cursor
+                                               const index = cm[3].indexOf(cursor);
+                                               if ( index > -1 ) {
+                                                   cm[3].splice( index, 1 )                                              // remove cursor that is already in selection buffer
+                                                   source._annotations[cm[0][cursor]].fill_color = source._default_color // background changes for masks in selection buffer
+                                               }
+                                               source._annotations[cm[0][cursor]].xs = [ ]                               // reset x coordinates
+                                               source._annotations[cm[0][cursor]].ys = [ ]                               // reset y coordinates
+                                               source._annotations[cm[0][cursor]].fill_color = source._default_color     // reset background
+                                               source._annotations[cm[0][cursor]].line_color = null                      // remove line
+                                               cm[0].splice( cursor, 1 )
+                                               cm[1].splice( cursor, 1 )
+                                               state_initialize_cursor( )
+                                           }
+                                           function state_translate_selection( dx, dy, cm = curmasks( ) ) {
+                                               register_mask_change('T')
+                                               const shape = source.image_source.shape
+                                               for ( const s of cm[3] ) {
+                                                   if ( dx > 0 && (Math.ceil(Math.max( ...source._annotations[cm[0][s]].xs )) + dx) >= shape[0] ) return;
+                                                   if ( dy > 0 && (Math.ceil(Math.max( ...source._annotations[cm[0][s]].ys )) + dy) >= shape[1] ) return;
+                                                   if ( dx < 0 && (Math.floor(Math.min( ...source._annotations[cm[0][s]].xs )) + dx) <= 0 ) return;
+                                                   if ( dy < 0 && (Math.floor(Math.min( ...source._annotations[cm[0][s]].ys )) + dy) <= 0 ) return;
+                                               }
+                                               cm[3].forEach( s => {
+                                                   if ( dx !== 0 ) source._annotations[cm[0][s]].xs = source._annotations[cm[0][s]].xs.map( x => x + dx )
+                                                   if ( dy !== 0 ) source._annotations[cm[0][s]].ys = source._annotations[cm[0][s]].ys.map( y => y + dy )
+                                                   cm[2][s][0] += dx
+                                                   cm[2][s][1] += dy
+                                               } )
+                                           }
+                                           function state_copy_selection( cm = curmasks( ) ) {
+                                               source._copy_buffer = [ [ ], [ ].slice.call(source.cur_chan) ]
+                                               //    polygons----------^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----the channel polys were copied from
+                                               // loop over selection indexes and add polygon index + translation
+                                               cm[3].forEach( idx => { source._copy_buffer[0].push( [ cm[1][idx], [ ].slice.call(cm[2][idx]) ] ) } )
+                                           }
+                                           function state_paste_selection( cm = curmasks( ) ) {
+                                               function paste( c_indexes ) {
+                                                   c_indexes.forEach( idx => {
+                                                                          // idx[0]     --  index into the master polygon list
+                                                                          // idx[1][0]  --  x offset for this polygon
+                                                                          // idx[1][1]  --  y offset for this polygon
+                                                                          let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) )
+                                                                          if ( typeof(anno_id) == 'string') {          // is id reasonable
+                                                                              cm[0].push(anno_id)                      // claim this annotation
+                                                                              cm[3].push(cm[1].length)                 // add pasted poly to selected set
+                                                                                                                       //     (position in channel poly list)
+                                                                              cm[1].push(idx[0])                       // add poly index (index may occur
+                                                                                                                       //     more than once)
+                                                                              cm[2].push([].slice.call(idx[1]))        // store x/y translation
+                                                                              const poly = source._polys[idx[0]]
+                                                                              if ( cm[4][0] == source.cur_chan[0] && cm[4][1] == source.cur_chan[1] ) {
+                                                                                  const anno = source._annotations[anno_id]
+                                                                                  anno.xs = poly.geometry.xs.map( x => x + idx[1][0] )
+                                                                                  anno.ys = poly.geometry.ys.map( y => y + idx[1][1] )
+                                                                                  anno.fill_color = source._cursor_color   // change fill color for addition
+                                                                                                                           //     to selected set (above)
+                                                                              }
+                                                                          }
+                                                                      } )
+                                               }
+                                               function paste_with_offset( c_indexes ) {
+                                                   // find extent of the polygons to be pasted that already exist in this channel
+                                                   function calculate_offset( ) {
+                                                       function minmax( ) {
+                                                           return c_indexes.reduce( (acc,i) => {
+                                                                      // i[0]     --  index into the master polygon list
+                                                                      // i[1][0]  --  x offset for this polygon
+                                                                      // i[1][1]  --  y offset for this polygon
+                                                                      const min = [ Math.min(...source._polys[i[0]].geometry.xs) + i[1][0],
+                                                                                    Math.min(...source._polys[i[0]].geometry.ys) + i[1][1] ]
+                                                                      const max = [ Math.max(...source._polys[i[0]].geometry.xs) + i[1][0],
+                                                                                    Math.max(...source._polys[i[0]].geometry.ys) + i[1][1] ]
+                                                                      return acc[0] == null ? [ min, max ] :
+                                                                             [ [ Math.min( min[0], acc[0][0] ), Math.min( min[1], acc[1][1] ) ],
+                                                                             [ Math.max( max[0], acc[1][0] ), Math.max( max[1], acc[1][1] ) ] ]
+                                                                  }, [ null, null ] )
+                                                       }
+                                                       const offset = 35
+                                                       const shape = source.image_source.shape
+                                                       const [[xmin,ymin],[xmax,ymax]] = minmax( )
+                                                       if ( xmax + offset < shape[0] &&
+                                                           ymax + offset < shape[1] ) return [ offset, offset ]
+                                                       else if ( xmin - offset >= 0 &&
+                                                                 ymin - offset >= 0 ) return [ -offset, -offset ]
+                                                       else if ( xmin - offset >= 0 &&
+                                                                 ymax + offset < shape[1] ) return [ -offset, offset ]
+                                                       else if ( xmax + offset < shape[0] &&
+                                                                 ymin - offset >= 0 ) return [ offset, -offset ]
+                                                       else if ( xmax + offset < shape[0] ) return [ offset, 0 ]
+                                                       else if ( xmin - offset >= 0 ) return [ -offset, 0 ]
+                                                       else if ( ymax + offset < shape[1] ) return [ 0, offset ]
+                                                       else if ( ymin - offset >= 0 ) return [ 0, -offset ]
+                                                       else return [ 0, 0 ]
+                                                   }
+                                                   if ( c_indexes.length > 0 ) {
+                                                       const off = calculate_offset( )
+                                                       paste( c_indexes.map( e => [ e[0], [e[1][0]+off[0],e[1][1]+off[1]] ] ) )
+                                                   }
+                                               }
+                                               function groupby( source, predicate ) {
+                                                   return source.reduce( (acc,elem) => {
+                                                       if ( predicate(elem) ) acc[0].push(elem)
+                                                       else acc[1].push(elem)
+                                                       return acc }, [ [], [] ] )
+                                               }
+                                               function poly_already_exists( c_index ) {
+                                                   const c_geom = source._polys[c_index[0]].geometry
+                                                   const c_delta = c_index[1]
+                                                   const potential_matching_chan_polys = cm[1].reduce( (acc,i,cm_index) => {
+                                                       // first element of return is the index into the master list of polygons
+                                                       // the second is the index into the curmask masks
+                                                       if ( source._polys[i].geometry.xs.length == c_geom.xs.length ) acc.push([i,cm_index])
+                                                       return acc
+                                                   }, [ ] )
+                                                   return potential_matching_chan_polys.reduce( (acc,p) => {
+                                                       const match_delta = cm[2][p[1]]
+                                                       if ( c_geom.xs.every( (element, i) => element === source._polys[p[0]].geometry.xs[i] ) &&
+                                                            c_geom.ys.every( (element, i) => element === source._polys[p[0]].geometry.ys[i] ) &&
+                                                            c_delta[0] == match_delta[0] && c_delta[1] == match_delta[1] )
+                                                           acc.push(p)
+                                                       return acc}, [ ] ).length > 0
+                                               }
+                                               const addition = groupby( source._copy_buffer[0], poly_already_exists )
+                                               paste_with_offset( addition[0] )
+                                               paste( addition[1] )
+                                           }''',
+                     ### add a polygon after one is drawn by the user via the Bokeh annotation tools
+                     'add-polygon':     '''const cur_masks = curmasks( )
+                                           const prev_masks = curmasks(cb_obj._cur_chan_prev)
+                                           prev_masks[0].forEach( (i) => {                                  // RESET ANNOTATIONS FROM OLD CHANNEL
+                                               cb_obj._annotations[i].xs = [ ];                             // clear Xs for annotations used by prev
+                                               cb_obj._annotations[i].ys = [ ]                              // clear Ys for annotations used by prev
+                                               cb_obj._annotations[i].line_color = null                     // clear line color
+                                               cb_obj._annotations[i].fill_color = cb_obj._default_color    // set default mask fill
+                                           } )
+                                           cur_masks[2].forEach( ( xlate, i ) => {                          // SET ANNOTATIONS FOR NEW CHANNEL
+                                               const mask_annotation = cb_obj._annotations[cur_masks[0][i]] // current annotation
+                                               const mask_poly = cb_obj._polys[cur_masks[1][i]]             // current poly
+                                               if ( mask_poly ) {                                           // sometimes this is undefined when
+                                                                                                            //    releasing the option key
+                                                   // set Xs for the current annotation add any X translation from current poly
+                                                   mask_annotation.xs = mask_poly.geometry.xs.reduce( (acc,x) => { acc.push(x + xlate[0]); return acc } , [ ] )
+                                                   // set Ys for the current annotation add any Y translation from current poly
+                                                   mask_annotation.ys = mask_poly.geometry.ys.reduce(
+                                                                            (acc,y) => { acc.push(y + xlate[1]); return acc } , [ ] )
+                                                                            // restore selections for this channel
+                                                                            if ( cur_masks[3].includes( i ) ) mask_annotation.fill_color = cb_obj._cursor_color
+                                               } } )
+                                               cb_obj._cur_chan_prev = cb_obj.cur_chan''',
+                     ### invoke key state management functions in response to keyboard events in the document. this
+                     ### code manages the permitted key combinations while most of the state management is handled
+                     ### by the state management functions.
+                     ###
+                     ###     //****************************************************
+                     ###     //*** NEED TO IMPLEMENT STOKES TRAVERSAL WITH      ***
+                     ###     //*** Alt+Shift+Up and Alt+Shift+Down when an      ***
+                     ###     //*** image with multiple stokes axes is available ***
+                     ###     //****************************************************
+                     'setup-key-mgmt':  '''if ( typeof(source._hotkeys) === 'undefined' ) {
+                                               source._hotkeys = { id: '%s' }
+                                               // next channel -- all modes
+                                               casalib.hotkeys( 'alt+up,ctrl+up,command+up', {scope: source._hotkeys.id},
+                                                                (e) => { e.preventDefault( )
+                                                                         if ( source.cur_chan[1] + 1 >= source.num_chans[1] ) {
+                                                                             // wrap round to the first channel
+                                                                             source.channel( 0, source.cur_chan[0] )
+                                                                             if ( chan_slider ) { chan_slider.value = 0 }
+                                                                         } else {
+                                                                             // advance to the next channel
+                                                                             source.channel( source.cur_chan[1] + 1, source.cur_chan[0] )
+                                                                             if ( chan_slider ) { chan_slider.value = source.cur_chan[1] + 1 }
+                                                                         } } )
+                                               // previous channel -- all modes
+                                               casalib.hotkeys( 'alt+down,ctrl+down,command+down', { scope: source._hotkeys.id},
+                                                                (e) => { e.preventDefault( )
+                                                                         if ( source.cur_chan[1] - 1 >= 0 ) {
+                                                                             // advance to the prev channel
+                                                                             source.channel( source.cur_chan[1] - 1, source.cur_chan[0] )
+                                                                             if ( chan_slider ) { chan_slider.value = source.cur_chan[1] - 1 }
+                                                                         } else {
+                                                                             // wrap round to the last channel
+                                                                             source.channel( source.num_chans[1] - 1, source.cur_chan[0] )
+                                                                             if ( chan_slider ) { chan_slider.value = source.num_chans[1] - 1 }
+                                                                         } } )
+
+                                               // next polarization/stokes -- all modes
+                                               casalib.hotkeys( 'alt+right,ctrl+right,command+right', {scope: source._hotkeys.id},
+                                                                (e) => { e.preventDefault( )
+                                                                         if ( source.cur_chan[0] + 1 >= source.num_chans[0] ) {
+                                                                             // wrap round to the first channel
+                                                                             source.channel( source.cur_chan[1], 0 )
+                                                                         } else {
+                                                                             // advance to the next channel
+                                                                             source.channel( source.cur_chan[1], source.cur_chan[0] + 1 )
+                                                                         } } )
+                                               // previous polarization/stokes -- all modes
+                                               casalib.hotkeys( 'alt+left,ctrl+left,command+left', { scope: source._hotkeys.id},
+                                                                (e) => { e.preventDefault( )
+                                                                         if ( source.cur_chan[0] - 1 >= 0 ) {
+                                                                             // advance to the prev channel
+                                                                             source.channel( source.cur_chan[1], source.cur_chan[0] - 1 )
+                                                                         } else {
+                                                                             // wrap round to the last channel
+                                                                             source.channel( source.cur_chan[1], source.num_chans[0] - 1)
+                                                                         } } )
+                                               %s
+
+                                           }''' % (  self._hotkey_state['id'],
+                                                     self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else
+                                                     self._js_mode_code['bitmask-hotkey-setup-add-sub'] + self._js_mode_code['bitmask-hotkey-setup'] )
+                        }
+        
+        
 
     def __help_string( self, rows=[ ] ):
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is

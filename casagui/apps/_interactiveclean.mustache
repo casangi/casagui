@@ -307,7 +307,6 @@ class InteractiveClean:
         for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
 
-            imdetails['mask-history'] = [ ]
             imdetails['gui'] = { 'params': { 'iteration': { }, 'automask': { } },
                                  'image': { },
                                  'image-adjust': { } }
@@ -568,8 +567,6 @@ class InteractiveClean:
         icw = SharedWidgets( )
         for imid, imdetails in self._clean_targets.items( ):
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
-
-            imdetails['gui']['fig'] = { }
 
             status_line = imdetails['gui']['stopcode'] = imdetails['gui']['cube'].status_text( "<p>initial residual image</p>" if imdetails['image-channels'] > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230, reuse=status_line )
 

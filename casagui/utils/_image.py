@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2023
+# Copyright (C) 2023, 2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -27,11 +27,19 @@
 ########################################################################
 '''image utilities'''
 
-from os.path import isfile
+from os.path import isfile, exists
 from io import BytesIO
 from pathlib import Path
 import PIL.Image
 import base64
+
+try:
+    import casatools as ct
+    from casatools import image as imagetool
+except:
+    ct = None
+    from casagui.utils import warn_import
+    warn_import('casatools')
 
 def image_as_mime( path ):
 
@@ -50,3 +58,57 @@ def image_as_mime( path ):
         return f"data:image/{fmt.lower()};base64,{encoded}"
 
     raise RuntimeError( f'''could not load {path}''' )
+
+def new_image( pattern, path, overwrite=False ):
+    '''Create a new image using ``pattern`` as a pattern. ``pattern`` supplies the
+    shape for the new image as well as the coordinate system for the new image.
+
+    Parameters
+    ----------
+    path: str
+        path to the image to be created
+
+    pattern: str
+        path to the image on which the new image should be based
+
+    overwrite: bool
+        overwrite any existing image, directory or file
+    '''
+    if ct is None:
+        raise RuntimeError( 'new_image: casatools is not available' )
+    if exists(path) and not overwrite:
+        raise RuntimeError( '''new_image: image already exists (and 'overwrite=False')''' )
+    if not exists(pattern):
+        raise RuntimeError( 'new_image: an original image is required' )
+    im = imagetool( )
+    im.open(pattern)
+    print(repr(im.coordsys( )))
+    newim = im.newimagefromshape( path, shape=im.shape( ), csys=im.coordsys( ).torecord( ), overwrite=overwrite )
+    im.close( )
+    im.done( )
+    result = newim.name( )
+    newim.close( )
+    newim.done( )
+    return result
+
+def image_shape( path ):
+    '''Return the shape of an image.
+
+    Parameters
+    ----------
+    path: str
+        path to the image
+
+    Returns
+    -------
+    list of int
+        shape of image
+    '''
+    if not exists(path):
+        raise RuntimeError( '''image_shape: image does not exist''' )
+    im = imagetool( )
+    im.open(path)
+    result = im.shape( )
+    im.close( )
+    im.done( )
+    return result

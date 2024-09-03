@@ -29,7 +29,7 @@
 
 from ._plotants import plotants
 from ._plotbandpass import plotbandpass
-from ._makemask import MakeMask
+from ._createmask import CreateMask
 from ._interactiveclean import InteractiveClean
 from ..bokeh.state import initialize_session
 from ..utils import copydoc
