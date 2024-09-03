@@ -153,12 +153,18 @@ class CreateMask:
         self._app_state = AppContext( 'Make Mask' )
 
         ###
+        ### widgets shared across image tabs (masking multiple images)
+        ###
+        self._cube_palette = None
+        self._image_bitmask_controls = None
+
+        ###
         ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
         ### browser window (requiring scrolling) if a width is not specified. It could be that
         ### this should be computed from the width of the tabbed control area at the right of
         ### the image display.
         ###
-        self._conv_spect_plot_width = 450
+        self._spect_plot_width = 450
 
         ###
         ### Validate image paths
@@ -261,16 +267,15 @@ class CreateMask:
                                                                                  position='right' )
             imdetails['gui']['channel-ctrl'] = imdetails['gui']['cube'].channel_ctrl( )
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
+
             self._fig['status'] = imdetails['gui']['status'] = imdetails['gui']['cube'].status_text( "<p>initialization</p>" , width=230, reuse=self._fig['status'] )
-            imdetails['gui']['image-adjust']['mask-color-pick'], \
-                imdetails['gui']['image-adjust']['mask-alpha-pick'], \
-                imdetails['gui']['image-adjust']['mask-clean-notclean-pick'] = imdetails['gui']['cube'].bitmask_controls( button_type='light' )
+            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_controls( reuse=self._image_bitmask_controls, button_type='light' )
 
             ###
             ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
             ###
             if imdetails['image-channels'] > 1:
-                imdetails['gui']['spectrum'] = imdetails['gui']['cube'].spectrum( orient='vertical', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
+                imdetails['gui']['spectrum'] = imdetails['gui']['cube'].spectrum( orient='vertical', sizing_mode='stretch_height', width=self._spect_plot_width )
                 imdetails['gui']['slider'] = imdetails['gui']['cube'].slider( show_value=False, title='', margin=(14,5,5,5), sizing_mode="scale_width" )
                 imdetails['gui']['goto'] = imdetails['gui']['cube'].goto( )
             else:
@@ -290,11 +295,7 @@ class CreateMask:
         self.__result_future = None
 
     def _create_colormap_adjust( self, imdetails ):
-        if not hasattr(self,'_cube_palette'):
-            palette = self._cube_palette = imdetails['gui']['cube'].palette( )
-        else:
-            palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
-
+        palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
         return column( row( Div(text="<div><b>Colormap:</b></div>",margin=(5,2,5,25)), palette ),
                        imdetails['gui']['cube'].colormap_adjust( ), sizing_mode='stretch_both' )
 
@@ -320,9 +321,7 @@ class CreateMask:
         imid, imdetails = imagetuple
 
         return TabPanel( child=column( row( *imdetails['gui']['channel-ctrl'], imdetails['gui']['cube'].coord_ctrl( ),
-                                            imdetails['gui']['image-adjust']['mask-clean-notclean-pick'],
-                                            imdetails['gui']['image-adjust']['mask-color-pick'],
-                                            imdetails['gui']['image-adjust']['mask-alpha-pick'],
+                                            *self._image_bitmask_controls,
                                             #Spacer( height=5, height_policy="fixed", sizing_mode="scale_width" ),
                                             imdetails['gui']['cursor-pixel-text'],
                                             row( Spacer( sizing_mode='stretch_width' ),
@@ -452,7 +451,7 @@ class CreateMask:
             raise self._error_result
         elif self._error_result is not None:
             return self._error_result
-        return { k: v['gui']['cube'].result( ) for k,v in self._mask_state.items( ) }
+        return self._paths
 
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the

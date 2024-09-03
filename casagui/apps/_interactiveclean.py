@@ -1868,6 +1868,12 @@ class InteractiveClean:
                                  'flux':     'forestgreen' }
 
         ###
+        ### widgets shared across image tabs (multifield imaging)
+        ###
+        self._cube_palette = None
+        self._image_bitmask_controls = None
+
+        ###
         ### clean generator
         ###
         if _gclean is None:
@@ -1984,7 +1990,6 @@ class InteractiveClean:
         for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
 
-            imdetails['mask-history'] = [ ]
             imdetails['gui'] = { 'params': { 'iteration': { }, 'automask': { } },
                                  'image': { },
                                  'image-adjust': { } }
@@ -2246,8 +2251,6 @@ class InteractiveClean:
         for imid, imdetails in self._clean_targets.items( ):
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
 
-            imdetails['gui']['fig'] = { }
-
             status_line = imdetails['gui']['stopcode'] = imdetails['gui']['cube'].status_text( "<p>initial residual image</p>" if imdetails['image-channels'] > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230, reuse=status_line )
 
             ###
@@ -2338,7 +2341,7 @@ class InteractiveClean:
 
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
 
-            imdetails['gui']['image-adjust']['mask-color-pick'], imdetails['gui']['image-adjust']['mask-alpha-pick'], imdetails['gui']['image-adjust']['mask-clean-notclean-pick'] = imdetails['gui']['cube'].bitmask_controls( button_type='light' )
+            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_controls( reuse=self._image_bitmask_controls, button_type='light' )
 
             if imdetails['params']['am']['usemask'] == 'auto-multithresh':
                 imdetails['gui']['auto-masking-panel'] = [ TabPanel( child=column( row( Tip( imdetails['gui']['params']['automask']['noisethreshold'],
@@ -2561,11 +2564,7 @@ class InteractiveClean:
         show(self._fig['layout'])
 
     def _create_colormap_adjust( self, imdetails ):
-        if not hasattr(self,'_cube_palette'):
-            palette = self._cube_palette = imdetails['gui']['cube'].palette( )
-        else:
-            palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
-
+        palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
         return column( row( Div(text="<div><b>Colormap:</b></div>",margin=(5,2,5,25)), palette ),
                        imdetails['gui']['cube'].colormap_adjust( ), sizing_mode='stretch_both' )
 
@@ -2616,9 +2615,7 @@ class InteractiveClean:
 
 
         return TabPanel( child=column( row( *imdetails['gui']['channel-ctrl'], imdetails['gui']['cube'].coord_ctrl( ),
-                                            imdetails['gui']['image-adjust']['mask-clean-notclean-pick'],
-                                            imdetails['gui']['image-adjust']['mask-color-pick'],
-                                            imdetails['gui']['image-adjust']['mask-alpha-pick'],
+                                            *self._image_bitmask_controls,
                                             #Spacer( height=5, height_policy="fixed", sizing_mode="scale_width" ),
                                             imdetails['gui']['cursor-pixel-text'],
                                             row( Spacer( sizing_mode='stretch_width' ),

@@ -1009,7 +1009,7 @@ class CubeMask:
                                                    position="top" ) ) ),
                        sizing_mode="scale_width" )
 
-    def bitmask_controls( self, **kw ):
+    def bitmask_controls( self, reuse=None, **kw ):
 
         if self._bitmask is None:
             raise RuntimeError('cube bitmask not in use')
@@ -1020,19 +1020,46 @@ class CubeMask:
         ###    NOTE: the self._bitmask_color_selector change function is setup
         ###          in the "connect" member function
         ###
-        self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
-                                                    stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+
+
+        ### widget to select how the masked area should be indicated:
+        ###
+        ###    contour  --   draw a dashed line at the transition between ones and zeros in the mask
+        ###    masked   --   shade the area that is masked
+        ###    unmasked --   shade the area that is unmasked
+        ###
+        if reuse is not None and reuse[0] is not None:
+            self._bitmask_transparency_button = reuse[0].child
+        else:
+            self._bitmask_transparency_button = set_attributes( Dropdown( label='contour', button_type='light', margin=(-1, 0, 0, 0),
+                                                                          sizing_mode='scale_height', menu=['contour','masked','unmasked'] ), **kw )
+
+        ###
+        ### color to be used when drawing the contour or masked/unmasked shading
+        ###
+        if reuse is not None and reuse[1] is not None:
+            self._bitmask_color_selector = reuse[1].child
+        else:
+            self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
+                                                        stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
                                                                                                        padding: 0 var(--padding-vertical); }''' ) ] )
 
-        mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
+        ###
+        ### transparency to be used when shading the masked/unmasked area
+        ###
+        if reuse is not None and reuse[2] is not None:
+            mask_alpha_pick = reuse[2].child
+        else:
+            mask_alpha_pick = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1, value=0.6, margin=(-1, 0, 0, 0), visible=False )
+
         mask_alpha_pick.js_on_change( 'value', CustomJS( args=dict( bitmask=self._bitmask ),
                                                          code='''let gl = bitmask.glyph
                                                                  gl.global_alpha.value = cb_obj.value
                                                                  gl.change.emit( )''' ) )
 
-        ### setting button background color does not work with Bokeh 2.4.3
-        self._bitmask_transparency_button = set_attributes( Dropdown( label='contour', button_type='light', margin=(-1, 0, 0, 0),
-                                                                      sizing_mode='scale_height', menu=['contour','masked','unmasked'] ), **kw )
+        ###
+        ### created above but callback uses mask_alpha_pick
+        ###
         self._bitmask_transparency_button.js_on_click( CustomJS( args=dict( bitmask=self._bitmask, contour=self._bitmask_contour,
                                                                             contour_ds=self._bitmask_contour_ds,
                                                                             selector=self._bitmask_color_selector,
@@ -1062,15 +1089,14 @@ class CubeMask:
                                                                 }
                                                                 this.origin.label = this.item''' ) )
 
-        return ( Tip( self._bitmask_color_selector,
+        return ( Tip( self._bitmask_transparency_button,
+                      tooltip=Tooltip( content=HTML("The mask can be displayed as a <b>contour</b> or the <b>masked/unmasked</b> portion can be shaded"),
+                                       position='right' ) ),
+                 Tip( self._bitmask_color_selector,
                       tooltip=Tooltip( content=HTML("Set the color used for drawing the mask"), position="right" ) ),
                  Tip( mask_alpha_pick,
                       tooltip=Tooltip( content=HTML("<b>If</b> the mask is indicated with shading, this sets the opaqueness of the shading"),
-                                       position="bottom" ) ),
-                 Tip( self._bitmask_transparency_button,
-                      tooltip=Tooltip( content=HTML("The mask can be displayed as a <b>contour</b> or the <b>masked/unmasked</b> portion can be shaded"),
-                                       position='right' ) ) )
-
+                                       position="bottom" ) ) )
 
     def channel_ctrl( self ):
         '''Return a text label for the current channel being displayed.
@@ -2513,8 +2539,8 @@ class CubeMask:
                                                      self._js_mode_code['no-bitmask-hotkey-setup'] if self._mask_path is None else
                                                      self._js_mode_code['bitmask-hotkey-setup-add-sub'] + self._js_mode_code['bitmask-hotkey-setup'] )
                         }
-        
-        
+
+
 
     def __help_string( self, rows=[ ] ):
         '''Retrieve the help Bokeh object. When returned the ``visible`` property is
