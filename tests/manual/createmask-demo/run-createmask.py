@@ -1,5 +1,3 @@
-from casagui.bokeh.state import initialize_bokeh
-initialize_bokeh( bokehjs_subst="/tmp/bokeh-3.2.2.js" )
 import os
 import ssl
 import certifi
