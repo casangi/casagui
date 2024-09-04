@@ -50,7 +50,8 @@ from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
 from casagui.bokeh.format import WcsTicks
 from casagui.bokeh.models import EditSpan
-from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook, image_as_mime
+from ..data import casaimage
+from ..utils import pack_arrays, find_ws_address, set_attributes, resource_manager, polygon_indexes, is_notebook
 from ..bokeh.models import EvTextInput
 from ..bokeh.tools import CBResetTool
 from ..bokeh.state import available_palettes, find_palette, default_palette
@@ -143,12 +144,12 @@ class CubeMask:
         ### JavaScript init script to be run early in the startup. Piggybacked off of the ImagePipe initialization              ###
         ### CustomAction callbacks are set in connect( ) function.                                                              ###
         ###########################################################################################################################
-        _add_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-chan.png' ) ),
-                      cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
-        _sub_ = dict( chan=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
-                      cube=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
-        self._mask_icons_ = dict( on=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
-                                  off=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
+        _add_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-chan.png' ) ),
+                      cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
+        _sub_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
+                      cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
+        self._mask_icons_ = dict( on=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
+                                  off=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
         self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
                                                     description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
                                'sub': CustomAction( icon=_sub_['chan'],
@@ -780,7 +781,7 @@ class CubeMask:
                                                                                      set_edited(span2)
                                                                                  }''' ) )
 
-        self._cm_adjust['reset'] = CBResetTool( icon=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'reset.png' )),
+        self._cm_adjust['reset'] = CBResetTool( icon=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'reset.png' )),
                                                 description="Reset pan/zoom and extents" )
         self._cm_adjust['fig'] = figure( width=250, height=200, toolbar_location='above',
                                          tools=[ self._cm_adjust['reset'],
@@ -789,7 +790,7 @@ class CubeMask:
                                                  #WheelZoomTool(toggleable=False), PanTool(toggleable=False),
                                                  #WheelZoomTool(visible=False), PanTool(toggleable=False),
                                                  'wheel_zoom', 'pan',
-                                                 ResetTool( icon=image_as_mime(join( dirname(dirname(__file__)), "__icons__", 'zoom-to-fit.png' )),
+                                                 ResetTool( icon=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'zoom-to-fit.png' )),
                                                             description="Reset pan/zoom but preserve extents" ) ],
                                         sizing_mode="scale_width" )
 

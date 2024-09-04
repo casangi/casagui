@@ -59,7 +59,6 @@ from ._conversion import pack_arrays
 from ._conversion import strip_arrays
 from ._conversion import serialize, deserialize
 from ._static import static_vars, static_dir
-from ._image import image_as_mime, new_image, image_shape
 from ._tiles import TMSTiles
 from ._contextmgrchain import ContextMgrChain
 

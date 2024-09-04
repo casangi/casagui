@@ -40,7 +40,8 @@ from casagui.bokeh.utils import svg_icon
 from bokeh.io import reset_output as reset_bokeh_output
 from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
-from ..utils import resource_manager, reset_resource_manager, new_image, image_shape, is_notebook
+from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..data import casaimage
 from ..bokeh.models import TipButton, Tip
 from ..utils import ContextMgrChain as CMC
 
@@ -124,7 +125,7 @@ class CreateMask:
     def __create_masks( self, paths ):
         '''Create missing masks...'''
         ### Create any mask images which do not exist (if create=True)
-        return list( map( lambda p: (p[0],new_image(*p)) if not exists(p[1]) else p, paths ) )
+        return list( map( lambda p: (p[0],casaimage.new(*p)) if not exists(p[1]) else p, paths ) )
 
 
     def __init__( self, image, mask=None, create=True ):
@@ -213,7 +214,7 @@ class CreateMask:
         else:
             self._paths = self.__create_masks( self.__expand_mask_paths( zip(image_paths, mask_paths) ) )
 
-        if not all((image_shape(p[0]) == image_shape(p[1])).all( ) for p in self._paths):
+        if not all((casaimage.shape(p[0]) == casaimage.shape(p[1])).all( ) for p in self._paths):
             raise RuntimeError('CreateMask: mismatch between image and mask shapes')
 
 

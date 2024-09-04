@@ -41,7 +41,7 @@ except:
     from casagui.utils import warn_import
     warn_import('casatools')
 
-def image_as_mime( path ):
+def as_mime( path ):
 
     value = path
     if isinstance( value, str ) and isfile(value):
@@ -59,7 +59,7 @@ def image_as_mime( path ):
 
     raise RuntimeError( f'''could not load {path}''' )
 
-def new_image( pattern, path, overwrite=False ):
+def new( pattern, path, overwrite=False ):
     '''Create a new image using ``pattern`` as a pattern. ``pattern`` supplies the
     shape for the new image as well as the coordinate system for the new image.
 
@@ -75,11 +75,11 @@ def new_image( pattern, path, overwrite=False ):
         overwrite any existing image, directory or file
     '''
     if ct is None:
-        raise RuntimeError( 'new_image: casatools is not available' )
+        raise RuntimeError( 'casaimage.new: casatools is not available' )
     if exists(path) and not overwrite:
-        raise RuntimeError( '''new_image: image already exists (and 'overwrite=False')''' )
+        raise RuntimeError( '''casaimage.new: image already exists (and 'overwrite=False')''' )
     if not exists(pattern):
-        raise RuntimeError( 'new_image: an original image is required' )
+        raise RuntimeError( 'casaimage.new: an original image is required' )
     im = imagetool( )
     im.open(pattern)
     print(repr(im.coordsys( )))
@@ -91,7 +91,7 @@ def new_image( pattern, path, overwrite=False ):
     newim.done( )
     return result
 
-def image_shape( path ):
+def shape( path ):
     '''Return the shape of an image.
 
     Parameters
@@ -105,7 +105,7 @@ def image_shape( path ):
         shape of image
     '''
     if not exists(path):
-        raise RuntimeError( '''image_shape: image does not exist''' )
+        raise RuntimeError( '''casaimage.shape: image does not exist''' )
     im = imagetool( )
     im.open(path)
     result = im.shape( )
