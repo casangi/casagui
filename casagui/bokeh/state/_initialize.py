@@ -90,15 +90,19 @@ def initialize_bokeh( bokehjs_subst=None ):
             if type(replacement) == str:
                 if path.isfile(replacement):
                     return [ f'''file://{abspath(replacement)}''' ]
+                elif replacement.startswith('http'):
+                    return [ replacement ]
                 else:
-                    return replacement
+                    raise RuntimeError( f'''debugging bokehjs substitution ('{replacement}') does not exist''' )
             if type(replacement) == list:
                 result = [ ]
                 for u in replacement:
                     if path.isfile(u):
                         result.append( f'''file://{abspath(u)}''' )
-                    else:
+                    elif u.startswith('http'):
                         result.append( u )
+                    else:
+                        raise RuntimeError( f'''debugging bokehjs substitution ('{u}') does not exist''' )
                 return result
             return [ ]
         def casaguijs_predicate( s ):
