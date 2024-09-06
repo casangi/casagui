@@ -53,7 +53,8 @@ class CreateMask:
     '''
 
     def __stop( self ):
-        self.__result_future.set_result(self.__retrieve_result( ))
+        if not self.__result_future.done( ):
+            self.__result_future.set_result(self.__retrieve_result( ))
 
     def _abort_handler( self, err ):
         self._error_result = err
@@ -195,7 +196,7 @@ class CreateMask:
             mask_paths = [mask]
         elif isinstance(mask,list):
             if len(mask) == 0:
-                mask_paths = [None] * len(self._image_papths)
+                mask_paths = [None] * len(image_paths)
             elif len(image_paths) != len(mask):
                 raise RuntimeError( 'CreateMask: when specifying masks, one must be provided for each image (even if its value is None)' )
             elif all(isinstance(x, str) or x is None for x in mask):
