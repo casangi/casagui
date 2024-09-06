@@ -22,7 +22,7 @@ license = {text = "LGPL"}
 [tool]
 [tool.pdm]
 [tool.pdm.build]
-excludes = [ "casagui/apps/*.mustache", "**/*.py-*", "**/*~" ]
+excludes = [ "casagui/apps/*.mustache", "casagui/private/casashell/*.mustache", "casagui/private/casatasks/*.mustache", "**/*.xml", "**/*.py-*", "**/*~" ]
 
 [tool.pdm.version]
 source = "scm"

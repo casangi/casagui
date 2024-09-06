@@ -1,0 +1,31 @@
+<casaxml xsi:schemaLocation="http://casa.nrao.edu/schema/casa.xsd file:///opt/casa/code/xmlcasa/xml/casa.xsd" xmlns="http://casa.nrao.edu/schema/psetTypes.html" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <task type="function" name="createmask" category="imaging">
+    <shortdescription>Create mask cubes interactively with a GUI</shortdescription>
+
+    <description>Create a mask cube for one or more images using a GUI. This task
+                         This task is based upon the same tools that are used to build
+                         the interactive clean application so the same command keys are
+                         used for both applications.
+    </description>
+
+    <input>
+      <param name="image">
+        <shortdescription>Image(s) for which a mask cube will be created or updated</shortdescription>
+        <type mustexist="true">path</type>
+        <type mustexist="true">pathVec</type>
+      </param>
+      <param name="mask">
+        <shortdescription>Mask cubes(s) to be updated or created</shortdescription>
+        <type>path</type>
+        <type>pathVec</type>
+        <value type="stringVec"/>
+      </param>
+      <param name="create">
+        <type>bool</type>
+        <value>True</value>
+      </param>
+    </input>
+    <returns>any</returns>
+  </task>
+</casaxml>
