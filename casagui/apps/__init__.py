@@ -18,7 +18,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be adressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -29,13 +29,10 @@
 
 from ._plotants import plotants
 from ._plotbandpass import plotbandpass
-from ._makemask import MakeMask
+from ._createmask import CreateMask
 from ._interactiveclean import InteractiveClean
 from ..bokeh.state import initialize_session
 from ..utils import copydoc
 initialize_session()
 
-@copydoc(InteractiveClean)
-def run_iclean( *args, **kwargs ):
-    ic = InteractiveClean( *args, **kwargs )
-    return ic( )
+from ..private.casatasks.iclean import iclean

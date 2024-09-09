@@ -18,7 +18,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be adressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -68,7 +68,7 @@ def initialize_bokeh( bokehjs_subst=None ):
     Example
     -------
     from casagui.bokeh.state import initialize_bokeh
-    initialize_bokeh( bokehjs_subst="/tmp/casaguijs.min.js" )
+    initialize_bokeh( bokehjs_subst="/tmp/bokeh-3.2.2.js" )
     """
 
     if initialize_bokeh.initialized:
@@ -89,16 +89,20 @@ def initialize_bokeh( bokehjs_subst=None ):
                 return [ ]
             if type(replacement) == str:
                 if path.isfile(replacement):
-                    return [ f'''file:/{abspath(replacement)}''' ]
+                    return [ f'''file://{abspath(replacement)}''' ]
+                elif replacement.startswith('http'):
+                    return [ replacement ]
                 else:
-                    return replacement
+                    raise RuntimeError( f'''debugging bokehjs substitution ('{replacement}') does not exist''' )
             if type(replacement) == list:
                 result = [ ]
                 for u in replacement:
                     if path.isfile(u):
-                        result.append( f'''file:/{abspath(u)}''' )
-                    else:
+                        result.append( f'''file://{abspath(u)}''' )
+                    elif u.startswith('http'):
                         result.append( u )
+                    else:
+                        raise RuntimeError( f'''debugging bokehjs substitution ('{u}') does not exist''' )
                 return result
             return [ ]
         def casaguijs_predicate( s ):

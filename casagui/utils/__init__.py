@@ -18,7 +18,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be adressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -59,8 +59,8 @@ from ._conversion import pack_arrays
 from ._conversion import strip_arrays
 from ._conversion import serialize, deserialize
 from ._static import static_vars, static_dir
-from ._image import image_as_mime
 from ._tiles import TMSTiles
+from ._contextmgrchain import ContextMgrChain
 
 @static_vars(mgr=None)
 def resource_manager( ):

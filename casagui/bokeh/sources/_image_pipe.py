@@ -18,7 +18,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be adressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -238,8 +238,9 @@ class ImagePipe(DataPipe):
                     print( f'''error: ${selected_scaling} is not a known scaling...''', file=sys.stderr )
                     result = image_plane
                 else:
+                    normalize = 0 if umin > 0 else -umin
                     result = np.ma.zeros(image_plane.shape,image_plane.dtype)
-                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included] if included is not None else image_plane,
+                    result[included] = self.__quant_scaling[selected_scaling]( image_plane[included]+normalize if included is not None else image_plane+normalize,
                                                                                **self.__quant_adjustments['transfer']['args'] )
                     if exclude_below is not None:
                         result[exclude_below] = result[included].min( )
@@ -251,7 +252,7 @@ class ImagePipe(DataPipe):
             ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
             ### Histogram of the scaled
             ### --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
-            hist, edges = np.histogram( result, density=False, bins=255, range=( umin, umax ) )
+            edges = np.histogram_bin_edges( result, bins=254, range=( umin, umax ) )
 
             return np.digitize( result, edges, right=True ).astype(nptype)
 
@@ -398,17 +399,17 @@ class ImagePipe(DataPipe):
         ### here for X rather than just the index
         try:
             if mask:
-                return { 'x': list(range(len(result))), 'y': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
+                return { 'chan': list(range(len(result))), 'pixel': list(result) }, None if result_mask is None else list(result_mask.astype(bool))
             else:
-                return { 'x': list(range(len(result))), 'y': list(result) }
+                return { 'chan': list(range(len(result))), 'pixel': list(result) }
         except Exception as e:
             ## In this case, result is not iterable (e.g.) only one channel in the cube.
             ## A zero length numpy ndarray has no shape and looks like a float but it is
             ## an ndarray.
             if mask:
-                return { 'x': [0], 'y': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
+                return { 'chan': [0], 'pixel': [float(result)] }, None if result_mask is None else [ bool(result_mask) ]
             else:
-                return { 'x': [0], 'y': [float(result)] }
+                return { 'chan': [0], 'pixel': [float(result)] }
 
     def histogram_source( self, data ):
         if not self._histogram_source:
@@ -548,7 +549,9 @@ class ImagePipe(DataPipe):
         ia = imagetool( )
         ia.open(self.__image_path)
         if self.__mask_statistics:
-            rawstats = ia.statistics( region=reg, mask=self.__mask_path )
+            ### mask is an LEL expression and quotes prevents a name containing
+            ### numbers from being interpreted as an expression
+            rawstats = ia.statistics( region=reg, mask=f'''"{self.__mask_path}"''' )
         else:
             rawstats = ia.statistics( region=reg )
         ia.close( )

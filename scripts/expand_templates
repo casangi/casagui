@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+from os.path import dirname, realpath, join, splitext, isfile, exists
+from sys import stderr
+from os import walk, pathsep, chmod
+from stat import S_IREAD, S_IRGRP, S_IROTH, S_IWRITE
+import subprocess
+import os
+import re
+
+try:
+    from casatasks import xml_interface_defs
+except:
+    exit("Failed to find 'xml_interface_defs' in the casatasks module...")
+
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return realpath(program)
+    else:
+        for path in os.environ.get("PATH", "").split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return realpath(exe_file)
+    return None
+
+java = which( "java" )
+if not java:
+    exit( "Could not find java executable..." )
+
+jarfile_name = "xml-casa-assembly-1.86.jar"
+jarpath = join( dirname(dirname(realpath(__file__))), "casagui", "private", "__java__", jarfile_name )
+if not isfile(jarpath):
+    exit( "JAR file ('{jarfile_name}') does not exit..." )
+cmd = [ java, '-jar', jarpath ]
+
+def generate_python( dest, template, xml, args=[], strip_control_lines=0 ):
+    python_source = subprocess.run( cmd + args + [template, xml], stdout=subprocess.PIPE ).stdout.decode('utf-8')
+    if exists(dest): chmod( dest, S_IWRITE )
+    with open( dest, "w" ) as out:
+        for line in python_source.splitlines( ):
+            if strip_control_lines > 0 and re.match( "^\#+\s*TASK XML\s*>\s*(\S+)(.*)", line ):
+                strip_control_lines -= 1
+                continue
+            out.write( f'''{line.rstrip( )}\n''' )
+            if strip_control_lines > 0:
+                strip_control_lines -= 1
+    chmod( dest, S_IREAD | S_IRGRP | S_IROTH )
+
+XML_SEARCH_LINES = 5
+tasks = xml_interface_defs( )
+for root, dirs, files in walk( join(dirname(dirname(realpath(__file__))),'casagui') ):
+    for file in files:
+        if splitext(file)[1] == '.mustache':
+            with open(join(root,file)) as f:
+                header = [ (m.group(1), m.group(2), m.group(0)) for m in [ re.match( "^\#+\s*TASK XML\s*>\s*(\S+)(.*)", next(f) ) for _ in range(XML_SEARCH_LINES) ] if m ]
+                if len(header) > 0:
+                    ###
+                    ### file details specified in mustache file
+                    ###
+                    if len(header) != 1:
+                        print( f'''Found more than one XML descriptor in '{join(root,file)}'... skipping...''', file=stderr )
+                    else:
+                        task = splitext(header[0][0])[0]
+                        if task in tasks:
+                            if not isfile( tasks[task] ):
+                                print( f'''Task XML file ('{tasks[task]}') is missing... skipping '{join(root,file)}'...''', file=stderr )
+                            else:
+                                src = join(root,file)
+                                tgt = join( root, f'''{splitext(src)[0]}.py''' )
+
+                                args = cmd
+                                if header[0][1]:
+                                    args = args + header[0][1].split( )
+
+                                generate_python( tgt, src, tasks[task], header[0][1].split( ) if header[0][1] else None, XML_SEARCH_LINES )
+                        else:
+                            print( f'''The XML file for task '{task}' is not included in casatasks... skipping '{join(root,file)}'...''', file=stderr )
+                else:
+                    ###
+                    ### use XML file in the same directory and with with the same
+                    ### name as the mustache file
+                    ###
+                    classname = splitext(file)[0]
+                    localxml = join( root, f'''{classname}.xml''' )
+                    if exists(localxml):
+                        generate_python( join(root,f'''{classname}.py'''), join(root,file), localxml )

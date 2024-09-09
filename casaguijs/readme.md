@@ -20,7 +20,7 @@ and _Python_ files to be edited from the same directory and keeps the
    ```
 2. Ensure that the `npm` executable is available
    ```
-   bash$ type type npm
+   bash$ type npm
    npm is /opt/local/bin/npm
    bash$
    ```

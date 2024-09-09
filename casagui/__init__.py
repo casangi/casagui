@@ -18,7 +18,7 @@
 # Inc., 675 Massachusetts Ave, Cambridge, MA 02139, USA.
 #
 # Correspondence concerning AIPS++ should be adressed as follows:
-#        Internet email: aips2-request@nrao.edu.
+#        Internet email: casa-feedback@nrao.edu.
 #        Postal address: AIPS++ Project Office
 #                        National Radio Astronomy Observatory
 #                        520 Edgemont Road
@@ -29,6 +29,8 @@
 used to build GUI applications for astronomy. It also contains some
 applications turn-key applications'''
 
+import os as __os
+
 try:
     from .__version__ import __version__
 except:
@@ -38,3 +40,12 @@ except:
     ### available so set it to a default value...
     ###
     __version__ = {}
+
+
+def xml_interface_defs( ):
+    return { }
+
+__mustache_interface_templates__ = { 'iclean': __os.path.join( __os.path.dirname(__file__), "private", "casashell", "iclean.mustache" ) }
+def mustache_interface_templates( ):
+    return __mustache_interface_templates__
+

@@ -135,7 +135,7 @@ export class DataPipe extends DataSource {
             }
 
             this.websocket.onclose = ( ) => {
-                if ( reconnections.connected == true ) {
+                if ( reconnections && reconnections.connected == true ) {
                     console.log( `connection lost at ${new Date( )}` )
                     reconnections.connected = false
                     if ( ! document.shutdown_in_progress_ ) {
