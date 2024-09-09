@@ -152,7 +152,7 @@ class CreateMask:
         ### Create application context (which includes a temporary directory).
         ### This sets the title of the plot.
         ###
-        self._app_state = AppContext( 'Make Mask' )
+        self._app_state = AppContext( 'Create Mask' )
 
         ###
         ### widgets shared across image tabs (masking multiple images)
