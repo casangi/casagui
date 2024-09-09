@@ -55,9 +55,9 @@ def get_axis_data(xds, axis):
         return _calc_uvw_axis(xds, axis)
     elif 'wave' in axis:
         return _calc_wave_axis(xds, axis)
-    elif axis in axis_to_xds.keys():
+    elif axis in axis_to_xds:
         location = axis_to_xds[axis]
-        if location in xds.attrs.keys():
+        if location in xds.attrs:
             xda = xds.attrs[location]
         else:
             xda = xds[location]
@@ -74,9 +74,19 @@ def _calc_vis_axis(xds, axis):
     ''' Calculate axis from VISIBILITY xarray DataArray '''
     data_var = get_vis_data_var(axis)
     if data_var not in xds.data_vars:
-        raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
+        if "SPECTRUM" in xds.data_vars:
+            data_var = "SPECTRUM"
+        else:
+            raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
     xda = xds[data_var]
 
+    # Single dish
+    if data_var == "SPECTRUM":
+        if axis in ['amp', 'real']:
+            return xda.assign_attrs(units='Jy')
+        raise ValueError(f"{axis} invalid for SPECTRUM dataset")
+
+    # Interferometry
     if 'amp' in axis:
         return np.absolute(xda).assign_attrs(units='Jy')
     elif 'phase' in axis:

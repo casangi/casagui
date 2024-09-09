@@ -8,10 +8,7 @@ import xarray as xr
 def get_coordinate_label(xds, coordinate):
     ''' Return single coordinate value as string '''
     label = _get_coordinate_labels(xds, coordinate)
-    if coordinate == 'time':
-        start_date, end_date = _get_date_range(xds.time)
-        label = f"{start_date} {label}"
-    elif coordinate == 'frequency':
+    if coordinate == 'frequency':
         label = f"{label} {xds.frequency.attrs['units']}"
     return label
 
@@ -20,30 +17,29 @@ def _get_coordinate_labels(xds, coordinate):
     if coordinate == 'time':
         return _get_time_labels(xds.time)
     elif coordinate == 'baseline':
-        return _get_baseline_labels(xds.baseline)
+        return _get_baseline_antenna_labels(xds.baseline)
+    elif coordinate == 'antenna_name':
+        return _get_baseline_antenna_labels(xds.antenna_name)
     elif coordinate == 'frequency':
         return _get_frequency_labels(xds.frequency)
     elif coordinate == 'polarization':
         return _get_polarization_labels(xds.polarization)
-    elif coordinate == 'ddi':
-        return _get_ddi_labels(xds.ddi)
+    elif coordinate == 'spw':
+        return _get_spw_labels(xds.spw)
 
 def _get_time_labels(time_xda):
     ''' Return time string or list of time strings '''
-    start_date, end_date = _get_date_range(time_xda)
-    if start_date == end_date:
+    if time_xda.size > 1:
         times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
     else:
-        times = to_datetime(time_xda, unit='s').strftime("%F %H:%M:%S")
-    if isinstance(times, str):
-        return times
-    return list(times.values)
+        times = to_datetime(time_xda, unit='s').strftime("%d-%b-%Y %H:%M:%S")
+    return times if isinstance(times, str) else list(times.values)
 
-def _get_baseline_labels(baseline_xda):
+def _get_baseline_antenna_labels(baseline_antenna_xda):
     ''' Return baseline pair string or list of strings '''
-    if baseline_xda.size == 1:
-        return baseline_xda.values
-    return baseline_xda.values.ravel().tolist()
+    if baseline_antenna_xda.size == 1:
+        return baseline_antenna_xda.values
+    return baseline_antenna_xda.values.ravel().tolist()
 
 def _get_polarization_labels(polarization_xda):
     ''' Return polarization string or list of polarization strings '''
@@ -53,17 +49,17 @@ def _get_polarization_labels(polarization_xda):
 
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
-    if frequency_xda.size == 1: # float
+    if frequency_xda.size == 1:
         return f"{frequency_xda.values:.4f}"
     else:
         return None # auto ticks from frequency values
 
-def _get_ddi_labels(ddi_xda):
+def _get_spw_labels(spw_xda):
     ''' Return ddi string for single value, or None to autogenerate ticks '''
-    if ddi_xda.size == 1: # int
-        return f"{ddi_xda.values[0]}"
+    if spw_xda.size == 1: # int
+        return f"{spw_xda.values[0]}"
     else:
-        return None # auto ticks from ddi values
+        return None # auto ticks from spw values
 
 def get_vis_axis_labels(xds, data_var, axis):
     ''' Get vis axis label for colorbar '''
@@ -89,7 +85,7 @@ def get_axis_labels(xds, axis):
         start_date, end_date = _get_date_range(xds.time)
         label =  f"Time ({start_date})"
         if xds.time.size > 1:
-            tick_inc = int(len(ticks) / 10)
+            tick_inc = max(int(len(ticks) / 10), 1)
             ticks = ticks[::tick_inc]
         # Set time axis as time index
         xds['time'] = np.array(range(xds.time.size))
@@ -98,6 +94,9 @@ def get_axis_labels(xds, axis):
         label = "Baseline Antenna1"
         ticks = _get_baseline_ant1_ticks(ticks)
         xds['baseline'] = np.array(range(xds.baseline.size))
+    elif axis == "antenna_name":
+        label = "Antenna"
+        xds['antenna_name'] = np.array(range(xds.antenna_name.size))
     elif axis == "frequency":
         unit = xds.frequency.frequency.attrs['units']
         label =  f"Frequency ({unit})"
@@ -105,8 +104,8 @@ def get_axis_labels(xds, axis):
         label =  "Polarization"
         # replace axis with index for plot range
         xds['polarization'] = np.array(range(xds.polarization.size))
-    elif axis == "ddi":
-        label =  "DDI"
+    elif axis == "spw":
+        label =  "Spectral Window"
     return xds, (axis, label, ticks)
 
 def _get_date_range(time_xda):

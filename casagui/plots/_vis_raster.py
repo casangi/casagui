@@ -3,17 +3,17 @@ Implementation of the ``VisRaster`` application for plotting and editing
 visibilities
 '''
 
-import hvplot
-import holoviews as hv
-import os.path
+import os
 import time
+
+import hvplot
+import pandas as pd
 
 from graphviper.utils.logger import setup_logger
 
-from ..data._ps_utils import apply_ps_selection, concat_ps_xds
-from ..data._vis_data import is_vis_axis, get_vis_data_var
-from ..data._vis_stats import calculate_vis_stats 
-from ..data._xds_utils import set_coordinates
+from ..data.vis_data._vis_data import is_vis_axis, get_vis_data_var
+from ..data.vis_data._vis_stats import calculate_vis_stats 
+from ..data.vis_data._xds_utils import set_coordinates
 from ..io import get_processing_set
 from ..plot import raster_plot
 
@@ -33,14 +33,14 @@ class VisRaster:
     '''
 
     def __init__(self, vis, log_level="INFO"):
-        # Processing set
-        self._ps, self._vis_path = get_processing_set(vis)
-        n_datasets = len(self._ps.keys())
-        if n_datasets == 0:
-            raise RuntimeError("Failed to read visibility file into processing set")
-
         # Logger
         self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
+
+        # Processing set
+        self._ps, self._vis_path = get_processing_set(vis)
+        n_datasets = len(self._ps)
+        if n_datasets == 0:
+            raise RuntimeError("Failed to read visibility file into processing set")
         self._logger.info(f"Processing set contains {n_datasets} msv4 datasets.")
 
         # Set baseline names and units for plotting
@@ -52,52 +52,79 @@ class VisRaster:
         self._plot = None
 
 
-    def summary(self):
-        ''' Print processing set summary '''
-        summary = self._ps.summary()
-        for row in summary.itertuples(index=False): #, name=None):
-            name, ddi, intent, field_id, field_name, start_freq, end_freq, shape, field_coords = row
-            print("-----")
-            print(f"ddi {ddi}: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
-            print(f"intent: {intent}")
-            print(f"field: {field_name} ({field_id})")
-            print(f"field coordinates: {field_coords[1]} {field_coords[2]} ({field_coords[0]})")
-            print(f"frequency range: {start_freq:e} - {end_freq:e}")
-        print("-----")
+    def summary(self, columns=None):
+        ''' Print processing set summary.
+            Args: columns (None, str, list): type of metadata to list.
+                None:      Print all summary columns in processing set.
+                'by_msv4': Print formatted summary metadata by MSv4.
+                str, list: Print a subset of summary columns in processing set.
+                           Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+        '''
+        pd.set_option("display.max_rows", len(self._ps))
+        pd.set_option("display.max_columns", 10)
+        ps_summary = self._ps.summary()
 
+        if columns is None:
+            print(ps_summary)
+        elif columns == "by_msv4":
+            for row in ps_summary.itertuples(index=False):
+                name, obs_mode, shape, polarization, scan_number, spw_name, field_name, source_name, line_name, field_coords, start_frequency, end_frequency = row
+                print("-----")
+                print(f"MSv4 name: {name}")
+                print(f"obs_mode: {obs_mode}")
+                print(f"shape: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
+                print(f"polarization: {polarization}")
+                print(f"scan_number: {scan_number}")
+                print(f"spw_name: {spw_name}")
+                print(f"field_name: {field_name}")
+                print(f"source_name: {source_name}")
+                print(f"line_name: {line_name}")
+                print(f"field_coords: ({field_coords[0]}) {field_coords[1]} {field_coords[2]}")
+                print(f"frequency range: {start_frequency:e} - {end_frequency:e}")
+            print("-----")
+        else:
+            if isinstance(columns, str):
+                columns = [columns]
+            columns_in_list = []
+            for column in columns:
+                if column in ps_summary.columns:
+                    columns_in_list.append(column)
+                else:
+                    print(f"Ignoring invalid summary column: {column}")
+            print(ps_summary[columns_in_list])
 
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None):
         '''
         Create a static y_axis vs x_axis raster plot of visibilities after applying selection.
-        Plot axes include ddi, time, baseline, channel, and polarization.  The axes not set as plot axes can be selected, else the first will be used.
+        Plot axes include time, baseline, channel, polarization, and spw.  The axes not set as plot axes can be selected, else the first will be used.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline'.
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Visibility component and type (corrected, model). Default 'amp'.
             selection (dict): selected data to plot. Options include:
-              Metadata selection:
-                field (int or str):  Default '', all fields in ddi.
-                intent (str): Default '', all intents in ddi.
+              Processing set selection:
+                Summary column names: 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                'query': for pandas query of summary columns.
+                First spw_name by frequency will be selected if spw is not a plot axis.
               Plot selection:
-                ddi, time, baseline, channel, polarization: select dimensions not being plotted. Default is index 0.
+                time, baseline, frequency, polarization: select data dimensions which are not plot axes. Default is index 0.
 
         If plotting is successful, use show() or save() to view/save the plot.
         '''
         start_plot = time.time()
         self._check_plot_inputs(x_axis, y_axis, vis_axis, selection)
 
-        # Select ddi if needed
-        selection = self._select_ddi(x_axis, y_axis, selection)
+        # Apply metadata selection to processing set (spw, field, source, obs_mode)
+        selected_ps, selection = self._select_ps(self._ps, selection, x_axis, y_axis)
 
-        # Apply metadata (ddi, field, intent) selection to processing set.
-        selected_ps = apply_ps_selection(self._ps, selection, self._logger)
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
         # For amplitude, limit colorbar range using visibility stats
         # TODO: save and reuse color limits?
-        color_limits = self._amp_color_limits(selected_ps, vis_axis)
+        #color_limits = self._amp_color_limits(selected_ps, vis_axis)
+        color_limits = None
 
         # Plot selected processing set
         self._plot = raster_plot(selected_ps, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits, self._logger)
@@ -134,15 +161,18 @@ class VisRaster:
         if self._plot is None:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
 
+        start = time.time()
         if not filename:
             filename = f"{self._vis_basename}_raster.png"
+        hvplot.save(self._plot, filename=filename)
+        '''
         resources = 'inline' if resources == 'offline' else 'cdn'
 
-        start = time.time()
         if hist:
             hvplot.save(self._plot.hist(), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
         else:
             hvplot.save(self._plot, filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+        '''
         self._logger.info(f"Saved plot to {filename}.")
         self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
 
@@ -154,12 +184,18 @@ class VisRaster:
         # TODO: are vis types in all xds in ps? Checking first one
         first_xds = self._ps.get(0)
 
-        vis_data = get_vis_data_var(vis_axis)
+        if "SPECTRUM" in first_xds.data_vars:
+            vis_data = "SPECTRUM"
+        else: 
+            vis_data = get_vis_data_var(vis_axis)
+
         if vis_data not in first_xds.data_vars:
             raise ValueError(f"vis_axis {vis_axis} does not exist in dataset")
 
         valid_axes = list(first_xds[vis_data].dims)
-        valid_axes.append('ddi')
+        valid_axes.append('spw') # dimension added when plot axis
+        if vis_data == "SPECTRUM":
+            valid_axes.append('baseline') # antenna_name dim in spectrum data
         if x_axis not in valid_axes or y_axis not in valid_axes:
             raise ValueError(f"Invalid x or y axis, please select from {valid_axes}")
 
@@ -167,16 +203,72 @@ class VisRaster:
             raise RuntimeError("selection must be dictionary")
 
 
-    def _select_ddi(self, x_axis, y_axis, selection):
-        ''' Add ddi selection if not plot axis and not selected '''
-        # ddi selection exists or is not needed when a plot axis
-        if (selection and 'ddi' in selection.keys()) or 'ddi' in (x_axis, y_axis):
-            return selection
+    def _select_ps(self, ps, selection, x_axis, y_axis):
+        ''' Apply ps selection: spw_name, field_name, source_name, obs_mode '''
+        selected_ps = ps
 
-        # Select first ddi
-        selection = {} if selection is None else selection
-        selection['ddi'] = min(self._ps.summary()['ddi'].tolist())
-        return selection
+        # Apply user selection
+        if selection:
+            ps_selection = {}
+            if 'spw_name' in selection:
+                ps_selection['spw_name'] = selection['spw_name']
+            if 'field_name' in selection:
+                ps_selection['field_name'] = selection['field_name']
+            if 'source_name' in selection:
+                ps_selection['source_name'] = selection['source_name']
+            if 'obs_mode' in selection:
+                ps_selection['obs_mode'] = selection['obs_mode']
+            if ps_selection:
+                self._logger.info(f"Applying user selection to processing set: {ps_selection}")
+                selected_ps = ps.sel(**ps_selection)
+
+        # Select first spw if not plot axis and not user-selected
+        if 'spw' not in (x_axis, y_axis) and (not selection or 'spw_name' not in selection):
+            # Set spw selection
+            spw_ps = selected_ps if selected_ps is not None else ps
+            spw_name = self._get_spw_name_selection(spw_ps, None)
+            spw_selection = {'spw_name': spw_name}
+            # Apply spw selection
+            selected_ps = selected_ps.sel(**spw_selection) if selected_ps else ps.sel(**spw_selection)
+            # Update selection with spw selection
+            selection = selection | spw_selection if selection else spw_selection
+
+        return selected_ps, selection
+
+
+    def _get_spw_name_selection(self, ps, spw_selection):
+        ''' Return spw selection by name (str or list) or first by frequency if selection is None '''
+        # spw was selected by name(s)
+        if isinstance(spw_selection, str) or \
+           (isinstance(spw_selection, list) and all(isinstance(spw, str) for spw in spw_selection)):
+           return spw_selection
+
+        # Collect spw names by id
+        spw_names = {}
+        for key in ps:
+            freq_xds = ps[key].frequency
+            spw_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
+
+        # spw was selected by list
+        if isinstance(spw_selection, list):
+            spw_name_list = []
+            for spw in spw_selection:
+                if isinstance(spw, int):
+                    # User selected by id
+                    spw_name_list.append(spw_names[spw])
+                elif isinstance(spw, str):
+                    # User selected by name
+                    spw_name_list.append(spw)
+                else:
+                    raise ValueError(f"Invalid spw selection: {spw}")
+            return spw_name_list
+
+        # spw not selected: select first spw by id
+        first_spw_id = min(spw_names)
+        first_spw_name = spw_names[first_spw_id]
+        spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
+        self._logger.info(f"Selecting first spw id {first_spw_id}: {first_spw_name} with range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
+        return first_spw_name
 
 
     def _amp_color_limits(self, ps, vis_axis):

@@ -40,9 +40,8 @@ def get_processing_set(vis_path):
             print(f"Converting input MS {vis_path} to zarr {zarr_path}")
             convert_msv2_to_processing_set(
                 in_file=vis_path,
-                out_file=zarr_path,
-                partition_scheme="ddi_intent_field"
-            )
+                out_file=zarr_path
+                )
 
     if not os.path.exists(zarr_path):
         raise RuntimeError("Zarr file does not exist")

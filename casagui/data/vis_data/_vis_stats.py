@@ -6,6 +6,7 @@ from graphviper.graph_tools.map import map
 from graphviper.graph_tools.reduce import reduce
 
 import dask
+from dask.distributed import client
 import numpy as np
 
 from ._vis_data import get_vis_data_var, get_axis_data
@@ -26,7 +27,16 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
     input_params['vis_axis'] = vis_axis
     input_params['vis_data'] = vis_data
 
-    n_chunks = len(local_client().nthreads())
+    active_client = client._get_global_client()
+    if active_client is not None:
+        n_threads = len(active_client.nthreads())
+        logger.debug(f"vis stats: dask client has {n_threads} threads.")
+    else:
+        n_threads = 1
+        logger.debug("vis stats: no dask client created.")
+    #n_ddis = len(set(ps.summary()['spw_id']))
+    #n_chunks = n_client_threads * n_ddis * 4
+    n_chunks = max(n_threads, 8)
     logger.debug(f"Setting {n_chunks} n_chunks for parallel coords.")
 
     # Calculate min, max, mean using frequency parallel coords
@@ -44,7 +54,7 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
         graph, _reduce_stats, input_params, mode='tree'
     )
     dask_graph = generate_dask_workflow(graph_reduce)
-    dask_graph.visualize(filename='stats.png')
+    #dask_graph.visualize(filename='stats.png')
     results = dask.compute(dask_graph)
     data_min, data_max, data_sum, data_count = results[0]
     data_mean = data_sum / data_count
@@ -116,6 +126,7 @@ def _map_stats(input_params):
     max_vals = []
     sum_vals = []
     count_vals = []
+    #print(f"data selection: {input_params['data_selection']}")
 
     ps_iter = processing_set_iterator(
         input_params['data_selection'],
