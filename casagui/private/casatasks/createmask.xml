@@ -22,6 +22,7 @@
         <value type="stringVec"/>
       </param>
       <param name="create">
+        <shortdescription>If equal to True, mask cubes are created if they do not exist</shortdescription>
         <type>bool</type>
         <value>True</value>
       </param>
