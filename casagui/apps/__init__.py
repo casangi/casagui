@@ -30,9 +30,11 @@
 from ._plotants import plotants
 from ._plotbandpass import plotbandpass
 from ._createmask import CreateMask
+#from ._createregion import CreateRegion
 from ._interactiveclean import InteractiveClean
 from ..bokeh.state import initialize_session
 from ..utils import copydoc
 initialize_session()
 
 from ..private.casatasks.iclean import iclean
+from ..private.casatasks.createmask import createmask
