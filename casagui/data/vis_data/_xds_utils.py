@@ -1,6 +1,7 @@
 '''
-Utility functions to manage processing set data
+Utility functions to manage xarray DataSets
 '''
+
 import numpy as np
 import xarray as xr
 
