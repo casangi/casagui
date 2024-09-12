@@ -1,21 +1,31 @@
 import numpy as np
 from astropy.constants import c
 
+from xradio.vis._processing_set import processing_set
+
 def is_vis_axis(axis):
     vis_axes = ['amp', 'phase', 'real', 'imag']
     return axis.split('_')[0] in vis_axes
 
 
-def get_vis_data_var(vis_axis):
+def get_vis_data_var(xds, vis_axis):
     ''' Returns name of xds data_var or raise exception '''
+    if isinstance(xds, processing_set):
+        xds = xds.get(0)
+
     vis_type = vis_axis.split('_')[1] if '_' in vis_axis else 'data'
     data_vars = {
         'data': 'VISIBILITY',
         'corrected': 'VISIBILITY_CORRECTED',
         'model': 'VISIBILITY_MODEL'
     }
+
     if vis_type not in data_vars:
         raise ValueError(f"Invalid vis axis type: {vis_type}")
+
+    if "SPECTRUM" in xds.data_vars:
+        return "SPECTRUM"
+
     return data_vars[vis_type]
 
 def get_axis_data(xds, axis):
@@ -72,12 +82,9 @@ def get_axis_data(xds, axis):
 
 def _calc_vis_axis(xds, axis):
     ''' Calculate axis from VISIBILITY xarray DataArray '''
-    data_var = get_vis_data_var(axis)
+    data_var = get_vis_data_var(xds, axis)
     if data_var not in xds.data_vars:
-        if "SPECTRUM" in xds.data_vars:
-            data_var = "SPECTRUM"
-        else:
-            raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
+        raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
     xda = xds[data_var]
 
     # Single dish

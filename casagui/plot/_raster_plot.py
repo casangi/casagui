@@ -25,22 +25,19 @@ def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path, color_limits,
 
     Returns: holoviews Image or Overlay (if flagged data)
     '''
-    if 'SPECTRUM' in ps.get(0).data_vars:
-        # sd float data
-        vis_data = 'SPECTRUM'
-        x_axis = 'antenna_name' if x_axis == 'baseline' else x_axis
-        y_axis = 'antenna_name' if y_axis == 'baseline' else y_axis
-    else:
-        vis_data = get_vis_data_var(vis_axis)
+    vis_data_var = get_vis_data_var(ps, vis_axis)
+    if 'SPECTRUM' in vis_data_var:
+        x_axis = 'antenna_name' if x_axis in ['baseline', 'antenna'] else x_axis
+        y_axis = 'antenna_name' if y_axis in ['baseline', 'antenna'] else y_axis
 
     # capture all dimensions before selection
-    vis_dims = ps.get(0)[vis_data].dims
+    vis_dims = ps.get(0)[vis_data_var].dims
     dims_to_select = _get_raster_selection_dims(vis_dims, x_axis, y_axis)
     logger.debug(f"Selecting dimensions {dims_to_select} for raster plane")
 
     # xds selected for raster plane with vis data (amp, phase, etc.) set
-    plot_xds, selection = _get_plot_xds(ps, x_axis, y_axis, vis_axis, vis_data, dims_to_select, selection, logger)
-    logger.debug(f"Plotting visibility data with shape: {plot_xds[vis_data].shape}")
+    plot_xds, selection = _get_plot_xds(ps, x_axis, y_axis, vis_axis, vis_data_var, dims_to_select, selection, logger)
+    logger.debug(f"Plotting visibility data with shape: {plot_xds[vis_data_var].shape}")
 
     # Set title for all plots
     title = _get_plot_title(plot_xds, dims_to_select, selection, os.path.basename(vis_path))
@@ -48,34 +45,29 @@ def raster_plot(ps, x_axis, y_axis, vis_axis, selection, vis_path, color_limits,
     # Axes for plot (replaced with index for regular spacing where needed)
     raster_xds, x_axis_labels = get_axis_labels(plot_xds, x_axis)
     raster_xds, y_axis_labels = get_axis_labels(plot_xds, y_axis)
-    c_axis_labels = get_vis_axis_labels(plot_xds, vis_data, vis_axis)
+    c_axis_labels = get_vis_axis_labels(plot_xds, vis_data_var, vis_axis)
 
-    return _plot_xds(plot_xds, vis_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
+    return _plot_xds(plot_xds, vis_data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
 
-def _get_plot_xds(ps, x_axis, y_axis, vis_axis, vis_data, dims_to_select, selection, logger):
+def _get_plot_xds(ps, x_axis, y_axis, vis_axis, vis_data_var, dims_to_select, selection, logger):
     # User selection
     selected_ps = _apply_user_selection(ps, dims_to_select, selection, logger)
 
     # Raster plane selection (first index) if not selected by user; selection updated
     raster_ps, selection = _apply_raster_selection(selected_ps, dims_to_select, selection, logger)
 
-    # Add spw dimension for plot axis
-    if 'spw' in (x_axis, y_axis):
-        raster_ps = _add_spw_dimension(raster_ps)
-
     # xds for raster plot
     raster_xds = concat_ps_xds(raster_ps, logger)
-    if raster_xds[vis_data].count() == 0:
+    if raster_xds[vis_data_var].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded visibilities with nan values.")
 
     # Calculate complex component of vis data
-    raster_xds[vis_data] = get_axis_data(raster_xds, vis_axis)
+    raster_xds[vis_data_var] = get_axis_data(raster_xds, vis_axis)
 
     return raster_xds, selection
 
 def _get_raster_selection_dims(vis_dims, x_axis, y_axis):
     dims = list(vis_dims)
-    # spw axis is not a dim (yet)
     if x_axis in dims:
         dims.remove(x_axis)
     if y_axis in dims:
@@ -172,16 +164,6 @@ def _get_value_for_index(ps, dim, index):
         except IndexError:
             raise IndexError(f"Plot failed: {dim} selection {index} out of range {len(values)}")
 
-def _add_spw_dimension(ps):
-    spw_ps = ps
-    for key in ps:
-        xds = spw_ps[key]
-        spw_id = xds.frequency.spectral_window_id
-        spw_xds = xds.expand_dims({"spw": 1}, axis=0)
-        spw_xds = spw_xds.assign_coords({"spw": [spw_id]})
-        spw_ps[key] = spw_xds
-    return spw_ps
-
 def _get_plot_title(xds, selected_dims, selection, vis_name):
     ''' Form string containing vis name and selected values '''
     title = f"{vis_name}\n"
@@ -189,8 +171,10 @@ def _get_plot_title(xds, selected_dims, selection, vis_name):
     # Add processing set selection: spw, field, and intent
     if 'spw_name' in selection:
         title += f"spw: {selection['spw_name']} ({xds.frequency.spectral_window_id})\n"
-    if 'field' in selection:
-        title += f"field: {field}\n"
+    if 'field_name' in selection:
+        title += f"field: {selection['field_name']}\n"
+    if 'source_name' in selection:
+        title += f"source: {selection['source_name']}\n"
     if 'obs_mode' in selection:
         title += f"obs mode: {selection['obs_mode']}\n"
 
@@ -207,14 +191,14 @@ def _get_plot_title(xds, selected_dims, selection, vis_name):
 
     return title
 
-def _plot_xds(xds, vis_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):
+def _plot_xds(xds, vis_data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):
     # create holoviews.element.raster.Image
     x_axis, x_label, x_ticks = x_axis_labels
     y_axis, y_label, y_ticks = y_axis_labels
     c_axis, c_label = c_axis_labels
 
-    unflagged_xda = xds[vis_data].where(xds.FLAG == 0.0).rename(c_axis)
-    flagged_xda = xds[vis_data].where(xds.FLAG == 1.0).rename(c_axis)
+    unflagged_xda = xds[vis_data_var].where(xds.FLAG == 0.0).rename(c_axis)
+    flagged_xda = xds[vis_data_var].where(xds.FLAG == 1.0).rename(c_axis)
 
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
     unflagged_colormap = "viridis"
@@ -235,11 +219,11 @@ def _plot_xds(xds, vis_data, title, x_axis_labels, y_axis_labels, c_axis_labels,
 def _plot_xda(xda, x_axis, y_axis, color_limits, c_label, title, x_label, y_label, x_ticks, y_ticks, colormap):
     if xda.count() == 0:
         return None
-    # print("plot xda:", xda)
+    #print("plot xda:", xda)
 
     if xda.coords[x_axis].size > 1 and xda.coords[y_axis].size > 1:
         # Raster 2D data
-        return xda.hvplot(x=x_axis, y=y_axis, width=900, height=600,
+        return xda.hvplot.quadmesh(x=x_axis, y=y_axis, width=900, height=600,
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
             rot=90, xticks=x_ticks, yticks=y_ticks,

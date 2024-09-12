@@ -60,35 +60,23 @@ def concat_ps_xds(ps, logger):
         logger.debug("Processing set contains one dataset, nothing to concat.")
         return ps.get(0)
 
-    concat_dim = 'time'
     xds_list = []
     first_values = []
-    '''
-    if 'spw' in ps.get(0).dims: # spw is plot axis
-        concat_dim = 'spw'
 
-    if concat_dim == 'spw':
-        for key in ps:
-            # each xds has one spw value
-            xds_list.append(ps[key])
-            first_values.append(ps[key].spw.values)
-    else:
-    '''
-    if True:
-        # xds have time ranges from different scans, so split xds at time gaps
-        sorted_time_values = _get_sorted_times(ps)
-        for key in ps:
-            split_xds, first_xds_times = _split_xds_by_time_gap(ps[key], sorted_time_values)
-            xds_list.extend(split_xds)
-            first_values.extend(first_xds_times)
-        if len(xds_list) < n_xds:
-            logger.debug(f"Split {n_xds} datasets by time gap into {len(xds_list)} datasets.")
+    # xds have time ranges from different scans, so split xds at time gaps
+    sorted_time_values = _get_sorted_times(ps)
+    for key in ps:
+        split_xds, first_xds_times = _split_xds_by_time_gap(ps[key], sorted_time_values)
+        xds_list.extend(split_xds)
+        first_values.extend(first_xds_times)
+    if len(xds_list) < n_xds:
+        logger.debug(f"Split {n_xds} datasets by time gap into {len(xds_list)} datasets.")
 
     # Create sorted xds list using sorted first values
     sorted_xds = [None] * len(xds_list)
     first_values.sort()
     for xds in xds_list:
-        first_xds_value = xds[concat_dim].values
+        first_xds_value = xds['time'].values
         if first_xds_value.size > 1:
             first_xds_value = first_xds_value[0]
 
@@ -98,7 +86,7 @@ def concat_ps_xds(ps, logger):
                 sorted_xds[idx] = xds
                 break
 
-    return xr.concat(sorted_xds, dim=concat_dim)
+    return xr.concat(sorted_xds, dim='time')
 
 def _get_sorted_times(ps):
     values = []

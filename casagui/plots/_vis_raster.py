@@ -49,6 +49,7 @@ class VisRaster:
 
         # Vis name (no path) for plot title and save filename
         self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
+        self._spw_color_limits = {}
         self._plot = None
 
 
@@ -96,17 +97,17 @@ class VisRaster:
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None):
         '''
         Create a static y_axis vs x_axis raster plot of visibilities after applying selection.
-        Plot axes include time, baseline, channel, polarization, and spw.  The axes not set as plot axes can be selected, else the first will be used.
+        Plot axes include time, baseline/antenna, channel, and polarization.  The axes not set as plot axes can be selected, else the first will be used.
 
         Args:
-            x_axis (str): Plot x-axis. Default 'baseline'.
+            x_axis (str): Plot x-axis. Default 'baseline' ('antenna' for spectrum).
             y_axis (str): Plot y-axis. Default 'time'.
-            vis_axis (str): Visibility component and type (corrected, model). Default 'amp'.
+            vis_axis (str): Visibility component (amp, phase, real, imag) and type if not data (corrected, model), e.g. 'phase_corrected'. Default 'amp'.
             selection (dict): selected data to plot. Options include:
               Processing set selection:
                 Summary column names: 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
                 'query': for pandas query of summary columns.
-                First spw_name by frequency will be selected if spw is not a plot axis.
+                Default: select first spw by id.
               Plot selection:
                 time, baseline, frequency, polarization: select data dimensions which are not plot axes. Default is index 0.
 
@@ -122,14 +123,25 @@ class VisRaster:
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
         # For amplitude, limit colorbar range using visibility stats
-        # TODO: save and reuse color limits?
-        #color_limits = self._amp_color_limits(selected_ps, vis_axis)
         color_limits = None
+        if 'amp' in vis_axis:
+            selected_spw = selection['spw_name']
+            if selected_spw in self._spw_color_limits:
+                color_limits = self._spw_color_limits[selected_spw]
+            else:
+                color_limits = self._calc_amp_color_limits(selected_ps, vis_axis)
+                self._spw_color_limits[selected_spw] = color_limits
+            if color_limits is None:
+                self._logger.info("Autoscale colorbar limits")
+            else:
+                self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
 
         # Plot selected processing set
         self._plot = raster_plot(selected_ps, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits, self._logger)
+
         if self._plot is None:
             raise RuntimeError("Plot failed.")
+
         plot_time = time.time() - start_plot
         self._logger.debug(f"Plot elapsed time: {plot_time:.2f}s.")
 
@@ -181,21 +193,10 @@ class VisRaster:
         if not is_vis_axis(vis_axis):
             raise ValueError(f"Invalid vis_axis {vis_axis}")
 
-        # TODO: are vis types in all xds in ps? Checking first one
-        first_xds = self._ps.get(0)
-
-        if "SPECTRUM" in first_xds.data_vars:
-            vis_data = "SPECTRUM"
-        else: 
-            vis_data = get_vis_data_var(vis_axis)
-
-        if vis_data not in first_xds.data_vars:
-            raise ValueError(f"vis_axis {vis_axis} does not exist in dataset")
-
-        valid_axes = list(first_xds[vis_data].dims)
-        valid_axes.append('spw') # dimension added when plot axis
-        if vis_data == "SPECTRUM":
-            valid_axes.append('baseline') # antenna_name dim in spectrum data
+        vis_data_var = get_vis_data_var(self._ps, vis_axis)
+        valid_axes = list(self._ps.get(0)[vis_data_var].dims)
+        if "SPECTRUM" in vis_data_var:
+            valid_axes.append('baseline') # has 'antenna_name' dim instead
         if x_axis not in valid_axes or y_axis not in valid_axes:
             raise ValueError(f"Invalid x or y axis, please select from {valid_axes}")
 
@@ -222,46 +223,24 @@ class VisRaster:
                 self._logger.info(f"Applying user selection to processing set: {ps_selection}")
                 selected_ps = ps.sel(**ps_selection)
 
-        # Select first spw if not plot axis and not user-selected
-        if 'spw' not in (x_axis, y_axis) and (not selection or 'spw_name' not in selection):
-            # Set spw selection
+        # Select first spw (min id) if not user-selected
+        if not selection or 'spw_name' not in selection:
             spw_ps = selected_ps if selected_ps is not None else ps
-            spw_name = self._get_spw_name_selection(spw_ps, None)
-            spw_selection = {'spw_name': spw_name}
-            # Apply spw selection
+            first_spw_name = self._get_first_spw_name(spw_ps)
+            spw_selection = {'spw_name': first_spw_name}
             selected_ps = selected_ps.sel(**spw_selection) if selected_ps else ps.sel(**spw_selection)
-            # Update selection with spw selection
             selection = selection | spw_selection if selection else spw_selection
 
         return selected_ps, selection
 
 
-    def _get_spw_name_selection(self, ps, spw_selection):
+    def _get_first_spw_name(self, ps):
         ''' Return spw selection by name (str or list) or first by frequency if selection is None '''
-        # spw was selected by name(s)
-        if isinstance(spw_selection, str) or \
-           (isinstance(spw_selection, list) and all(isinstance(spw, str) for spw in spw_selection)):
-           return spw_selection
-
         # Collect spw names by id
         spw_names = {}
         for key in ps:
             freq_xds = ps[key].frequency
             spw_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
-
-        # spw was selected by list
-        if isinstance(spw_selection, list):
-            spw_name_list = []
-            for spw in spw_selection:
-                if isinstance(spw, int):
-                    # User selected by id
-                    spw_name_list.append(spw_names[spw])
-                elif isinstance(spw, str):
-                    # User selected by name
-                    spw_name_list.append(spw)
-                else:
-                    raise ValueError(f"Invalid spw selection: {spw}")
-            return spw_name_list
 
         # spw not selected: select first spw by id
         first_spw_id = min(spw_names)
@@ -271,11 +250,8 @@ class VisRaster:
         return first_spw_name
 
 
-    def _amp_color_limits(self, ps, vis_axis):
-        # Calculate colorbar limits from amplitude stats
-        if 'amp' not in vis_axis:
-            return None
-
+    def _calc_amp_color_limits(self, ps, vis_axis):
+        # Calculate colorbar limits from amplitude stats for unflagged data
         self._logger.info("Calculating stats for colorbar limits.")
         start = time.time()
         min_val, max_val, mean, std = self._get_vis_stats(ps, vis_axis)
@@ -283,9 +259,11 @@ class VisRaster:
         clip_min = max(data_min, mean - (3.0 * std))
         data_max = max(0.0, max_val)
         clip_max = min(data_max, mean + (3.0 * std))
-        color_limits = (clip_min, clip_max)
+        if clip_min == 0.0 and clip_max == 0.0:
+            color_limits = None # flagged plot
+        else:
+            color_limits = (clip_min, clip_max)
         self._logger.debug(f"Stats elapsed time: {time.time() - start:.2f} s.")
-        self._logger.info(f"Setting colorbar limits: ({clip_min:.4f}, {clip_max:.4f}).")
         return color_limits
 
 

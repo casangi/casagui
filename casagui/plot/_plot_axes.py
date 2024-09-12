@@ -24,13 +24,14 @@ def _get_coordinate_labels(xds, coordinate):
         return _get_frequency_labels(xds.frequency)
     elif coordinate == 'polarization':
         return _get_polarization_labels(xds.polarization)
-    elif coordinate == 'spw':
-        return _get_spw_labels(xds.spw)
 
 def _get_time_labels(time_xda):
     ''' Return time string or list of time strings '''
     if time_xda.size > 1:
-        times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
+        if time_xda.integration_time['data'] < 1.0:
+            times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S.%f")
+        else:
+            times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
     else:
         times = to_datetime(time_xda, unit='s').strftime("%d-%b-%Y %H:%M:%S")
     return times if isinstance(times, str) else list(times.values)
@@ -50,16 +51,9 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.values:.4f}"
+        return f"{frequency_xda.item():.4f}"
     else:
         return None # auto ticks from frequency values
-
-def _get_spw_labels(spw_xda):
-    ''' Return ddi string for single value, or None to autogenerate ticks '''
-    if spw_xda.size == 1: # int
-        return f"{spw_xda.values[0]}"
-    else:
-        return None # auto ticks from spw values
 
 def get_vis_axis_labels(xds, data_var, axis):
     ''' Get vis axis label for colorbar '''
@@ -104,8 +98,6 @@ def get_axis_labels(xds, axis):
         label =  "Polarization"
         # replace axis with index for plot range
         xds['polarization'] = np.array(range(xds.polarization.size))
-    elif axis == "spw":
-        label =  "Spectral Window"
     return xds, (axis, label, ticks)
 
 def _get_date_range(time_xda):

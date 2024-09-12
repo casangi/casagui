@@ -18,14 +18,14 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
         ps_store (str): path to visibility file
         vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
     '''
-    vis_data = get_vis_data_var(vis_axis)
-    if vis_data is None:
+    vis_data_var = get_vis_data_var(ps, vis_axis)
+    if vis_data_var is None:
         raise RuntimeError(f"Invalid visibility axis {vis_axis}")
 
     input_params = {}
     input_params['input_data_store'] = ps_store
     input_params['vis_axis'] = vis_axis
-    input_params['vis_data'] = vis_data
+    input_params['data_var'] = vis_data_var
 
     active_client = client._get_global_client()
     if active_client is not None:
@@ -34,8 +34,6 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
     else:
         n_threads = 1
         logger.debug("vis stats: no dask client created.")
-    #n_ddis = len(set(ps.summary()['spw_id']))
-    #n_chunks = n_client_threads * n_ddis * 4
     n_chunks = max(n_threads, 8)
     logger.debug(f"Setting {n_chunks} n_chunks for parallel coords.")
 
@@ -57,9 +55,14 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
     #dask_graph.visualize(filename='stats.png')
     results = dask.compute(dask_graph)
     data_min, data_max, data_sum, data_count = results[0]
+
+    if data_count == 0.0:
+        logger.debug("stats: no unflagged data")
+        return (0.0, 0.0)
+
     data_mean = data_sum / data_count
     input_params['mean'] = data_mean
-    logger.debug(f"stats: min={data_min}, max={data_max}, sum={data_sum}, count={data_count}, mean={data_mean}")
+    logger.debug(f"stats: min={data_min:.4f}, max={data_max:.4f}, sum={data_sum:.4f}, count={data_count} mean={data_mean:.4f}")
 
     # Calculate variance and standard deviation
     graph = map(
@@ -76,7 +79,7 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
     var_sum, var_count = results[0]
     data_variance = var_sum / var_count
     data_stddev = data_variance ** 0.5
-    logger.debug(f"stats: variance={data_variance}, stddev={data_stddev}")
+    logger.debug(f"stats: variance={data_variance:.4f}, stddev={data_stddev:.4f}")
     return (data_min, data_max, data_mean, data_stddev)
 
 def calculate_coord_min(ps, ps_store, coord):
@@ -106,39 +109,42 @@ def calculate_coord_min(ps, ps_store, coord):
 
 def _get_stats_xda(xds, vis_axis):
     ''' Return xda with only unflagged cross-corr visibility data '''
+    # apply flags to get unflagged vis data
     xda = get_axis_data(xds, vis_axis)
-    # apply flags
     unflagged_xda = xda.where(np.logical_not(xds.FLAG))
-    # remove autocorrelation baselines
-    stats_xda = unflagged_xda.where(
-        xds.baseline_antenna1_id != xds.baseline_antenna2_id,
-        drop=True
-    )
-    if stats_xda.size == 0:
-        stats_xda = unflagged_xda
-    return stats_xda
+
+    if unflagged_xda.count() > 0 and "baseline_antenna1_name" in unflagged_xda.coords:
+        # if unflagged data, remove autocorrelation baselines
+        stats_xda = unflagged_xda.where(
+            unflagged_xda.baseline_antenna1_name != unflagged_xda.baseline_antenna2_name
+        )
+        if stats_xda.count() > 0:
+            # return xda with nan where flagged or auto-corr
+            return stats_xda
+
+    # return xda with nan where flagged
+    return unflagged_xda
 
 def _map_stats(input_params):
     ''' Return min, max, sum, and count of data chunk '''
     vis_axis = input_params['vis_axis']
-    vis_data = input_params['vis_data']
+    data_var = input_params['data_var']
     min_vals = []
     max_vals = []
     sum_vals = []
     count_vals = []
-    #print(f"data selection: {input_params['data_selection']}")
 
     ps_iter = processing_set_iterator(
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],
-        data_variables=[vis_data, 'FLAG'],
+        data_variables=[data_var, 'FLAG'],
         load_sub_datasets=False
     )
  
     for xds in ps_iter:
         xda = _get_stats_xda(xds, vis_axis)
-        if xda.size > 0:
+        if xda.count() > 0:
             xda_data = xda.values.ravel()
             try:
                 min_val = xda_data[np.nanargmin(xda_data)]
@@ -153,11 +159,11 @@ def _map_stats(input_params):
             sum_vals.append(np.nansum(xda))
             count_vals.append(xda.count().values)
     try:
-        min_value = np.min(min_vals)
+        min_value = np.nanmin(min_vals)
     except ValueError:
         min_value = np.nan
     try:
-        max_value = np.max(max_vals)
+        max_value = np.nanmax(max_vals)
     except ValueError:
         max_value = np.nan
     result = (min_value, max_value, sum(sum_vals), sum(count_vals))
@@ -166,11 +172,11 @@ def _map_stats(input_params):
 def _reduce_stats(graph_inputs, input_params):
     ''' Compute min, max, sum, and count of all data'''
     try:
-        data_min = min(0.0, np.min([input[0] for input in graph_inputs]))
+        data_min = min(0.0, np.nanmin([input[0] for input in graph_inputs]))
     except ValueError:
         data_min = 0.0
     try:
-        data_max = max(0.0, np.max([input[1] for input in graph_inputs]))
+        data_max = max(0.0, np.nanmax([input[1] for input in graph_inputs]))
     except ValueError:
         data_max = 0.0
     data_sum = sum([input[2] for input in graph_inputs])
@@ -181,7 +187,7 @@ def _map_variance(input_params):
     ''' Return sum, count, of (xda - mean) squared '''
     mean = input_params['mean']
     vis_axis = input_params['vis_axis']
-    vis_data = input_params['vis_data']
+    data_var = input_params['data_var']
 
     sq_diff_sum = 0.0
     sq_diff_count = 0
@@ -190,7 +196,7 @@ def _map_variance(input_params):
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],
-        data_variables=[vis_data, 'FLAG'],
+        data_variables=[data_var, 'FLAG'],
         load_sub_datasets=False
     )
 
