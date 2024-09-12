@@ -6,8 +6,6 @@ visibilities
 import os
 import time
 
-import hvplot
-
 from graphviper.utils.logger import setup_logger
 
 from ..data.vis_data._vis_data import is_vis_axis, get_vis_data_var
@@ -16,20 +14,22 @@ from ..data.vis_data._ps_utils import summary
 from ..data.vis_data._xds_utils import set_coordinates
 from ..io import get_processing_set
 from ..plot import raster_plot
+from ..plots._vis_plot import show, save
 
 class VisRaster:
     '''
-    Plot visibilities as raster plot.
+    Plot visibility data as raster plot.
 
     Args:
         vis (str): visibility path in MSv2 (.ms) or MSv4 (.zarr) format.
+        log_level (str): logging threshold, default 'INFO'
 
     Example:
         vr = VisRaster(vis='myvis.ms')
         vr.summary()
         vr.plot(x_axis='baseline_id', y_axis='time', vis_axis='amp') # same as vr.plot()
         vr.show()
-        vr.save('myplot.png')
+        vr.save() # saves as {vis name}_raster.png
     '''
 
     def __init__(self, vis, log_level="INFO"):
@@ -38,6 +38,9 @@ class VisRaster:
 
         # Processing set
         self._ps, self._vis_path = get_processing_set(vis)
+        # Vis name (no path) for plot title and save filename
+        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
+
         n_datasets = len(self._ps)
         if n_datasets == 0:
             raise RuntimeError("Failed to read visibility file into processing set")
@@ -47,8 +50,6 @@ class VisRaster:
         for key in self._ps:
             self._ps[key] = set_coordinates(self._ps[key])
 
-        # Vis name (no path) for plot title and save filename
-        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
         self._spw_color_limits = {}
         self._plot = None
 
@@ -119,42 +120,29 @@ class VisRaster:
         ''' 
         Show interactive Bokeh plot in a browser.
         Plot tools include pan, zoom, hover, and save.
-        Groupby axes have selectors: slider, dropdown, etc.
         '''
-        if self._plot is None:
-            raise RuntimeError("No plot to show.  Run plot() to create plot.")
-        hvplot.show(self._plot, title="VisRaster " + self._vis_basename, threaded=True)
-
+        title="VisRaster " + self._vis_basename
+        show(self._plot, title)
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
         '''
         Save plot to file.
             filename (str): Name of file to save. Default '': see below.
-            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'. Default 'auto': inferred from filename.
+            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
             hist (bool): Whether to compute and adjoin histogram.  Default False.
             backend (str): rendering backend, 'bokeh' or 'matplotlib'.  Default None = 'bokeh'.
             resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file. Default 'online'.
-            toolbar (bool): Whether to include the toolbar in the exported plot (True) or not (False). Default None = display the toolbar unless plotfile is png.
+            toolbar (bool, None): Whether to include the toolbar in the exported plot (True) or not (False). Default None: display the toolbar unless plotfile is png.
             title (str): Custom title for exported HTML file.
 
-        If plotfile is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
+        If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
 
         '''
-        if self._plot is None:
-            raise RuntimeError("No plot to save.  Run plot() to create plot.")
-
         start = time.time()
         if not filename:
             filename = f"{self._vis_basename}_raster.png"
-        hvplot.save(self._plot, filename=filename)
-        '''
-        resources = 'inline' if resources == 'offline' else 'cdn'
 
-        if hist:
-            hvplot.save(self._plot.hist(), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
-        else:
-            hvplot.save(self._plot, filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
-        '''
+        save(self._plot, filename, fmt, hist, backend, resources, toolbar, title)
         self._logger.info(f"Saved plot to {filename}.")
         self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
 
