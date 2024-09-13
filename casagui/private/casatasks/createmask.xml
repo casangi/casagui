@@ -3,7 +3,7 @@
   <task type="function" name="createmask" category="imaging">
     <shortdescription>Create mask cubes interactively with a GUI</shortdescription>
 
-    <description>Create a mask cube for one or more images using a GUI. This task
+    <description>Create a mask cube for one or more images using a GUI.
                          This task is based upon the same tools that are used to build
                          the interactive clean application so the same command keys are
                          used for both applications.
