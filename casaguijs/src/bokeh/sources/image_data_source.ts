@@ -126,10 +126,10 @@ export class ImageDataSource extends ColumnDataSource {
     }
 
     static {
-        this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
+        this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Nullable, Any }) => ({
             init_script: [ Any, null ],
             image_source: [ Ref(ImagePipe) ],
-            _mask_contour_source: [ Ref(ColumnDataSource), null ],
+            _mask_contour_source: [ Nullable(Ref(ColumnDataSource)), null ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],
         }));
