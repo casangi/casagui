@@ -3,9 +3,15 @@ Implementation of the ``VisScatter`` application for plotting and editing
 visibilities
 '''
 
+import os
+import time
+
+from graphviper.utils.logger import setup_logger
+
+from ..data.vis_data._ps_utils import summary
 from ..io import get_processing_set
 from ..plot import scatter_plot
-import hvplot
+from ..plots._vis_plot import show, save
 
 class VisScatter:
     '''
@@ -13,49 +19,84 @@ class VisScatter:
 
     Args:
         vis (str): visibility path in MSv2 (.ms) or MSv4 (.zarr) format.
+        log_level (str): logging threshold, default 'INFO'
 
     Example:
         vs = VisScatter(vis='myvis.ms')
+        vs.summary()
         vs.plot(xaxis='time', yaxis='amp')
-        vs.save() # saves as {vis}_scatter.png
+        vs.show()
+        vs.save() # saves as {vis name}_scatter.png
     '''
 
-    def __init__(self, vis):
+    def __init__(self, vis, log_level="INFO"):
+        # Logger
+        self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
+
         self._ps, self._vis_path = get_processing_set(vis)
-        n_datasets = len(self._ps.keys())
+        # Vis name (no path) for plot title and save filename
+        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
+
+        n_datasets = len(self._ps)
         if n_datasets == 0:
             raise RuntimeError("Failed to read visibility file into processing set")
         print(f"Processing {n_datasets} msv4 datasets")
+
         self._plot = None
 
-    def plot(self, xaxis='time', yaxis='amp', interactive=False):
+
+    def summary(self, columns=None):
+        ''' Print processing set summary.
+            Args: columns (None, str, list): type of metadata to list.
+                None:      Print all summary columns in processing set.
+                'by_msv4': Print formatted summary metadata by MSv4.
+                str, list: Print a subset of summary columns in processing set.
+                           Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+        '''
+        summary(self._ps, columns)
+
+
+    def plot(self, xaxis='time', yaxis='amp'):
         '''
         Create a scatter plot with specified xaxis and yaxis.
             xaxis (str): Plot x-axis. Default 'time'.
             yaxis (str): Plot y-axis. Default 'amp'.
             interactive (bool): Whether to display plot in browser (no GUI). Default False.
 
-        If interactive, the plot will be displayed in a web browser where the
-        user can inspect the Bokeh plot with pan, zoom, locate, etc.
+        TODO: add selection
         '''
+        start = time.time()
         self._plot = scatter_plot(self._ps, xaxis, yaxis)
-        if self._plot and interactive:
-            hvplot.show(self._plot)
-       
-    def save(self, plotfile=''):
+        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
+        if self._plot is None:
+            raise RuntimeError("Plot failed.")
+
+    def show(self):
+        ''' 
+        Show interactive Bokeh plot in a browser.
+        Plot tools include pan, zoom, hover, and save.
+        '''
+        title="VisScatter " + self._vis_basename
+        show(self._plot, title)
+
+    def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
         '''
         Save plot to file.
-            plotfile (str): Name of plot file to save.
+            filename (str): Name of file to save. Default '': see below.
+            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
+            hist (bool): Whether to compute and adjoin histogram.  Default False.
+            backend (str): rendering backend, 'bokeh' or 'matplotlib'.  Default None = 'bokeh'.
+            resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file. Default 'online'.
+            toolbar (bool, None): Whether to include the toolbar in the exported plot (True) or not (False). Default None: display the toolbar unless plotfile is png.
+            title (str): Custom title for exported HTML file.
 
-        If plotfile is set, the plot will be exported to the specified
-        filename in the format of its extension.  If not set, the plot
-        will be saved as a PNG with name {vis}_scatter.png.
+        If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
+
         '''
-        if not self._plot:
-            raise RuntimeError("No plot to save.  Run plot() to create plot.")
+        start = time.time()
+        if not filename:
+            filename = f"{self._vis_basename}_scatter.png"
 
-        if not plotfile:
-            plotfile = os.path.splitext(os.path.basename(self._vis_name))[0] + "_scatter.png"
-
-        print(f"Saving plot to {plotfile}")
-        hvplot.save(self._plot, plotfile)
+        save(self._plot, filename, fmt, hist, backend, resources, toolbar, title)
+        self._logger.info(f"Saved plot to {filename}.")
+        self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
