@@ -82,31 +82,6 @@ def calculate_vis_stats(ps, ps_store, vis_axis, logger):
     logger.debug(f"stats: variance={data_variance:.4f}, stddev={data_stddev:.4f}")
     return (data_min, data_max, data_mean, data_stddev)
 
-def calculate_coord_min(ps, ps_store, coord):
-    ''' Calculate minimum value of coord in ps '''
-    input_params = {}
-    input_params['input_data_store'] = ps_store
-    input_params['coord'] = coord
-    n_chunks = 8 
-
-    # Calculate min, max, mean using frequency parallel coords
-    frequencies = ps.get_ps_freq_axis()
-    parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_chunks)}
-    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
-
-    graph = map(
-        input_data=ps,
-        node_task_data_mapping=node_task_data_mapping,
-        node_task=_map_min,
-        input_params=input_params
-    )
-    graph_reduce = reduce(
-        graph, _reduce_min, input_params, mode='tree'
-    )
-    dask_graph = generate_dask_workflow(graph_reduce)
-    results = dask.compute(dask_graph)
-    return results[0]
-
 def _get_stats_xda(xds, vis_axis):
     ''' Return xda with only unflagged cross-corr visibility data '''
     # apply flags to get unflagged vis data
@@ -213,26 +188,3 @@ def _reduce_variance(graph_inputs, input_params):
     sq_diff_sum = sum([input[0] for input in graph_inputs])
     sq_diff_count = sum([input[1] for input in graph_inputs])
     return (sq_diff_sum, sq_diff_count)
-
-def _map_min(input_params):
-    ''' Return minimum value of input coord '''
-    coord = input_params['coord']
-    min_vals = []
-
-    ps_iter = processing_set_iterator(
-        input_params['data_selection'],
-        input_params['input_data_store'],
-        input_params['input_data'],
-        data_variables=[coord],
-        load_sub_datasets=False
-    )
- 
-    for xds in ps_iter:
-        xda = xds[coord]
-        min_val = np.min(xda).values.item()
-        min_vals.append(min_val)
-    return min(min_vals)
-
-def _reduce_min(graph_inputs, input_params):
-    ''' Compute min of all data (scalar) '''
-    return min(graph_inputs)
