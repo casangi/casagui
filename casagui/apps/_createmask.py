@@ -292,7 +292,7 @@ class CreateMask:
         self.__initialized = False
 
         ###
-        ### the asyncio future that is used to transmit the result from interactive clean
+        ### the asyncio future that is used to transmit the result from mask creation
         ###
         self.__result_future = None
 
@@ -386,11 +386,7 @@ class CreateMask:
         ###
         image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._mask_state.items( ) ],
                                                                 itergroups=self._image_control_tab_groups ),
-                                                     code='''console.group('Tab Change')
-                                                             console.log('names:',names)
-                                                             console.log('itergroups:',itergroups)
-                                                             console.groupEnd( )
-                                                             if ( ! hasprop(document,'_casa_last_control_tab') ) {
+                                                     code='''if ( ! hasprop(document,'_casa_last_control_tab') ) {
                                                                  document._casa_last_control_tab = 0
                                                              }
                                                              document._casa_image_name = names[cb_obj.active]
