@@ -1150,10 +1150,11 @@ class CubeMask:
             if msg['action'] == 'spectrum':
                 chan = msg['value']['chan']
                 index = msg['value']['index']
-                spectrum, mask = self._pipe['image'].spectrum( index + [chan[0]], True )
+                spectrum, mask_value = self._pipe['image'].spectrum( index + [chan[0]], True )
+                mask = { } if mask_value is None else dict( mask=mask_value )
                 return dict( result='success', update=dict( spectrum=spectrum,
-                                                            mask=mask,
-                                                            index=index, chan=chan ) )
+                                                            index=index, chan=chan,
+                                                            **mask ) )
 
         self._pipe['control'].register( self._ids['fetch-spectrum'], fetch_spectrum )
         return self._pixel_tracking_text
@@ -2078,8 +2079,7 @@ class CubeMask:
                                                                'chan' in msg.update &&
                                                                msg.update.index.length == 2 &&
                                                                msg.update.index.length == 2 ) {
-                                                              const { spectrum, chan, index, mask } = msg.update
-                                                              isource._update_spectrum = { spectrum, mask, chan, index }
+                                                              isource._update_spectrum = msg.update
                                                               update_func( isource._update_spectrum )
                                                           } else console.log( 'Error: update of spectrum', msg )
                                                       }
