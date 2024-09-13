@@ -84,7 +84,7 @@ class VisRaster:
 
         If plotting is successful, use show() or save() to view/save the plot.
         '''
-        start_plot = time.time()
+        start = time.time()
         self._check_plot_inputs(x_axis, y_axis, vis_axis, selection)
 
         # Apply metadata selection to processing set (spw, field, source, obs_mode)
@@ -109,12 +109,11 @@ class VisRaster:
 
         # Plot selected processing set
         self._plot = raster_plot(selected_ps, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits, self._logger)
+        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
         if self._plot is None:
             raise RuntimeError("Plot failed.")
 
-        plot_time = time.time() - start_plot
-        self._logger.debug(f"Plot elapsed time: {plot_time:.2f}s.")
 
     def show(self):
         ''' 
