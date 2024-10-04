@@ -664,7 +664,7 @@ class InteractiveClean:
 
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
 
-            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_controls( reuse=self._image_bitmask_controls, button_type='light' )
+            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_ctrl( reuse=self._image_bitmask_controls, button_type='light' )
 
             if imdetails['params']['am']['usemask'] == 'auto-multithresh':
                 imdetails['gui']['auto-masking-panel'] = [ TabPanel( child=column( row( Tip( imdetails['gui']['params']['automask']['noisethreshold'],

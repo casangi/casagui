@@ -40,7 +40,9 @@ from sys import platform
 from os.path import dirname, join
 import websockets
 from contextlib import asynccontextmanager
-from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, LODStart, LODEnd, ValueSubmit
+from bokeh.core.enums import HatchPattern as _hatch_patterns
+from bokeh.core.enums import DashPattern as _dash_patterns
+from bokeh.events import SelectionGeometry, MouseEnter, MouseLeave, MouseMove, LODStart, LODEnd, ValueSubmit
 from bokeh.models import CustomJS, CustomAction, Slider, PolyAnnotation, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
                          LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
@@ -62,6 +64,9 @@ from ..bokeh.models import TipButton, Tip
 from casagui.bokeh.utils import svg_icon
 
 import numpy as np
+
+_hatches = [str(p) for p in _hatch_patterns]
+_dashes = [str(p) for p in _dash_patterns]
 
 class CubeMask:
     '''Class which provides a common implementation of Bokeh widget behavior for
@@ -93,10 +98,13 @@ class CubeMask:
 
         self._is_notebook = is_notebook()
         #self._color = '#00FF00'                           # anti-green VLA users feedback (issue #40 2024-05-02 13:08:32)
-        self._color  = '#FFFFFF'                           # default color for mask, selection, etc.
+        self._region_style=dict( fill_alpha=0, fill_color='white', line_color='white', line_dash='solid', line_width=1, line_alpha=1, hatch_pattern=_hatches[0],
+                                 hover_line_color='white', hover_line_width=3, hover_fill_alpha=0.3, hover_fill_color='white', hover_hatch_pattern='blank',
+                                 hover_line_alpha=0.6, hover_line_dash='solid' )
         self._stop_serving_function = None                 # function supplied when starting serving
         self._image_path = image                           # path to image cube to be displayed
         self._mask_path = mask                             # path to bitmask cube (if any)
+        self._region_controls = { }                        # gui styling for regions
         self._mask_id = None                               # id for each unique mask
         self._image = None                                 # figure displaying cube & mask planes
         self._channel_ctrl = None                          # display channel and stokes
@@ -202,8 +210,6 @@ class CubeMask:
             ### init_script code sets up Ctrl key handling for switching the add/subtract plot tool actions from single channel ###
             ### operation to all channel operation                                                                              ###
             #######################################################################################################################
-            ### It could be that 'casalib.is_empty' should move to the actual casalib instead of being wedged in here           ###
-            #######################################################################################################################
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
                                              stats=True, abort=self.__abort, address=find_ws_address( ),
                                              init_script=CustomJS( args=self._mask_add_sub,
@@ -301,7 +307,38 @@ class CubeMask:
 
             if self._mask_path is None:
                 ### multiple annotations are drawn per channel to create mask from scratch
-                self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=0.3, line_color=None, fill_color='black', visible=True ) for _ in range(maxanno) ]
+                self._annotations = [ PolyAnnotation( xs=[], ys=[], visible=True, editable=True,
+                                                      **self._region_style ) for _ in range(maxanno) ]
+                for poly in self._annotations:
+                    # TypeError: Cannot read properties of undefined (reading 'connect')
+                    poly.js_on_change( 'xs', CustomJS( args=dict(),
+                                                          code='''console.group('XS')
+                                                                  console.log(cb_obj,this,cb_data)
+                                                                  console.groupEnd( )''' ) )
+                    poly.js_on_event( 'mouseenter', CustomJS( args=dict(),
+                                                              code='''console.group('Mouse Enter')
+                                                                      console.log(cb_obj,this,cb_data)
+                                                                      console.groupEnd( )''' ) )
+                    poly.js_on_event( 'panstart', CustomJS( args=dict(),
+                                                            code='''console.group('Pan Start')
+                                                                      console.log(cb_obj,this,cb_data)
+                                                                      console.groupEnd( )''' ) )
+                    #poly.js_on_event( 'mouseenter', CustomJS( args=dict(),
+                    #                                          code='''console.group('Mouse Enter')
+                    #                                                  console.log(cb_obj,this,cb_data)
+                    #                                                  console.groupEnd( )''' ) )
+                    #poly.js_on_change( 'data', CustomJS( args=dict(),
+                    #                                      code='''console.group('Data')
+                    #                                              console.log(cb_obj,this,cb_data)
+                    #                                              console.groupEnd( )''' ) )
+                    # poly.js_on_change( 'data', CustomJS( args=dict(),
+                    #                                      code='''console.group('Data')
+                    #                                              console.log(cb_obj,this,cb_data)
+                    #                                              console.groupEnd( )''' ) )
+                    # poly.js_on_event( 'change:data', CustomJS( args=dict(),
+                    #                                            code='''console.group('Change:Data')
+                    #                                                    console.log(cb_obj,this,cb_data)
+                    #                                                    console.groupEnd( )''' ) )
             else:
                 ### a bitmask cube is available and a single annotation is used to add or subtract from the bitmask cube
                 async def mod_mask( msg, self=self ):
@@ -411,6 +448,7 @@ class CubeMask:
 
                     return dict( result='failure', update={ }, error=err )
 
+                ## styling differs between the single "bitmask" PolyAnnotation and the "regions" PolyAnnotation
                 self._annotations = [ PolyAnnotation( xs=[], ys=[], fill_alpha=1.0, line_color=None, fill_color='black', visible=True ) ]
                 self._pipe['control'].register( self._ids['mask-mod'], mod_mask )
 
@@ -479,7 +517,7 @@ class CubeMask:
                 ##
                 self._bitmask = self._image.image( image='msk', x=0, y=0, dw=shape[0], dh=shape[1],
                                                    color_mapper=LinearColorMapper( low=0, high=1,
-                                                                                   palette=['rgba(0, 0, 0, 0)',self._color] ),
+                                                                                   palette=['rgba(0, 0, 0, 0)', self._region_style['fill_color']] ),
                                                    alpha=0.6, source=self._image_source )
                 self._bitmask.visible = False
                 ###
@@ -487,7 +525,7 @@ class CubeMask:
                 ### mask/non-masked boundary of one channel
                 ###
                 self._bitmask_contour_ds = self._image_source.mask_contour_source( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
-                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color=self._color,
+                self._bitmask_contour = self._image.multi_polygons( xs="xs", ys="ys", fill_color=None, line_color=self._region_style['line_color'],
                                                                     source=self._bitmask_contour_ds )
                 self._bitmask_contour.visible = True
 
@@ -498,7 +536,7 @@ class CubeMask:
                 ###
                 self._bitmask_contour_maskmod_ds = ColumnDataSource( data={ "xs": [ [[[]]] ], "ys": [ [[[]]] ] } )
                 self._bitmask_contour_maskmod = self._image.multi_polygons( xs="xs", ys="ys", line_width = 3, fill_color=None, line_alpha=0.3,
-                                                                            line_color=self._color, line_dash = 'dashed', fill_alpha=0.3,
+                                                                            line_color=self._region_style['line_color'], line_dash = 'dashed', fill_alpha=0.3,
                                                                             source=self._bitmask_contour_maskmod_ds )
                 self._bitmask_contour_maskmod.visible = True
 
@@ -1010,10 +1048,10 @@ class CubeMask:
                                                    position="top" ) ) ),
                        sizing_mode="scale_width" )
 
-    def bitmask_controls( self, reuse=None, **kw ):
+    def bitmask_ctrl( self, reuse=None, **kw ):
 
         if self._bitmask is None:
-            raise RuntimeError('cube bitmask not in use')
+            raise RuntimeError('CubeMask: bitmask cube not in use')
 
         ###
         ### retrieve controls for adjusting the cube bitmask
@@ -1041,7 +1079,7 @@ class CubeMask:
         if reuse is not None and reuse[1] is not None:
             self._bitmask_color_selector = reuse[1].child
         else:
-            self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._color, margin=(-1, 0, 0, 0),
+            self._bitmask_color_selector = ColorPicker( width_policy='fixed', width=40, color=self._region_style['fill_color'], margin=(-1, 0, 0, 0),
                                                         stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
                                                                                                        padding: 0 var(--padding-vertical); }''' ) ] )
 
@@ -1098,6 +1136,188 @@ class CubeMask:
                  Tip( mask_alpha_pick,
                       tooltip=Tooltip( content=HTML("<b>If</b> the mask is indicated with shading, this sets the opaqueness of the shading"),
                                        position="bottom" ) ) )
+
+    def region_ctrl( self, reuse=None, **kw ):
+        alpha_code = self._js['func-curmasks']( ) + '''
+                     casalib.map( (k,v) => v[attr] = cb_obj.value, source._annotations )'''
+        color_code = self._js['func-curmasks']( ) + '''
+                     casalib.map( (k,v) => v[attr] = cb_obj.color, source._annotations )'''
+        hatch_code = self._js['func-curmasks']( ) + '''
+                        const name = this.item.replaceAll(' ','_')
+                        casalib.map( (k,v) => v[attr] = name, source._annotations )
+                        casalib.map( (k,v) => { console.log('hatch_pattern',v.hatch_pattern); console.log('hover_hatch_pattern',v.hover_hatch_pattern); console.log(k,v) }, source._annotations )
+                        console.groupEnd( )
+                        this.origin.label = this.item'''
+
+        if self._bitmask is not None:
+            raise RuntimeError('CubeMask: region selection not in use')
+
+        if len(self._annotations) == 0:
+            raise RuntimeError('CubeMask: cannot fetch region controls before annotation creation')
+
+        print('****************************************************************************************************')
+        print( self._annotations[0] )
+        print('-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -')
+        print( dir(self._annotations[0]) )
+        print('-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -')
+        print(self._annotations[0].hover_fill_color)
+        print('-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -')
+        print('>>>>>>>>>>>>>>>>>>>>>>',self._annotations[0].line_dash)
+        print('****************************************************************************************************')
+        if 'no-hover' not in self._region_controls:
+            self._region_controls['no-hover'] = dict(fill={ }, line={ })
+            if reuse is None:
+                self._region_controls['no-hover']['fill']['color'] = ColorPicker( width_policy='fixed', width=40, color=self._region_style['fill_color'],
+                                                                                  margin=(-1, 0, 0, 0),
+                                                                                  stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                                         padding: 0 var(--padding-vertical); }''' ) ] )
+                self._region_controls['no-hover']['fill']['alpha'] = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1,
+                                                                              value=self._region_style['fill_alpha'],
+                                                                              margin=(-1, 0, 0, 0) )
+                self._region_controls['no-hover']['fill']['hatch'] = set_attributes( Dropdown( label=self._region_style['hatch_pattern'],
+                                                                                               button_type='light', margin=(-1, 0, 0, -1),
+                                                                                               width=130, menu=[h.replace('_',' ') for h in _hatches] ), **kw )
+                self._region_controls['no-hover']['line']['color'] = ColorPicker( width_policy='fixed', width=40, color=self._region_style['hover_line_color'],
+                                                                                  margin=(-1, 0, 0, 0),
+                                                                                  stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                                         padding: 0 var(--padding-vertical); }''' ) ] )
+                self._region_controls['no-hover']['line']['width'] = Spinner( width_policy='fixed', width=55, low=0, high=10, mode='float', step=0.1,
+                                                                              value=self._region_style['line_width'],
+                                                                              margin=(-1, 0, 0, 0) )
+                self._region_controls['no-hover']['line']['alpha'] = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1,
+                                                                              value=self._region_style['line_alpha'],
+                                                                              margin=(-1, 0, 0, 0) )
+                self._region_controls['no-hover']['line']['dash'] = set_attributes( Dropdown( label=self._region_style['line_dash'], button_type='light',
+                                                                                              margin=(-1, 0, 0, -1),
+                                                                                              width=130, menu=[d.replace('_',' ') for d in _dashes] ), **kw )
+            else:
+                self._region_controls['no-hover']['fill']['color'] = reuse['nofocus']['fill'][0]
+                self._region_controls['no-hover']['fill']['alpha'] = reuse['nofocus']['fill'][1]
+                self._region_controls['no-hover']['fill']['hatch'] = reuse['nofocus']['fill'][2]
+                self._region_controls['no-hover']['line']['color'] = reuse['nofocus']['line'][0]
+                self._region_controls['no-hover']['line']['width'] = reuse['nofocus']['line'][1]
+                self._region_controls['no-hover']['line']['alpha'] = reuse['nofocus']['line'][2]
+                self._region_controls['no-hover']['line']['dash']  = reuse['nofocus']['line'][3]
+
+            #### 'fill_color' & 'fill_alpha'
+            self._region_controls['no-hover']['fill']['hatch'].js_on_click( CustomJS( args=dict( values=_hatches, labels=[h.replace('_',' ') for h in _hatches],
+                                                                                                 attr='hatch_pattern',
+                                                                                                 source=self._image_source,
+                                                                                                 annotations=self._annotations ),
+                                                                                      code=hatch_code ) )
+            self._region_controls['no-hover']['fill']['alpha'].js_on_change( 'value',
+                                                                     CustomJS( args=dict( source=self._image_source,
+                                                                                          attr='fill_alpha',
+                                                                                          annotations=self._annotations ),
+                                                                               code=alpha_code ) )
+            self._region_controls['no-hover']['fill']['color'].js_on_change( 'color', CustomJS( args=dict( source=self._image_source,
+                                                                                                           attr='fill_color',
+                                                                                                           annotations=self._annotations ),
+                                                                                                code=color_code ) )
+            self._region_controls['no-hover']['line']['dash'].js_on_click( CustomJS( args=dict( values=_dashes, labels=[d.replace('_',' ') for d in _dashes],
+                                                                                                attr='line_dash',
+                                                                                                source=self._image_source,
+                                                                                                annotations=self._annotations ),
+                                                                                     code=hatch_code ) )
+            self._region_controls['no-hover']['line']['alpha'].js_on_change( 'value',
+                                                                     CustomJS( args=dict( source=self._image_source,
+                                                                                          attr='line_alpha',
+                                                                                          annotations=self._annotations ),
+                                                                               code=alpha_code ) )
+            self._region_controls['no-hover']['line']['width'].js_on_change( 'value',
+                                                                     CustomJS( args=dict( source=self._image_source,
+                                                                                          attr='line_width',
+                                                                                          annotations=self._annotations ),
+                                                                               code=alpha_code ) )
+            self._region_controls['no-hover']['line']['color'].js_on_change( 'color', CustomJS( args=dict( source=self._image_source,
+                                                                                                           attr='line_color',
+                                                                                                           annotations=self._annotations ),
+                                                                                                code=color_code ) )
+
+        if 'hover' not in self._region_controls:
+            self._region_controls['hover'] = dict(fill={ }, line={ })
+            if reuse is None:
+                self._region_controls['hover']['fill']['color'] = ColorPicker( width_policy='fixed', width=40, color=self._region_style['hover_fill_color'],
+                                                                               margin=(-1, 0, 0, 0),
+                                                                               stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                                      padding: 0 var(--padding-vertical); }''' ) ] )
+                self._region_controls['hover']['fill']['alpha'] = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1,
+                                                                           value=self._region_style['hover_fill_alpha'],
+                                                                           margin=(-1, 0, 0, 0) )
+                self._region_controls['hover']['fill']['hatch'] = set_attributes( Dropdown( label=self._region_style['hover_hatch_pattern'],
+                                                                                            button_type='light', margin=(-1, 0, 0, -1),
+                                                                                            width=130, menu=[h.replace('_',' ') for h in _hatches] ), **kw )
+                self._region_controls['hover']['line']['color'] = ColorPicker( width_policy='fixed', width=40, color=self._region_style['hover_line_color'],
+                                                                               margin=(-1, 0, 0, 0),
+                                                                               stylesheets=[ InlineStyleSheet( css='''.bk-input { border: 0px solid #ccc;
+                                                                                                              padding: 0 var(--padding-vertical); }''' ) ] )
+                self._region_controls['hover']['line']['width'] = Spinner( width_policy='fixed', width=55, low=0, high=10, mode='float', step=0.1,
+                                                                           value=self._region_style['hover_line_width'],
+                                                                           margin=(-1, 0, 0, 0) )
+                self._region_controls['hover']['line']['alpha'] = Spinner( width_policy='fixed', width=55, low=0.0, high=1.0, mode='float', step=0.1,
+                                                                           value=self._region_style['hover_line_alpha'],
+                                                                           margin=(-1, 0, 0, 0) )
+                self._region_controls['hover']['line']['dash'] = set_attributes( Dropdown( label=self._region_style['hover_line_dash'], button_type='light',
+                                                                                           margin=(-1, 0, 0, -1),
+                                                                                           width=130, menu=[d.replace('_',' ') for d in _dashes] ), **kw )
+            else:
+                self._region_controls['hover']['fill']['color'] = reuse['focus']['fill'][0]
+                self._region_controls['hover']['fill']['alpha'] = reuse['focus']['fill'][1]
+                self._region_controls['hover']['fill']['hatch'] = reuse['focus']['fill'][2]
+                self._region_controls['hover']['line']['color'] = reuse['focus']['line'][0]
+                self._region_controls['hover']['line']['width'] = reuse['focus']['line'][1]
+                self._region_controls['hover']['line']['alpha'] = reuse['focus']['line'][2]
+                self._region_controls['hover']['line']['dash']  = reuse['focus']['line'][3]
+
+            self._region_controls['hover']['fill']['hatch'].js_on_click( CustomJS( args=dict( values=_hatches, labels=[h.replace('_',' ') for h in _hatches],
+                                                                                      attr='hover_hatch_pattern',
+                                                                                      source=self._image_source,
+                                                                                      annotations=self._annotations ),
+                                                                           code=hatch_code ) )
+            self._region_controls['hover']['fill']['alpha'].js_on_change( 'value',
+                                                                  CustomJS( args=dict( source=self._image_source,
+                                                                                       attr='hover_fill_alpha',
+                                                                                       annotations=self._annotations ),
+                                                                            code=alpha_code ) )
+            self._region_controls['hover']['fill']['color'].js_on_change( 'color', CustomJS( args=dict( source=self._image_source,
+                                                                                                        attr='hover_fill_color',
+                                                                                                        annotations=self._annotations ),
+                                                                                             code=color_code ) )
+            self._region_controls['hover']['line']['dash'].js_on_click( CustomJS( args=dict( values=_dashes, labels=[d.replace('_',' ') for d in _dashes],
+                                                                                             attr='hover_line_dash',
+                                                                                             source=self._image_source,
+                                                                                             annotations=self._annotations ),
+                                                                                  code=hatch_code ) )
+            self._region_controls['hover']['line']['alpha'].js_on_change( 'value',
+                                                                          CustomJS( args=dict( source=self._image_source,
+                                                                                               attr='hover_line_alpha',
+                                                                                               annotations=self._annotations ),
+                                                                                    code=alpha_code ) )
+            self._region_controls['hover']['line']['width'].js_on_change( 'value',
+                                                                          CustomJS( args=dict( source=self._image_source,
+                                                                                               attr='hover_line_width',
+                                                                                               annotations=self._annotations ),
+                                                                                    code=alpha_code ) )
+            self._region_controls['hover']['line']['color'].js_on_change( 'color', CustomJS( args=dict( source=self._image_source,
+                                                                                                        attr='hover_line_color',
+                                                                                                        annotations=self._annotations ),
+                                                                                             code=color_code ) )
+
+
+        return dict( focus=dict( fill=( self._region_controls['hover']['fill']['color'],
+                                        self._region_controls['hover']['fill']['alpha'],
+                                        self._region_controls['hover']['fill']['hatch'] ),
+                                 line=( self._region_controls['hover']['line']['color'],
+                                        self._region_controls['hover']['line']['width'],
+                                        self._region_controls['hover']['line']['alpha'],
+                                        self._region_controls['hover']['line']['dash'] ) ),
+                     nofocus=dict( fill=( self._region_controls['no-hover']['fill']['color'],
+                                          self._region_controls['no-hover']['fill']['alpha'],
+                                          self._region_controls['no-hover']['fill']['hatch'] ),
+                                   line=( self._region_controls['no-hover']['line']['color'],
+                                          self._region_controls['no-hover']['line']['width'],
+                                          self._region_controls['no-hover']['line']['alpha'],
+                                          self._region_controls['no-hover']['line']['dash'] ) ) )
 
     def channel_ctrl( self ):
         '''Return a text label for the current channel being displayed.
@@ -1378,73 +1598,64 @@ class CubeMask:
             ###
             ### code for spectrum update due to cursor movement
             ###
-            movement_code_spectrum_update = """if ( cb_obj.event_type === 'move' ) {
-                                                   if ( isource._freeze_cursor_update == false ) {
-                                                       var geometry = cb_data['geometry']
-                                                       var x_pos = Math.floor(geometry.x)
-                                                       var y_pos = Math.floor(geometry.y)
-                                                       if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
-                                                           isource._current_pos = [ x_pos, y_pos ]
-                                                           if ( specfig && ! specfig.disabled ) {
-                                                               /* SEGV: cannot fetch pixels while tclean may be modifying the image */
-                                                               update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
-                                                                                ( spec ) => specds.data = spec.spectrum )
-                                                           }
+            movement_code_spectrum_update = """if ( isource._freeze_cursor_update == false ) {
+                                                   var x_pos = Math.floor(cb_obj.x)
+                                                   var y_pos = Math.floor(cb_obj.y)
+                                                   if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                       isource._current_pos = [ x_pos, y_pos ]
+                                                       if ( specfig && ! specfig.disabled ) {
+                                                           /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                           update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                            ( spec ) => specds.data = spec.spectrum )
                                                        }
                                                    }
-                                               } else if ( cb_obj.event_name === 'mouseenter' ) {
-                                                   isource._freeze_cursor_update = false
                                                }"""
 
         if self._pixel_tracking_text:
             ###
             ### code for updating pixel value due to cursor movements
             ###
-            movement_code_pixel_update = self._js['pixel-update-func'] + '''
-                                         if ( cb_obj.event_type === 'move' ) {
-                                             if ( isource._freeze_cursor_update == false ) {
-                                                 var geometry = cb_data['geometry']
-                                                 var x_pos = Math.floor(geometry.x)
-                                                 var y_pos = Math.floor(geometry.y)
-                                                 if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
-                                                     isource._current_pos = [ x_pos, y_pos ]
-                                                     if ( specfig && ! specfig.disabled ) {
-                                                         /* SEGV: cannot fetch pixels while tclean may be modifying the image */
-                                                         update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
-                                                                          ( spec ) => {
-                                                                              refresh_pixel_display( spec.index,
-                                                                                                     spec.spectrum.pixel[spec.chan[1]],
-                                                                                                     'mask' in spec && spec.mask[spec.chan[1]],
-                                                                                                     pix_wrld && pix_wrld.label == 'pixel' ? false : true )
-                                                                          } )
-                                                     } else if ( isource._pixel_update_enabled ) {
-                                                         /* no spectrum to update */
-                                                         ctrl.send( ids['fetch-spectrum'],
-                                                                       { action: 'spectrum',
-                                                                         value: { chan: isource.cur_chan,
-                                                                                  index: isource._current_pos } },
-                                                                       ( msg ) => {
-                                                                           const spec = msg.update
-                                                                           refresh_pixel_display( spec.index,
-                                                                                                  spec.spectrum.pixel[spec.chan[1]],
-                                                                                                  'mask' in spec && spec.mask[spec.chan[1]],
-                                                                                                  pix_wrld && pix_wrld.label == 'pixel' ? false : true ) }, true )
-                                                        }
+            movement_code_pixel_update = '''if ( isource._freeze_cursor_update == false ) {
+                                                var x_pos = Math.floor(cb_obj.x)
+                                                var y_pos = Math.floor(cb_obj.y)
+                                                if ( isFinite(x_pos) && isFinite(y_pos) && x_pos >= 0 && y_pos >= 0 ) {
+                                                    isource._current_pos = [ x_pos, y_pos ]
+                                                    if ( specfig && ! specfig.disabled ) {
+                                                        /* SEGV: cannot fetch pixels while tclean may be modifying the image */
+                                                        update_spectrum( isource.cur_chan, [ x_pos, y_pos ],
+                                                                         ( spec ) => {
+                                                                             refresh_pixel_display( spec.index,
+                                                                                                    spec.spectrum.pixel[spec.chan[1]],
+                                                                                                    'mask' in spec ? spec.mask[spec.chan[1]] : undefined,
+                                                                                                    pix_wrld && pix_wrld.label == 'pixel' ? false : true )
+                                                                         } )
+                                                    } else if ( isource._pixel_update_enabled ) {
+                                                        /* no spectrum to update */
+                                                        ctrl.send( ids['fetch-spectrum'],
+                                                                   { action: 'spectrum',
+                                                                        value: { chan: isource.cur_chan,
+                                                                                 index: isource._current_pos } },
+                                                                   ( msg ) => {
+                                                                       const spec = msg.update
+                                                                       refresh_pixel_display( spec.index,
+                                                                                              spec.spectrum.pixel[spec.chan[1]],
+                                                                                              'mask' in spec ? spec.mask[spec.chan[1]] : undefined,
+                                                                                              pix_wrld && pix_wrld.label == 'pixel' ? false : true ) }, true )
                                                     }
                                                 }
                                             }'''
 
         if movement_code_spectrum_update or movement_code_pixel_update:
-            self._cb['impos'] = CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum,
-                                                     isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
-                                                     pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
-                                                     source=self._image_source ),
-                                          code = movement_code_spectrum_update + movement_code_pixel_update )
+            self._image.js_on_event( 'mousemove', CustomJS( args=dict( specds=self._image_spectrum, specfig=self._spectrum,
+                                                                       isource=self._image_source, ids=self._ids, ctrl=self._pipe['control'],
+                                                                       pixlabel = self._pixel_tracking_text, pix_wrld=self._coord_ctrl_dropdown,
+                                                                       source=self._image_source ),
+                                                            code=self._js['pixel-update-func'] +
+                                                                 movement_code_pixel_update +
+                                                                 movement_code_spectrum_update ) )
 
-            self._hover['image'] = HoverTool( callback=self._cb['impos'], tooltips=None )
-
-            self._image.js_on_event('mouseenter',self._cb['impos'])
-            self._image.add_tools(self._hover['image'])
+            self._image.js_on_event( 'mouseenter', CustomJS( args=dict( isource=self._image_source ),
+                                                             code='''isource._freeze_cursor_update = false''' ) )
 
 
         ## this is in the connect function to allow for access to self._statistics_source
@@ -1526,6 +1737,46 @@ class CubeMask:
                                                                     contour.glyph.line_color = cb_obj.color
                                                                     region.glyph.line_color = cb_obj.color''' ) )
 
+        #print( '***************REGION*CREATION**********************************************************************')
+        #print( '***************WITH*MASK****************************************************************************')
+        #print( ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
+        #                                           self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
+        #                                           if False else  self._js['contour-maskmod'] + (
+        #                                           ### selector indicates if a on-disk mask is being used
+        #                                           '''if ( source._masking_enabled ) {
+        #                                                  const geometry = cb_obj['geometry']
+        #                                                  if ( geometry.type === 'rect' ) {
+        #                                                      // rectangle drawing complete
+        #                                                      maskmod_region_set( annotations[0],
+        #                                                                          [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
+        #                                                                          [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
+        #                                                  } else if ( geometry.type === 'poly' && cb_obj.final ) {
+        #                                                      // polygon drawing complete
+        #                                                      maskmod_region_set( annotations[0],
+        #                                                                          [ ].slice.call(geometry.x),
+        #                                                                          [ ].slice.call(geometry.y) )
+        #                                                  }
+        #                                              }''' ) )
+        #print( '***************WITHOUT*MASK*************************************************************************')
+        #print( ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
+        #                                           self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
+        #                                           if True else  self._js['contour-maskmod'] + (
+        #                                           ### selector indicates if a on-disk mask is being used
+        #                                           '''if ( source._masking_enabled ) {
+        #                                                  const geometry = cb_obj['geometry']
+        #                                                  if ( geometry.type === 'rect' ) {
+        #                                                      // rectangle drawing complete
+        #                                                      maskmod_region_set( annotations[0],
+        #                                                                          [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
+        #                                                                          [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
+        #                                                  } else if ( geometry.type === 'poly' && cb_obj.final ) {
+        #                                                      // polygon drawing complete
+        #                                                      maskmod_region_set( annotations[0],
+        #                                                                          [ ].slice.call(geometry.x),
+        #                                                                          [ ].slice.call(geometry.y) )
+        #                                                  }
+        #                                              }''' ) )
+        #print( '****************************************************************************************************')
         self._image.js_on_event( SelectionGeometry,
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
@@ -1797,6 +2048,9 @@ class CubeMask:
                                                                          state_translate_selection( Math.floor(shape[0]/10 ), 0 ) } )
                                               ''',
                    'no-bitmask-hotkey-setup': '''// next region -- no-bitmask-cube mode
+                                              casalib.hotkeys( 'f', { scope: source._hotkeys.id },
+                                                               (e) => { source._freeze_cursor_update = true } )
+                                              //--no-mask-stale-bindings-below--------------------------------------------------
                                                casalib.hotkeys( 'alt+]', { scope: source._hotkeys.id },
                                                                 (e) => { e.preventDefault( )
                                                                          state_next_cursor( )} )
@@ -2000,10 +2254,7 @@ class CubeMask:
                      ### addition/subtraction to a single channel VS add/sub from all channels of the cube...
                      'cube-init': '''add._mode = 'chan'
                                      sub._mode = 'chan'
-                                     function is_empty( array ) {
-                                         return Array.isArray(array) && (array.length == 0 || array.every(is_empty))
-                                     }
-                                     casalib.is_empty = is_empty
+                                     let foo = casalib.is_empty
                                      function cube_on( ) {
                                          add._mode = 'cube'
                                          add.icon = img['add']['cube']
@@ -2051,15 +2302,20 @@ class CubeMask:
                      ###
                      'pixel-update-func': ''' function refresh_pixel_display( index, intensity, masked, world_coord=true ) {
                                                   const digits = 5
+                                                  function exponential( x ) {
+                                                      try { return x.toExponential(digits) }
+                                                      catch(e) { console.log( `oops, toExponential error for "${x}": ${e}` ) }
+                                                      return String(x)
+                                                  }
                                                   if ( world_coord ) {
                                                       const pt = new casalib.coordtxl.Point2D( Number(index[0]), Number(index[1]) )
                                                       isource.wcs( ).imageToWorldCoords(pt,false)
                                                       let wcstr = new casalib.coordtxl.WorldCoords(pt.getX(),pt.getY()).toString( )
-                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
-                                                                      (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
+                                                      pixlabel.text = '<p ALIGN=RIGHT>' + wcstr + "</p><p ALIGN=RIGHT>" + exponential(intensity) +
+                                                                      (masked === undefined ? '' : masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
                                                   } else {
                                                       pixlabel.text = '<p ALIGN=RIGHT>' + index[0] + ', ' + Number(index[1]) +
-                                                                      "</p><p ALIGN=RIGHT>" + intensity.toExponential(digits) +
+                                                                      "</p><p ALIGN=RIGHT>" + exponential(intensity) +
                                                                       (masked ? " <b>masked</b>" : " <b>unmasked</b>") + '</p>'
                                                   }
                                               }
@@ -2130,7 +2386,7 @@ class CubeMask:
                                                    update_spectrum( [isource.cur_chan[0], slider.value], isource._current_pos,
                                                                     ( spec ) => {
                                                                         refresh_pixel_display( spec.index,
-                                                                                               spec.spectrum.pixel[spec.chan[1]],
+                                                                                               'mask' in spec ? spec.mask[spec.chan[1]] : undefined,
                                                                                                'mask' in spec && spec.mask[spec.chan[1]],
                                                                                                pix_wrld && pix_wrld.label == 'pixel' ? false : true )
                                                                 } )
@@ -2217,7 +2473,9 @@ class CubeMask:
                      ###                         annotation that will be used to represent it for this particular channel
                      'func-newpoly':    '''function newpoly( cm ) {
                                                let anno_id = source._annotation_ids.find( v => ! cm[0].includes(v) ) // find id not in use
-                                               if ( typeof(anno_id) != 'string') return null                         // is id reasonable
+                                               if ( typeof(anno_id) != 'string') {
+                                                   return null                         // is id reasonable
+                                               }
                                                let poly_id = source._polys.length                                    // all polygons created
                                                let poly = { id: poly_id,
                                                             type: null,
@@ -2548,6 +2806,7 @@ class CubeMask:
         set to ``False``, but it can be toggled based on GUI actions.
         '''
         mask_control = { 'no-mask': '''
+                             <tr><td><b>f</b></td><td>freeze cursor tracking updates until the mouse <b>re-enters</b> the channel plot</td></tr>
                              <tr><td><b>option</b></td><td>display mask cursor (<i>at least one mask must have been drawn</i>)</td></tr>
                              <tr><td><b>option</b>-<b>]</b></td><td>move cursor to next mask</td></tr>
                              <tr><td><b>option</b>-<b>[</b></td><td>move cursor to previous mask</td></tr>
