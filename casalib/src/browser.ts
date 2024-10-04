@@ -3,6 +3,9 @@
  * The code executes when loaded in a browser.
  */
 import { object_id } from './object_id'
+//import { map, reduce } from "./functional"
+import { map } from "./functional"
+import { is_empty } from './array_funcs'
 import { ReconnectState } from "./reconnect_state"
 import { zip, unzip } from "./zip"
 
@@ -33,6 +36,8 @@ declare global {
 }
 
 var casalib = {
+    is_empty,
+    map,
     zip,
     unzip,
     object_id,

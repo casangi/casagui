@@ -1,2 +1,5 @@
 export { object_id } from "./object_id"
+export { is_empty } from "./array_funcs"
+//export { map, reduce } from "./functional"
+export { map } from "./functional"
 export { ReconnectState } from "./reconnect_state"
