@@ -18,7 +18,7 @@ and _Python_ files to be edited from the same directory and keeps the
    bokeh is hashed (/opt/local/Library/Frameworks/Python.framework/Versions/3.8/bin/bokeh)
    bash$
    ```
-2. Ensure that the `npm` executable is available
+2. Ensure that the `npm` (version 8 or greater) executable is available
    ```
    bash$ type npm
    npm is /opt/local/bin/npm

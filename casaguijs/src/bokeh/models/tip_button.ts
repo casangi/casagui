@@ -3,7 +3,7 @@ import {Tooltip, TooltipView} from "@bokehjs/models/ui/tooltip"
 import {BuiltinIcon} from "@bokehjs/models/ui/icons/builtin_icon"
 import {build_view, IterViews} from "@bokehjs/core/build_views"
 import {ButtonClick} from "@bokehjs/core/bokeh_events"
-import {EventCallbackLike} from "@bokehjs/model"
+import {EventCallback} from "@bokehjs/model"
 import * as p from "@bokehjs/core/properties"
 
 import {dict} from "@bokehjs/core/util/object"
@@ -146,7 +146,7 @@ export class TipButton extends AbstractButton {
     })
   }
 
-  on_click(callback: EventCallbackLike<ButtonClick>): void {
+  on_click(callback: EventCallback<ButtonClick>): void {
     this.on_event(ButtonClick, callback)
   }
 

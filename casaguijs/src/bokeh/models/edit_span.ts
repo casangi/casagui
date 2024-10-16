@@ -13,18 +13,18 @@ import type * as p from "@bokehjs/core/properties"
 export class EditSpanView extends SpanView {
   declare model: EditSpan
 
-  override _pan_start(ev: PanEvent): boolean {
-    const result = super._pan_start( ev )
+  override on_pan_start(ev: PanEvent): boolean {
+    const result = super.on_pan_start( ev )
     this.model.trigger_event( new LODStart( ) )
     return result
   }
 
-  override _pan(ev: PanEvent): void {
-    super._pan( ev )
+  override on_pan(ev: PanEvent): void {
+    super.on_pan( ev )
   }
 
-  override _pan_end(ev: PanEvent): void {
-    super._pan_end( ev )
+  override on_pan_end(ev: PanEvent): void {
+    super.on_pan_end( ev )
     this.model.trigger_event( new LODEnd( ) )
   }
 

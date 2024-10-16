@@ -1,5 +1,6 @@
 import {Attrs} from "@bokehjs/core/types"
-import {Pan,PanStart,PanEnd,KeyModifiers} from "@bokehjs/core/bokeh_events"
+import {Pan,PanStart,PanEnd} from "@bokehjs/core/bokeh_events"
+import {KeyModifiers} from "@bokehjs/core/ui_gestures"
 
 export type DragState = {
     sx: number

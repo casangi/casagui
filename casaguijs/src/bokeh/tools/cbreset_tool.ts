@@ -1,7 +1,8 @@
 import {ResetTool, ResetToolView} from "@bokehjs/models/tools/actions/reset_tool"
 import * as p from "@bokehjs/core/properties"
 import {tool_icon_reset} from "@bokehjs/styles/icons.css"
-import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
+import { CallbackLike0 } from "@bokehjs/core/util/callbacks";
+import {execute} from "@bokehjs/core/util/callbacks"
 
 export class CBResetToolView extends ResetToolView {
   declare model: CBResetTool
@@ -9,9 +10,9 @@ export class CBResetToolView extends ResetToolView {
   override doit(): void {
     // reset() issues the RangesUpdate event
     const {precallback,postcallback} = this.model
-    if ( precallback ) precallback.execute( this.model )
+    if ( precallback != null ) void execute( precallback, this.model )
     this.plot_view.reset()
-    if ( postcallback ) postcallback.execute( this.model )
+    if ( postcallback != null ) void execute( postcallback,  this.model )
   }
 }
 
