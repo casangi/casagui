@@ -1,9 +1,0 @@
-casadata
-casatools
-bokeh>=2.4.1
-websockets
-plotly
-pandas
-numpy
---extra-index-url https://casa-pip.nrao.edu:443/repository/pypi-group/simple
-casatasks
