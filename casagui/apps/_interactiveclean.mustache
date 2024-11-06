@@ -646,7 +646,7 @@ class InteractiveClean:
                                                                                                               ctrl={ 'converge': self._clean['converge'] },
                                                                                                               stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
                                                                                                    code=self._js['update-converge'] +
-                                                                                                        '''update_convergence_single( img_state, document._casa_convergence_data.chan[imid] )''' ) )
+                                                                                                        '''update_convergence_single( img_state, document._casa_convergence_data.convergence[imid] )''' ) )
 
             ###
             ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
