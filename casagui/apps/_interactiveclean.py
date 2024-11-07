@@ -2836,7 +2836,7 @@ class InteractiveClean:
                                                    if ( ! recurse ) {
                                                        ctrl.converge.pipe.send( ctrl.converge.id, { action: 'retrieve' },
                                                                                 (msg) => { if ( hasprop( msg.result, 'convergence' ) ) {
-                                                                                               document._casa_convergence_data = { chan: msg.result.convergence,
+                                                                                               document._casa_convergence_data = { convergence: msg.result.convergence,
                                                                                                                                    cyclethreshold: msg.result.cyclethreshold }
                                                                                                update_convergence(true)
                                                                                            } } )
@@ -2845,7 +2845,7 @@ class InteractiveClean:
                                                }
 
                                                Object.entries(images_state).map(
-                                                   ([k,v],i) => { update_convergence_single(v,convdata.chan[k]) } )
+                                                   ([k,v],i) => { update_convergence_single(v,convdata.convergence[k]) } )
                                            }''',
 
                      'clean-refresh':   '''function refresh( clean_msg ) {
@@ -2875,7 +2875,7 @@ class InteractiveClean:
                                                    }
 
                                                    if ( hasprop(clean_msg,'convergence') && clean_msg.convergence != null ) {
-                                                       document._casa_convergence_data = { chan: clean_msg.convergence,
+                                                       document._casa_convergence_data = { convergence: clean_msg.convergence,
                                                                                            cyclethreshold: clean_msg.cyclethreshold }
                                                    }
                                                }
