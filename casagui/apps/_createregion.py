@@ -32,7 +32,7 @@ from os.path import exists, splitext, join
 from os.path import split as splitpath
 import asyncio
 from contextlib import asynccontextmanager
-from bokeh.layouts import row, column
+from bokeh.layouts import row, column, grid
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS, TabPanel, Tabs, Spacer, Div, Dropdown
 from casagui.toolbox import CubeMask, AppContext
@@ -254,7 +254,7 @@ class CreateRegion:
         self.__result_future = None
 
     def _create_style_adjust( self, imdetails ):
-        self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_ctrl( reuse=self._image_region_controls, button_type='light' )
+        self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_style_ctrl( reuse=self._image_region_controls, button_type='light' )
         hover = row( column( Div(text='<div>Fill</div>'),
                              row(*imdetails['gui']['region-styling']['focus']['fill']),
                              Div(text='<div>Line</div>'),
@@ -270,6 +270,28 @@ class CreateRegion:
                        Div(text='<div><b>Non-focus Style</b></div>'),
                        nohover )
 
+    def _create_location_panel( self, imdetails, width=410 ):
+        pos = imdetails['gui']['cube'].region_position_ctrl( )
+        coords = grid( [ [ None, Div(text='<b>X</b>'), Div(text='<b>Y</b>') ],
+                         [ Div(text='<b>pixel</b>'), *pos['pixel'] ],
+                         [ Div(text='<b>world</b>'), *pos['world'] ] ] )
+        coord_section = row( column( Div(text='<b>Region Placement</b>'),
+                                     coords ),
+                             width=width )
+        chan_section = row( column( Div(text='<b>Channels</b>'),
+                                    *[ row( Div(text=f'''<b>{s}</b>'''), text, sizing_mode='stretch_width' ) for s,text in pos['chan'].items( ) ],
+                                    sizing_mode='stretch_width' ),
+                            width=width )
+
+        coord_section.styles = {"border": "1px solid black", "padding": "1px" }
+        chan_section.styles = {"border": "1px solid black", "padding": "1px" }
+
+        return column( coord_section,
+                       chan_section,
+                       row( pos['status'] ),
+                       row( Div(text='<b>Region Label:</b>', styles={"margin-top": "10px"} ), pos['label'], sizing_mode='stretch_width' ),
+                       row( Div(text='<b>Tracking state:</b>', styles={"margin-top": "10px"} ), *pos['tracking'] ) )
+
     def _create_colormap_adjust( self, imdetails ):
         palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
         return column( row( Div(text="<div><b>Colormap:</b></div>",margin=(5,2,5,25)), palette ),
@@ -277,7 +299,9 @@ class CreateRegion:
 
 
     def _create_control_image_tab( self, imid, imdetails ):
-        result = Tabs( tabs= ( [ TabPanel( child=imdetails['gui']['spectrum'],
+        result = Tabs( tabs= ( [ TabPanel( child=self._create_location_panel(imdetails),
+                                           title='Placement' ),
+                                 TabPanel( child=imdetails['gui']['spectrum'],
                                            title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
                                [ TabPanel( child=self._create_colormap_adjust(imdetails),
                                            title='Colormap' ),
