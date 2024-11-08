@@ -42,5 +42,8 @@ jobs:
       - name: Build package
         run: pdm build -v            # build distribution
 
+      - name: Show pdm.lock
+        run: cat pdm.lock
+
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
