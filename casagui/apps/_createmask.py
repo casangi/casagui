@@ -188,6 +188,7 @@ class CreateMask:
         ###
         ### Validate mask paths
         ###
+        mask_paths = None
         if mask is None:
             mask_paths = [None] * len(image_paths)
         elif isinstance(mask,str):

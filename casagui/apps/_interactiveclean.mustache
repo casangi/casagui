@@ -197,6 +197,14 @@ class InteractiveClean:
         self._image_bitmask_controls = None
 
         ###
+        ### String which indicates the changes applied to the mask to indicte when
+        ### the mask has changed... however, THIS IS NO LONGER USED
+        ### It could be removed, but it adds minor overhead and would be
+        ### DIFFICULT to add back in the future
+        ###
+        self._last_mask_breadcrumbs = ''
+
+        ###
         ### clean generator
         ###
         if _gclean is None:
