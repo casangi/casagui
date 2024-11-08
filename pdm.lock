@@ -4,8 +4,11 @@
 [metadata]
 groups = ["default"]
 strategy = ["cross_platform"]
-lock_version = "4.4"
-content_hash = "sha256:639d0d848dabfa407472df0a7d33f20641a4a36525478e18f4e9269669a59370"
+lock_version = "4.5.0"
+content_hash = "sha256:2ec6ba561bde724526623e67f56b02463311d1884e992e34ce7ff1940b4aeeb9"
+
+[[metadata.targets]]
+requires_python = ">=3.8"
 
 [[package]]
 name = "astropy"
@@ -174,6 +177,9 @@ name = "kiwisolver"
 version = "1.4.4"
 requires_python = ">=3.7"
 summary = "A fast implementation of the Cassowary constraint solver"
+dependencies = [
+    "typing-extensions; python_version < \"3.8\"",
+]
 files = [
     {file = "kiwisolver-1.4.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:2f5e60fabb7343a836360c4f0919b8cd0d6dbf08ad2ca6b9cf90bf0c76a3c4f6"},
     {file = "kiwisolver-1.4.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:10ee06759482c78bdb864f4109886dff7b8a56529bc1609d4f1112b93fe6423c"},
