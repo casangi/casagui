@@ -10,9 +10,10 @@ import {TipButton} from "./src/bokeh/models/tip_button"
 import {Tip} from "./src/bokeh/models/tip"
 import {EditSpan} from "./src/bokeh/models/edit_span"
 import {EvTextInput} from "./src/bokeh/models/ev_text_input"
+import {EvPolyAnnotation} from "./src/bokeh/annotations/ev_poly_annotation"
 import *  as find from "./src/bokeh/util/find"
 import {register_models} from "@bokehjs/base"
 
-export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput, serialize, deserialize }
+export { find, DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput, EvPolyAnnotation, serialize, deserialize }
 
-register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput })
+register_models({ DataPipe, ImagePipe, ImageDataSource, SpectraDataSource, WcsTicks, DragTool, CBResetTool, Tip, TipButton, EditSpan, EvTextInput, EvPolyAnnotation })

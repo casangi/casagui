@@ -1874,6 +1874,14 @@ class InteractiveClean:
         self._image_bitmask_controls = None
 
         ###
+        ### String which indicates the changes applied to the mask to indicte when
+        ### the mask has changed... however, THIS IS NO LONGER USED
+        ### It could be removed, but it adds minor overhead and would be
+        ### DIFFICULT to add back in the future
+        ###
+        self._last_mask_breadcrumbs = ''
+
+        ###
         ### clean generator
         ###
         if _gclean is None:
@@ -2323,7 +2331,7 @@ class InteractiveClean:
                                                                                                               ctrl={ 'converge': self._clean['converge'] },
                                                                                                               stopdescmap=ImagingDict.get_summaryminor_stopdesc( ) ),
                                                                                                    code=self._js['update-converge'] +
-                                                                                                        '''update_convergence_single( img_state, document._casa_convergence_data.chan[imid] )''' ) )
+                                                                                                        '''update_convergence_single( img_state, document._casa_convergence_data.convergence[imid] )''' ) )
 
             ###
             ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
@@ -2341,7 +2349,7 @@ class InteractiveClean:
 
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
 
-            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_controls( reuse=self._image_bitmask_controls, button_type='light' )
+            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_ctrl( reuse=self._image_bitmask_controls, button_type='light' )
 
             if imdetails['params']['am']['usemask'] == 'auto-multithresh':
                 imdetails['gui']['auto-masking-panel'] = [ TabPanel( child=column( row( Tip( imdetails['gui']['params']['automask']['noisethreshold'],
@@ -2836,7 +2844,7 @@ class InteractiveClean:
                                                    if ( ! recurse ) {
                                                        ctrl.converge.pipe.send( ctrl.converge.id, { action: 'retrieve' },
                                                                                 (msg) => { if ( hasprop( msg.result, 'convergence' ) ) {
-                                                                                               document._casa_convergence_data = { chan: msg.result.convergence,
+                                                                                               document._casa_convergence_data = { convergence: msg.result.convergence,
                                                                                                                                    cyclethreshold: msg.result.cyclethreshold }
                                                                                                update_convergence(true)
                                                                                            } } )
@@ -2845,7 +2853,7 @@ class InteractiveClean:
                                                }
 
                                                Object.entries(images_state).map(
-                                                   ([k,v],i) => { update_convergence_single(v,convdata.chan[k]) } )
+                                                   ([k,v],i) => { update_convergence_single(v,convdata.convergence[k]) } )
                                            }''',
 
                      'clean-refresh':   '''function refresh( clean_msg ) {
@@ -2875,7 +2883,7 @@ class InteractiveClean:
                                                    }
 
                                                    if ( hasprop(clean_msg,'convergence') && clean_msg.convergence != null ) {
-                                                       document._casa_convergence_data = { chan: clean_msg.convergence,
+                                                       document._casa_convergence_data = { convergence: clean_msg.convergence,
                                                                                            cyclethreshold: clean_msg.cyclethreshold }
                                                    }
                                                }

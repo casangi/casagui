@@ -3,7 +3,8 @@ import {GestureTool, GestureToolView} from "@bokehjs/models/tools/gestures/gestu
 import {PanEvent} from "@bokehjs/core/ui_events"
 import {Drag,DragStart,DragEnd,DragState} from "../events"
 import {px_from_sx,py_from_sy,dx_from_px,dy_from_py} from "../util/find"
-import { CallbackLike1 } from "@bokehjs/models/callbacks/callback";
+import {CallbackLike1} from "@bokehjs/core/util/callbacks";
+import {execute} from "@bokehjs/core/util/callbacks"
 
 export class DragToolView extends GestureToolView {
   declare model: DragTool
@@ -27,12 +28,15 @@ export class DragToolView extends GestureToolView {
       // including BOTH could only (probably) be supported by making the
       // TypeScript compile non-strict... so modifier keys are dropped
       // for Bokeh < 3.2
-      start.execute( this.model, { sx, sy, x, y,
-                                   delta_x: ev.dx,
-                                   delta_y: -ev.dy,
-                                   shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
-                                   ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
-                                   alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
+      void execute( start, this.model, { sx, sy, x, y,
+                                         delta_x: ev.dx,
+                                         delta_y: -ev.dy,
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                         shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                         ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                         alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new DragStart( sx,sy,x,y,ev.dx,-ev.dy,
                                                ev.modifiers ) )
@@ -47,12 +51,15 @@ export class DragToolView extends GestureToolView {
     const y = dy_from_py(this.plot_view,sy)
     const {move} = this.model
     if ( move ) {
-      move.execute( this.model, { sx, sy, x, y,
-                                  delta_x: ev.dx,
-                                  delta_y: -ev.dy,
-                                  shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
-                                  ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
-                                  alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
+      void execute( move, this.model, { sx, sy, x, y,
+                                        delta_x: ev.dx,
+                                        delta_y: -ev.dy,
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                        shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                        ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                         // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                        alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new Drag( sx,sy,x,y,ev.dx,-ev.dy,
                                           ev.modifiers ) )
@@ -66,12 +73,15 @@ export class DragToolView extends GestureToolView {
     const y = dy_from_py(this.plot_view,sy)
     const {end} = this.model
     if ( end ) {
-      end.execute( this.model, { sx, sy, x, y,
-                                 delta_x: ev.dx,
-                                 delta_y: -ev.dy,
-                                 shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
-                                 ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
-                                 alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
+      void execute( end, this.model, { sx, sy, x, y,
+                                       delta_x: ev.dx,
+                                       delta_y: -ev.dy,
+                                       // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                       shift: ('modifiers' in ev ? ev.modifiers.shift : undefined),
+                                       // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                       ctrl: ('modifiers' in ev ? ev.modifiers.ctrl : undefined),
+                                       // @ts-ignore: error TS2322: Type 'boolean | undefined' is not assignable to type 'boolean'.
+                                       alt: ('modifiers' in ev ? ev.modifiers.alt : undefined) } )
     } else {
       this.model.trigger_event( new DragEnd( sx,sy,x,y,ev.dx,-ev.dy,
                                              ev.modifiers ) )

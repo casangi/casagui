@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022, 2024
+# Copyright (C) 2024
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,16 +25,16 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''implementation of the ``CreateMask`` application for interactive creation
-of channel masks'''
+'''implementation of the ``CreateRegion`` application for interactive creation
+of astropy regions'''
 
 from os.path import exists, splitext, join
 from os.path import split as splitpath
 import asyncio
 from contextlib import asynccontextmanager
-from bokeh.layouts import row, column
+from bokeh.layouts import row, column, grid
 from bokeh.plotting import show
-from bokeh.models import Button, CustomJS, TabPanel, Tabs, Spacer, Div
+from bokeh.models import Button, CustomJS, TabPanel, Tabs, Spacer, Div, Dropdown
 from casagui.toolbox import CubeMask, AppContext
 from casagui.bokeh.utils import svg_icon
 from bokeh.io import reset_output as reset_bokeh_output
@@ -45,11 +45,11 @@ from ..data import casaimage
 from ..bokeh.models import TipButton, Tip
 from ..utils import ContextMgrChain as CMC
 
-class CreateMask:
-    '''Class that can be used to launch a createmask GUI with ``CreateMask('test.im','mask.im')( )``.
-    ``CreateMask`` operates in the same manner as ``InteractiveClean``. Regions drawn on the
-    displalyed CASA image cube can be added or subtracted from the related but separate mask
-    cube where each pixel is a 1 (masked) or a 0 (unmasked).
+class CreateRegion:
+    '''Class that can be used to launch a createregion GUI with ``CreateRegion('test.im')( )``.
+    ``CreateRegion`` is implemented with the same libraries that are used to implement
+    ``InteractiveClean`` and ``CreateMask``. Regions drawn on the displalyed CASA image
+    and then returned as astropy regions.
     '''
 
     def __stop( self ):
@@ -109,7 +109,7 @@ class CreateMask:
                 uniq = ''
             path,file = splitpath(impath)
             if len(path) > 0 and not exists(path):
-                raise RuntimeError( f'''CreateMask: mask path '{path}' does not exist''' )
+                raise RuntimeError( f'''CreateRegion: mask path '{path}' does not exist''' )
             basename,ext = splitext(file)
             return join( path, f'''{basename}{uniq}.mask''')
 
@@ -129,36 +129,27 @@ class CreateMask:
         return list( map( lambda p: (p[0],casaimage.new(*p)) if not exists(p[1]) else p, paths ) )
 
 
-    def __init__( self, image, mask=None, create=True ):
-        '''create a ``createmask`` object which will display image planes from a CASA
+    def __init__( self, image ):
+        '''create a ``createregion`` object which will display image planes from a CASA
         image and allow the user to draw masks for each channel.
 
         Parameters
         ----------
         image: str or list of str
-            path(s) to CASA image for which interactive masks will be drawn
-
-        mask: str or list of str
-            path(s) to CASA image mask into which interactive masks will be added.
-            None can be used to indicate that the mask should be created
-            (if ``create=True``) and the name should be based upon the image name
-
-        create: bool
-            if True then the mask will be created if it does not exist
-            if False a mask path which does not exist results in an exception
+            path(s) to CASA image for which interactive regions will be drawn
         '''
 
         ###
         ### Create application context (which includes a temporary directory).
         ### This sets the title of the plot.
         ###
-        self._app_state = AppContext( 'Create Mask' )
+        self._app_state = AppContext( 'Create Region' )
 
         ###
         ### widgets shared across image tabs (masking multiple images)
         ###
         self._cube_palette = None
-        self._image_bitmask_controls = None
+        self._image_region_controls = None
 
         ###
         ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
@@ -176,57 +167,23 @@ class CreateMask:
         elif isinstance(image, list) and all(isinstance(x, str) for x in image):
             image_paths = image
         else:
-            raise RuntimeError( 'CreateMask: image parameter should be a string or a list of strings' )
+            raise RuntimeError( 'CreateRegion: image parameter should be a string or a list of strings' )
 
         if len(image_paths) == 0:
-            raise RuntimeError( 'CreateMask: at least one image path must be specified' )
+            raise RuntimeError( 'CreateRegion: at least one image path must be specified' )
 
         for img in image_paths:
             if not exists(img):
-                raise RuntimeError(f'''CreateMask: image path '{img}' does not exist''')
+                raise RuntimeError(f'''CreateRegion: image path '{img}' does not exist''')
 
-        ###
-        ### Validate mask paths
-        ###
-        mask_paths = None
-        if mask is None:
-            mask_paths = [None] * len(image_paths)
-        elif isinstance(mask,str):
-            if len(image_paths) != 1:
-                raise RuntimeError( 'CreateMask: when specifying masks, one must be provided for each image (even if its value is None)' )
-            mask_paths = [mask]
-        elif isinstance(mask,list):
-            if len(mask) == 0:
-                mask_paths = [None] * len(image_paths)
-            elif len(image_paths) != len(mask):
-                raise RuntimeError( 'CreateMask: when specifying masks, one must be provided for each image (even if its value is None)' )
-            elif all(isinstance(x, str) or x is None for x in mask):
-                mask_paths = mask
-            else:
-                raise RuntimeError( 'CreateMask: image parameter should be a string or a list of elements whose type is string or None' )
-
-        ###
-        ### Create mask paths if necessary
-        ###
-        if create == False:
-            self._paths = self.__expand_mask_paths( zip(image_paths, mask_paths) )
-            for _,msk in self._paths:
-                if not exists(msk):
-                    raise RuntimeError(f'''CreateMask: mask path '{msk}' does not exist (and create=False)''')
-        else:
-            self._paths = self.__create_masks( self.__expand_mask_paths( zip(image_paths, mask_paths) ) )
-
-        if not all((casaimage.shape(p[0]) == casaimage.shape(p[1])).all( ) for p in self._paths):
-            raise RuntimeError('CreateMask: mismatch between image and mask shapes')
-
-
+        self._drawn_regions = { k: [] for k in image_paths }
         self._fig = { 'help': None, 'status': None }
-        self._mask_state = { }
+        self._region_state = { }
         self._ctrl_state = { }
         initialization_registered = False
-        for paths in self._paths:
-            _,name = splitpath(paths[0])
-            imdetails = self._mask_state[name] = { 'gui': { 'image': {}, 'fig': {},
+        for path in image_paths:
+            _,name = splitpath(path)
+            imdetails = self._region_state[name] = { 'gui': { 'image': {}, 'fig': {},
                                                             'image-adjust': { } } }
 
             ###
@@ -242,7 +199,7 @@ class CreateMask:
             ### If debugging this, make only a small change before confirming that exit from the
             ### Python asyncio loop continues to work... seems to be fiddly
             ###
-            imdetails['gui']['cube'] = CubeMask( paths[0], mask=paths[1],
+            imdetails['gui']['cube'] = CubeMask( path,
                                                  init_script = None if initialization_registered else \
                                                                CustomJS( args=dict( ), code='''
                                                                          window.addEventListener( 'beforeunload',
@@ -263,7 +220,7 @@ class CreateMask:
 
 
             imdetails['gui']['image']['src'] = imdetails['gui']['cube'].js_obj( )
-            imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( grid=False, height_policy='max', width_policy='max' )
+            imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( grid=False, height_policy='max', width_policy='max', maxanno=5 )
 
             if self._fig['help'] is None:
                  self._fig['help'] = self._ctrl_state['help'] = imdetails['gui']['cube'].help( rows=[ '<tr><td><i>stop button</i></td><td>clicking the stop button will close the dialog and control to python</td></tr>' ],
@@ -272,7 +229,6 @@ class CreateMask:
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
 
             self._fig['status'] = imdetails['gui']['status'] = imdetails['gui']['cube'].status_text( "<p>initialization</p>" , width=230, reuse=self._fig['status'] )
-            self._image_bitmask_controls = imdetails['gui']['cube'].bitmask_ctrl( reuse=self._image_bitmask_controls, button_type='light' )
 
             ###
             ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
@@ -293,9 +249,48 @@ class CreateMask:
         self.__initialized = False
 
         ###
-        ### the asyncio future that is used to transmit the result from mask creation
+        ### the asyncio future that is used to transmit the result from region creation
         ###
         self.__result_future = None
+
+    def _create_style_adjust( self, imdetails ):
+        self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_style_ctrl( reuse=self._image_region_controls, button_type='light' )
+        hover = row( column( Div(text='<div>Fill</div>'),
+                             row(*imdetails['gui']['region-styling']['focus']['fill']),
+                             Div(text='<div>Line</div>'),
+                             row(*imdetails['gui']['region-styling']['focus']['line']) ) )
+        hover.styles = {"border": "1px solid black", "padding": "1px" }
+        nohover = row( column( Div(text='<div>Fill</div>'),
+                               row(*imdetails['gui']['region-styling']['nofocus']['fill']),
+                               Div(text='<div>Line</div>'),
+                               row(*imdetails['gui']['region-styling']['nofocus']['line']) ) )
+        nohover.styles = { "border": "1px solid black", "padding": "1px" }
+        return column( Div(text='<div><b>Focus Style</b></div>'),
+                       hover,
+                       Div(text='<div><b>Non-focus Style</b></div>'),
+                       nohover )
+
+    def _create_location_panel( self, imdetails, width=410 ):
+        pos = imdetails['gui']['cube'].region_position_ctrl( )
+        coords = grid( [ [ None, Div(text='<b>X</b>'), Div(text='<b>Y</b>') ],
+                         [ Div(text='<b>pixel</b>'), *pos['pixel'] ],
+                         [ Div(text='<b>world</b>'), *pos['world'] ] ] )
+        coord_section = row( column( Div(text='<b>Region Placement</b>'),
+                                     coords ),
+                             width=width )
+        chan_section = row( column( Div(text='<b>Channels</b>'),
+                                    *[ row( Div(text=f'''<b>{s}</b>'''), text, sizing_mode='stretch_width' ) for s,text in pos['chan'].items( ) ],
+                                    sizing_mode='stretch_width' ),
+                            width=width )
+
+        coord_section.styles = {"border": "1px solid black", "padding": "1px" }
+        chan_section.styles = {"border": "1px solid black", "padding": "1px" }
+
+        return column( coord_section,
+                       chan_section,
+                       row( pos['status'] ),
+                       row( Div(text='<b>Region Label:</b>', styles={"margin-top": "10px"} ), pos['label'], sizing_mode='stretch_width' ),
+                       row( Div(text='<b>Tracking state:</b>', styles={"margin-top": "10px"} ), *pos['tracking'] ) )
 
     def _create_colormap_adjust( self, imdetails ):
         palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
@@ -304,12 +299,16 @@ class CreateMask:
 
 
     def _create_control_image_tab( self, imid, imdetails ):
-        result = Tabs( tabs= ( [ TabPanel( child=imdetails['gui']['spectrum'],
+        result = Tabs( tabs= ( [ TabPanel( child=self._create_location_panel(imdetails),
+                                           title='Placement' ),
+                                 TabPanel( child=imdetails['gui']['spectrum'],
                                            title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
-                          [ TabPanel( child=self._create_colormap_adjust(imdetails),
-                                      title='Colormap' ),
-                            TabPanel( child=imdetails['gui']['cube'].statistics( ),
-                                      title='Statistics' ) ],
+                               [ TabPanel( child=self._create_colormap_adjust(imdetails),
+                                           title='Colormap' ),
+                                 TabPanel( child=imdetails['gui']['cube'].statistics( ),
+                                           title='Statistics' ),
+                                 TabPanel( child=self._create_style_adjust(imdetails),
+                                           title='Styling' ) ],
                        width=500, sizing_mode='stretch_height', tabs_location='below' )
 
         if not hasattr(self,'_image_control_tab_groups'):
@@ -324,8 +323,7 @@ class CreateMask:
         imid, imdetails = imagetuple
 
         return TabPanel( child=column( row( *imdetails['gui']['channel-ctrl'], imdetails['gui']['cube'].coord_ctrl( ),
-                                            *self._image_bitmask_controls,
-                                            #Spacer( height=5, height_policy="fixed", sizing_mode="scale_width" ),
+                                            ##Spacer( height=5, height_policy="fixed", sizing_mode="scale_width" ),
                                             imdetails['gui']['cursor-pixel-text'],
                                             row( Spacer( sizing_mode='stretch_width' ),
                                                  imdetails['gui']['cube'].tapedeck( size='20px' ) if imdetails['image-channels'] > 1 else Div( ),
@@ -360,9 +358,9 @@ class CreateMask:
 
 
 
-        tab_panels = list( map( self._create_image_panel, self._mask_state.items( ) ) )
+        tab_panels = list( map( self._create_image_panel, self._region_state.items( ) ) )
 
-        for imid, imdetails in self._mask_state.items( ):
+        for imid, imdetails in self._region_state.items( ):
             imdetails['gui']['cube'].connect( )
 
         image_tabs = Tabs( tabs=tab_panels, tabs_location='below', height_policy='max', width_policy='max' )
@@ -385,7 +383,7 @@ class CreateMask:
         ###
         ###     bokeh.core.serialization.SerializationError: circular reference
         ###
-        image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._mask_state.items( ) ],
+        image_tabs.js_on_change( 'active', CustomJS( args=dict( names=[ t[0] for t in self._region_state.items( ) ],
                                                                 itergroups=self._image_control_tab_groups ),
                                                      code='''if ( ! hasprop(document,'_casa_last_control_tab') ) {
                                                                  document._casa_last_control_tab = 0
@@ -432,9 +430,9 @@ class CreateMask:
         self.__reset( )
         self._launch_gui( )
 
-        async with CMC( *( [ ctx for img in self._mask_state.keys( ) for ctx in
+        async with CMC( *( [ ctx for img in self._region_state.keys( ) for ctx in
                              [
-                                 self._mask_state[img]['gui']['cube'].serve(self.__stop),
+                                 self._region_state[img]['gui']['cube'].serve(self.__stop),
                              ]
                            ] ) ):
             self.__result_future = asyncio.Future( )
@@ -450,7 +448,7 @@ class CreateMask:
             raise self._error_result
         elif self._error_result is not None:
             return self._error_result
-        return self._paths
+        return self._drawn_regions
 
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the

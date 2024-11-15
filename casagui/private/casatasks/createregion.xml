@@ -1,0 +1,20 @@
+<casaxml xsi:schemaLocation="http://casa.nrao.edu/schema/casa.xsd file:///opt/casa/code/xmlcasa/xml/casa.xsd" xmlns="http://casa.nrao.edu/schema/psetTypes.html" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <task type="function" name="createregion" category="imaging">
+    <shortdescription>Create astropy regions interactively with a GUI</shortdescription>
+
+    <description>Create one or more regions for CASA images using a GUI.
+                         Regions can be drawn on the image and upon completion a list of
+                         regions is returned to python.
+    </description>
+
+    <input>
+      <param name="image">
+        <shortdescription>Image(s) for which regions will be created.</shortdescription>
+        <type mustexist="true">path</type>
+        <type mustexist="true">pathVec</type>
+      </param>
+    </input>
+    <returns>any</returns>
+  </task>
+</casaxml>

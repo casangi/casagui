@@ -17,6 +17,7 @@ export class EvTextInputView extends TextInputView {
     override connect_signals(): void {
         super.connect_signals()
 
+        // "this.el" changes to "this.input_el" in newer version of Bokeh...
         this.el.addEventListener("mouseenter", (event) => {
             this.model.trigger_event( new MouseEnter( event.screenX,
                                                       event.screenY,

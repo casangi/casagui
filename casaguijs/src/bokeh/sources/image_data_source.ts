@@ -1,8 +1,9 @@
 import { ColumnDataSource } from "@bokehjs/models/sources/column_data_source"
 import * as p from "@bokehjs/core/properties"
 import {uuid4} from "@bokehjs/core/util/string"
-import { CallbackLike0 } from "@bokehjs/models/callbacks/callback"
 import { ImagePipe } from "./image_pipe"
+import { CallbackLike0 } from "@bokehjs/core/util/callbacks";
+import {execute} from "@bokehjs/core/util/callbacks"
 
 declare global { // CASALIB DECL
     var casalib: {
@@ -69,14 +70,15 @@ export class ImageDataSource extends ColumnDataSource {
         if ( this._mask_contour_source != null &&
              'msk' in this.data &&
              this.data.msk.length > 0 &&
-             this.data.msk[0].length > 0 ) {
+            // @ts-ignore: error TS2571: Object ("this.data.msk[0]") is of type 'unknown'.
+            this.data.msk[0].length > 0 ) {
             const mask = <Array<any>>this.data.msk
             this._mask_contour_source.data = this._mask_contour( mask )
         }
-        const execute = () => {
-            if ( this.init_script != null ) this.init_script!.execute( this )
+        const _execute = () => {
+            if ( this.init_script != null ) void execute( this.init_script, this )
         }
-        execute( )
+        _execute( )
     }
 
     channel( c: number, s: number = 0, cb?: (msg:{[key: string]: any}) => any ): void {
@@ -126,10 +128,10 @@ export class ImageDataSource extends ColumnDataSource {
     }
 
     static {
-        this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Any }) => ({
+        this.define<ImageDataSource.Props>(({ Tuple, Number, Ref, Nullable, Any }) => ({
             init_script: [ Any, null ],
             image_source: [ Ref(ImagePipe) ],
-            _mask_contour_source: [ Ref(ColumnDataSource), null ],
+            _mask_contour_source: [ Nullable(Ref(ColumnDataSource)), null ],
             num_chans: [ Tuple(Number,Number) ],
             cur_chan:  [ Tuple(Number,Number) ],
         }));

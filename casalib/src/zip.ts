@@ -1,6 +1,14 @@
 
-export function zip( ...args: [ [any] ] ) {
-    return args[0].map((_,c)=>args.map(row=>row[c]))
+export function zip<T>(...arrays: T[][]): T[][] {
+  const maxLength = Math.max(...arrays.map(arr => arr.length));
+  const result: T[][] = [];
+
+  for (let i = 0; i < maxLength; i++) {
+    const row = arrays.map(arr => arr[i]);
+    result.push(row);
+  }
+
+  return result;
 }
 
 export function unzip( zip: [ any[] ] ) {

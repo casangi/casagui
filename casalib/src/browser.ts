@@ -3,6 +3,11 @@
  * The code executes when loaded in a browser.
  */
 import { object_id } from './object_id'
+//import { map, reduce } from "./functional"
+import { map } from "./functional"
+import { is_empty, minmax, sorted } from './array_funcs'
+import { strparse_intranges, intlist_to_rangestr } from './string_funcs'
+import { forexpr } from './loop_funcs'
 import { ReconnectState } from "./reconnect_state"
 import { zip, unzip } from "./zip"
 
@@ -10,7 +15,7 @@ import * as coordtxl from 'coordtxl'
 import hotkeys from 'hotkeys-js'
 import { contours } from 'd3-contour'
 // see https://d3js.org/d3-polygon
-import { polygonContains } from 'd3-polygon'
+import { polygonContains, polygonArea } from 'd3-polygon'
 
 //
 // In JavaScript "'PROP' in OBJ" only works if the type of OBJ
@@ -32,14 +37,39 @@ declare global {
     var Bokeh: any
 }
 
+function isPtList( value: unknown ): value is [number, number][] {
+    if ( !Array.isArray(value) ) return false;
+    for (const item of value) {
+        if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'number' || typeof item[1] !== 'number') {
+            return false;
+        }
+    }
+    return true;
+}
+
+function polyArea( pts: number[] | [number, number][], ypts?: number[] ) : number {
+    if ( pts.length <= 0 ) return 0
+    if ( isPtList( pts ) ) polygonArea( pts )
+    // @ts-ignore: Type 'any[]' is not assignable to type '[number, number]'.
+    return polygonArea( zip( pts, ypts ) )
+}
+
 var casalib = {
+    is_empty,
+    minmax,
+    sorted,
+    strparse_intranges,
+    intlist_to_rangestr,
+    map,
     zip,
     unzip,
+    forexpr,
     object_id,
     coordtxl,
     hotkeys,
     ReconnectState,
-    d3: { contours, polygonContains },
+    polyArea,
+    d3: { contours, polygonContains, polygonArea },
     // TypeScript is poor
     // ------------------
     // Without this bit of stupidity, 'casalib' is flagged with a compile time error:

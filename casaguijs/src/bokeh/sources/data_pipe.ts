@@ -1,7 +1,8 @@
 import { DataSource } from "@bokehjs/models/sources/data_source"
 import * as p from "@bokehjs/core/properties"
-import { CallbackLike0 } from "@bokehjs/models/callbacks/callback";
 import { serialize, deserialize } from "../util/conversions"
+import { CallbackLike0 } from "@bokehjs/core/util/callbacks";
+import {execute} from "@bokehjs/core/util/callbacks"
 
 // global object_id function supplied by casalib
 declare global { // CASALIB DECL
@@ -163,10 +164,10 @@ export class DataPipe extends DataSource {
         //
         // Run any initialization script
         //
-        const execute = () => {
-            if ( this.init_script != null ) this.init_script!.execute( this )
+        const _execute = () => {
+            if ( this.init_script != null ) void execute( this.init_script, this )
         }
-        execute( )
+        _execute( )
     }
 
     register( id: string, cb: (msg:{[key: string]: any}) => any ): void {
