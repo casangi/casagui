@@ -1,19 +1,19 @@
 '''
-Utility functions to manage xradio processing_set
+Utility functions to manage xradio ProcessingSet
 '''
 
 import pandas as pd
 
-from xradio.vis._processing_set import processing_set
+from xradio.measurement_set.processing_set import ProcessingSet
 
 def summary(ps, columns=None):
-    ''' Print processing set summary.
+    ''' Print ProcessingSet summary.
         Args:
-            ps (processing_set): ps for summary
+            ps (xradio ProcessingSet): ps for summary
             columns (None, str, list): type of metadata to list.
-                None:      Print all summary columns in processing set.
+                None:      Print all summary columns in ProcessingSet.
                 'by_msv4': Print formatted summary metadata by MSv4.
-                str, list: Print a subset of summary columns in processing set.
+                str, list: Print a subset of summary columns in ProcessingSet.
                     Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
     '''
     pd.set_option("display.max_rows", len(ps))

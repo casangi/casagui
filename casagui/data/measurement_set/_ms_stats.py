@@ -1,4 +1,4 @@
-from xradio.vis.load_processing_set import processing_set_iterator
+from xradio.measurement_set.load_processing_set import ProcessingSetIterator
 from graphviper.dask.client import local_client
 from graphviper.graph_tools import generate_dask_workflow
 from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
@@ -9,23 +9,23 @@ import dask
 from dask.distributed import client
 import numpy as np
 
-from ._vis_data import get_vis_data_var, get_axis_data
+from ._ms_data import get_vis_spectrum_data_var, get_axis_data
 
-def calculate_vis_stats(ps, ps_store, vis_axis, logger):
+def calculate_ms_stats(ps, ps_store, vis_axis, logger):
     '''
         Calculate stats for unflagged visibilities: min, max, mean, std
         ps (msv4 processing set): visibility data with flags
         ps_store (str): path to visibility file
         vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
     '''
-    vis_data_var = get_vis_data_var(ps, vis_axis)
-    if vis_data_var is None:
+    data_var = get_vis_spectrum_data_var(ps, vis_axis)
+    if data_var is None:
         raise RuntimeError(f"Invalid visibility axis {vis_axis}")
 
     input_params = {}
     input_params['input_data_store'] = ps_store
     input_params['vis_axis'] = vis_axis
-    input_params['data_var'] = vis_data_var
+    input_params['data_var'] = data_var
 
     active_client = client._get_global_client()
     if active_client is not None:
@@ -109,7 +109,7 @@ def _map_stats(input_params):
     sum_vals = []
     count_vals = []
 
-    ps_iter = processing_set_iterator(
+    ps_iter = ProcessingSetIterator(
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],
@@ -167,7 +167,7 @@ def _map_variance(input_params):
     sq_diff_sum = 0.0
     sq_diff_count = 0
 
-    ps_iter = processing_set_iterator(
+    ps_iter = ProcessingSetIterator(
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],

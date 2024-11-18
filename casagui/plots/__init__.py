@@ -27,5 +27,5 @@
 ########################################################################
 '''End user plotting applications supplied by ``casagui``.'''
 
-from ._vis_raster import VisRaster
-from ._vis_scatter import VisScatter
+from ._ms_raster import MSRaster
+from ._ms_scatter import MSScatter

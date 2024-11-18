@@ -1,11 +1,11 @@
 '''
-Functions to create a scatter plot of visibilities from xradio processing_set
+Functions to create a scatter plot of visibility/spectrum data from xarray Dataset
 '''
 
-def scatter_plot(ps, x_axis, y_axis):
+def scatter_plot(xds, x_axis, y_axis):
     '''
     Create scatter plot y_axis vs x_axis.
-        ps (processing_set): xradio processing set (dict of msv4 xarray Datasets)
+        xds (xarray Dataset): msv4 xarray Dataset
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
     Returns: plot

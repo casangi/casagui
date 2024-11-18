@@ -1,6 +1,6 @@
 '''
-Implementation of the ``VisScatter`` application for plotting and editing
-visibilities
+Implementation of the ``MSScatter`` application for plotting and editing
+visibility/spectrum data
 '''
 
 import os
@@ -8,28 +8,28 @@ import time
 
 from graphviper.utils.logger import setup_logger
 
-from ..data.vis_data._ps_utils import summary
+from ..data.measurement_set._ps_utils import summary
 from ..io import get_processing_set
 from ..plot import scatter_plot
-from ..plots._vis_plot import show, save
+from ..plots._ms_plot import show, save
 
-class VisScatter:
+class MSScatter:
     '''
-    Plot visibility data as scatter plot.
+    Plot MeasurementSet data as scatter plot.
 
     Args:
-        vis (str): visibility path in MSv2 (.ms) or MSv4 (.zarr) format.
+        ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
         log_level (str): logging threshold, default 'INFO'
 
     Example:
-        vs = VisScatter(vis='myvis.ms')
-        vs.summary()
-        vs.plot(xaxis='time', yaxis='amp')
-        vs.show()
-        vs.save() # saves as {vis name}_scatter.png
+        mss = MSScatter(vis='myvis.ms')
+        mss.summary()
+        mss.plot(xaxis='time', yaxis='amp') # default, same as mss.plot() with no arguments
+        mss.show()
+        mss.save() # saves as {ms name}_scatter.png
     '''
 
-    def __init__(self, vis, log_level="INFO"):
+    def __init__(self, ms, log_level="INFO"):
         # Logger
         self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
 
@@ -49,7 +49,7 @@ class VisScatter:
         ''' Print processing set summary.
             Args: columns (None, str, list): type of metadata to list.
                 None:      Print all summary columns in processing set.
-                'by_msv4': Print formatted summary metadata by MSv4.
+                'by_msv4': Print formatted summary metadata per MSv4.
                 str, list: Print a subset of summary columns in processing set.
                            Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''

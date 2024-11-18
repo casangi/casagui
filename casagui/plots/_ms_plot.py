@@ -1,5 +1,5 @@
 '''
-Common visibility plotting functions
+Common ms plotting functions
 '''
 
 import hvplot

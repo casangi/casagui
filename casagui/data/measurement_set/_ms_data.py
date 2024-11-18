@@ -1,32 +1,32 @@
 import numpy as np
 from astropy.constants import c
 
-from xradio.vis._processing_set import processing_set
+from xradio.measurement_set.processing_set import ProcessingSet
 
-def is_vis_axis(axis):
-    vis_axes = ['amp', 'phase', 'real', 'imag']
-    return axis.split('_')[0] in vis_axes
+def is_vis_spectrum_axis(axis):
+    vis_spectrum_axes = ['amp', 'phase', 'real', 'imag']
+    return axis.split('_')[0] in vis_spectrum_axes
 
 
-def get_vis_data_var(xds, vis_axis):
+def get_vis_spectrum_data_var(xds, vis_spectrum_axis):
     ''' Returns name of xds data_var or raise exception '''
-    if isinstance(xds, processing_set):
+    if isinstance(xds, ProcessingSet):
         xds = xds.get(0)
 
-    vis_type = vis_axis.split('_')[1] if '_' in vis_axis else 'data'
+    data_type = vis_spectrum_axis.split('_')[1] if '_' in vis_spectrum_axis else 'data'
     data_vars = {
-        'data': 'VISIBILITY',
-        'corrected': 'VISIBILITY_CORRECTED',
-        'model': 'VISIBILITY_MODEL'
+        'data': '',
+        'corrected': '_CORRECTED',
+        'model': '_MODEL'
     }
 
-    if vis_type not in data_vars:
-        raise ValueError(f"Invalid vis axis type: {vis_type}")
+    if data_type not in data_vars:
+        raise ValueError(f"Invalid data type: {data_type}")
 
-    if "SPECTRUM" in xds.data_vars:
-        return "SPECTRUM"
-
-    return data_vars[vis_type]
+    if "VISIBILITY" in xds.data_vars:
+        return "VISIBILITY" + data_vars[data_type]
+    else:
+        return "SPECTRUM" + data_vars[data_type]
 
 def get_axis_data(xds, axis):
     ''' Get requested axis data from xarray dataset.
@@ -59,8 +59,8 @@ def get_axis_data(xds, axis):
         'flag': 'FLAG',
     }
 
-    if is_vis_axis(axis):
-        return _calc_vis_axis(xds, axis)
+    if is_vis_spectrum_axis(axis):
+        return _calc_vis_spectrum_axis(xds, axis)
     elif axis in ['u', 'v', 'w', 'uvdist']:
         return _calc_uvw_axis(xds, axis)
     elif 'wave' in axis:
@@ -80,9 +80,9 @@ def get_axis_data(xds, axis):
         raise ValueError(f"Invalid/unsupported axis {axis}")
 
 
-def _calc_vis_axis(xds, axis):
+def _calc_vis_spectrum_axis(xds, axis):
     ''' Calculate axis from VISIBILITY xarray DataArray '''
-    data_var = get_vis_data_var(xds, axis)
+    data_var = get_vis_spectrum_data_var(xds, axis)
     if data_var not in xds.data_vars:
         raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
     xda = xds[data_var]

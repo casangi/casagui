@@ -8,38 +8,39 @@ import time
 
 from graphviper.utils.logger import setup_logger
 
-from ..data.vis_data._vis_data import is_vis_axis, get_vis_data_var
-from ..data.vis_data._vis_stats import calculate_vis_stats 
-from ..data.vis_data._ps_utils import summary
-from ..data.vis_data._xds_utils import set_coordinates
-from ..io import get_processing_set
+from ..data.measurement_set._ms_data import is_vis_spectrum_axis, get_vis_spectrum_data_var
+from ..data.measurement_set._raster_data import raster_data
+from ..data.measurement_set._ms_stats import calculate_ms_stats 
+from ..data.measurement_set._ps_utils import summary
+from ..data.measurement_set._xds_utils import set_coordinates
+from ..io._ms_io import get_processing_set
 from ..plot import raster_plot
-from ..plots._vis_plot import show, save
+from ..plots._ms_plot import show, save
 
-class VisRaster:
+class MSRaster:
     '''
-    Plot visibility data as raster plot.
+    Plot MeasurementSet data as raster plot.
 
     Args:
-        vis (str): visibility path in MSv2 (.ms) or MSv4 (.zarr) format.
+        ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
         log_level (str): logging threshold, default 'INFO'
 
     Example:
-        vr = VisRaster(vis='myvis.ms')
-        vr.summary()
-        vr.plot(x_axis='baseline_id', y_axis='time', vis_axis='amp') # same as vr.plot()
-        vr.show()
-        vr.save() # saves as {vis name}_raster.png
+        msr = MSRaster(vis='myvis.ms')
+        msr.summary()
+        msr.plot(x_axis='baseline_id', y_axis='time', vis_axis='amp') # default, same as msr.plot() with no arguments
+        msr.show()
+        msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, vis, log_level="INFO"):
+    def __init__(self, ms, log_level="INFO"):
         # Logger
-        self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
+        self._logger = setup_logger(logger_name="MSRaster", log_to_term=True, log_to_file=False, log_level=log_level)
 
         # Processing set
-        self._ps, self._vis_path = get_processing_set(vis)
-        # Vis name (no path) for plot title and save filename
-        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
+        self._ps, self._ms_path = get_processing_set(ms)
+        # ms name (no path) for plot title and save filename
+        self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
 
         n_datasets = len(self._ps)
         if n_datasets == 0:
@@ -58,17 +59,17 @@ class VisRaster:
         ''' Print processing set summary.
             Args: columns (None, str, list): type of metadata to list.
                 None:      Print all summary columns in processing set.
-                'by_msv4': Print formatted summary metadata by MSv4.
+                'by_msv4': Print formatted summary metadata per MSv4.
                 str, list: Print a subset of summary columns in processing set.
                            Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''
         summary(self._ps, columns)
 
 
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, showgui=False):
         '''
-        Create a static y_axis vs x_axis raster plot of visibilities after applying selection.
-        Plot axes include time, baseline/antenna, channel, and polarization.  The axes not set as plot axes can be selected, else the first will be used.
+        Create a static y_axis vs x_axis raster plot of visibility/spectrum data after applying selection.
+        Plot axes include time, baseline/antenna, channel, and polarization. Axes not set as plot axes can be selected, else the first will be used.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna' for spectrum).
@@ -81,8 +82,9 @@ class VisRaster:
                 Default: select first spw by id.
               Plot selection:
                 time, baseline, frequency, polarization: select data dimensions which are not plot axes. Default is index 0.
+            showgui (bool): whether to launch interactive GUI
 
-        If plotting is successful, use show() or save() to view/save the plot.
+        If not showgui and plotting is successful, use show() or save() to view/save the plot only.
         '''
         start = time.time()
         self._check_plot_inputs(x_axis, y_axis, vis_axis, selection)
@@ -93,7 +95,7 @@ class VisRaster:
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
-        # For amplitude, limit colorbar range using visibility stats
+        # For amplitude, limit colorbar range using ms stats
         color_limits = None
         if 'amp' in vis_axis:
             selected_spw = selection['spw_name']
@@ -107,12 +109,18 @@ class VisRaster:
             else:
                 self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
 
-        # Plot selected processing set
-        self._plot = raster_plot(selected_ps, x_axis, y_axis, vis_axis, selection, self._vis_path, color_limits, self._logger)
-        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
+        # Select data and concat into xarray Dataset for raster plot
+        raster_xds, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, selection, self._logger)
 
-        if self._plot is None:
-            raise RuntimeError("Plot failed.")
+        # Plot selected xds
+        if showgui:
+            raise RuntimeError("Interactive GUI not implemented.")
+        else:
+            self._plot = raster_plot(raster_xds, x_axis, y_axis, vis_axis, selection, self._ms_path, color_limits, self._logger)
+            self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
+
+            if self._plot is None:
+                raise RuntimeError("Plot failed.")
 
 
     def show(self):
@@ -120,7 +128,10 @@ class VisRaster:
         Show interactive Bokeh plot in a browser.
         Plot tools include pan, zoom, hover, and save.
         '''
-        title="VisRaster " + self._vis_basename
+        if self._plot is None:
+            raise RuntimeError("No plot to show.")
+
+        title="MSRaster " + self._ms_basename
         show(self._plot, title)
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
@@ -137,23 +148,26 @@ class VisRaster:
         If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
 
         '''
+        if self._plot is None:
+            raise RuntimeError("No plot to save.")
+
         start = time.time()
         if not filename:
-            filename = f"{self._vis_basename}_raster.png"
-
+            filename = f"{self._ms_basename}_raster.png"
         save(self._plot, filename, fmt, hist, backend, resources, toolbar, title)
         self._logger.info(f"Saved plot to {filename}.")
         self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
 
 
     def _check_plot_inputs(self, x_axis, y_axis, vis_axis, selection):
-        if not is_vis_axis(vis_axis):
+        if not is_vis_spectrum_axis(vis_axis):
             raise ValueError(f"Invalid vis_axis {vis_axis}")
 
-        vis_data_var = get_vis_data_var(self._ps, vis_axis)
-        valid_axes = list(self._ps.get(0)[vis_data_var].dims)
-        if "SPECTRUM" in vis_data_var:
+        data_var = get_vis_spectrum_data_var(self._ps, vis_axis)
+        valid_axes = list(self._ps.get(0)[data_var].dims)
+        if "SPECTRUM" in data_var:
             valid_axes.append('baseline') # has 'antenna_name' dim instead
+
         if x_axis not in valid_axes or y_axis not in valid_axes:
             raise ValueError(f"Invalid x or y axis, please select from {valid_axes}")
 
@@ -211,7 +225,7 @@ class VisRaster:
         # Calculate colorbar limits from amplitude stats for unflagged data
         self._logger.info("Calculating stats for colorbar limits.")
         start = time.time()
-        min_val, max_val, mean, std = self._get_vis_stats(ps, vis_axis)
+        min_val, max_val, mean, std = self._get_ms_stats(ps, vis_axis)
         data_min = min(0.0, min_val)
         clip_min = max(data_min, mean - (3.0 * std))
         data_max = max(0.0, max_val)
@@ -224,6 +238,6 @@ class VisRaster:
         return color_limits
 
 
-    def _get_vis_stats(self, ps, vis_axis):
+    def _get_ms_stats(self, ps, vis_axis):
         # Calculate stats (min, max, mean, std) for visibility axis in processing set
-        return calculate_vis_stats(ps, self._vis_path, vis_axis, self._logger)
+        return calculate_ms_stats(ps, self._ms_path, vis_axis, self._logger)

@@ -53,38 +53,41 @@ def set_coordinates(xds):
 def concat_ps_xds(ps, logger):
     ''' Concatenate xarray Datasets in processing set by given dimension.
         Return concat xds. '''
-    n_xds = len(ps)
-    if n_xds == 0:
+    ps_len = len(ps)
+    if ps_len == 0:
         raise RuntimeError("Processing set empty after selection.")
 
-    if n_xds == 1:
+    if ps_len == 1:
         logger.debug("Processing set contains one dataset, nothing to concat.")
         return ps.get(0)
 
-    xds_list = []
-    first_values = []
+    ms_xds_list = []
+    first_time_values = []
 
     # xds have time ranges from different scans, so split xds at time gaps
     sorted_time_values = _get_sorted_times(ps)
     for key in ps:
-        split_xds, first_xds_times = _split_xds_by_time_gap(ps[key], sorted_time_values)
-        xds_list.extend(split_xds)
-        first_values.extend(first_xds_times)
-    if len(xds_list) < n_xds:
-        logger.debug(f"Split {n_xds} datasets by time gap into {len(xds_list)} datasets.")
+        split_ms_xds, first_xds_times = _split_xds_by_time_gap(ps[key], sorted_time_values)
+        ms_xds_list.extend(split_ms_xds)
+        first_time_values.extend(first_xds_times)
+
+    ms_xds_list_len = len(ms_xds_list)
+    if ms_xds_list_len < ps_len:
+        logger.debug(f"Split {ps_len} datasets by time gap into {ms_xds_list_len} datasets.")
 
     # Create sorted xds list using sorted first values
-    sorted_xds = [None] * len(xds_list)
-    first_values.sort()
-    for xds in xds_list:
-        first_xds_value = xds['time'].values
-        if first_xds_value.size > 1:
-            first_xds_value = first_xds_value[0]
+    sorted_xds = [None] * ms_xds_list_len
+    first_time_values.sort()
+    for ms_xds in ms_xds_list:
+        first_xds_time = ms_xds['time'].values
+        if first_xds_time.size > 1:
+            first_xds_time = first_xds_time[0]
 
         # Assign first unused xds at index with same first value
-        for idx, value in enumerate(first_values):
-            if (value == first_xds_value) and (sorted_xds[idx] is None):
-                sorted_xds[idx] = xds
+        for idx, value in enumerate(first_time_values):
+            if (value == first_xds_time) and (sorted_xds[idx] is None):
+                # Convert MeasurementSetXds to xarray Dataset for concat
+                sorted_xds[idx] = xr.Dataset(ms_xds.data_vars, ms_xds.coords, ms_xds.attrs)
                 break
 
     return xr.concat(sorted_xds, dim='time')
