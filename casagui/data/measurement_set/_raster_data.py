@@ -3,19 +3,19 @@ Functions to create a raster xarray Dataset of visibility/spectrum data from xra
 '''
 
 from xradio.measurement_set.processing_set import ProcessingSet
-import xradio.measurement_set._utils._utils.stokes_types
+from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
 from ._xds_utils import concat_ps_xds
 from ._ms_data import get_vis_spectrum_data_var, get_axis_data
 
 def raster_data(ps, x_axis, y_axis, vis_axis, selection, logger):
     '''
-    Create raster xda: y_axis vs x_axis for vis axis in ddi.
+    Create raster xds: y_axis vs x_axis for vis axis.
         ps (xradio ProcessingSet): input MSv4 datasets
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
         vis_axis (str): visibility component to plot (amp, phase, real, imag)
-        selection (dict): select metadata (ddi, field, intent), data dimensions (time, baseline, channel, correlation)
+        selection (dict): selected data dimensions (time, baseline, channel, polarization)
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
@@ -115,25 +115,20 @@ def _apply_xds_selection(ps, selection):
 
 def _get_value_for_index(ps, dim, index):
     if dim == "polarization":
-        # Do not sort alphabetically
-        # Use predefined list from casacore StokesTypes for order
-        polarizations = ['I', 'Q', 'U', 'V',
-            'RR', 'RL', 'LR', 'LL', 'XX', 'XY', 'YX', 'YY',
-            'RX', 'RY', 'LX', 'LY', 'XR', 'XL', 'YR', 'YL',
-            'RCircular', 'LCircular', 'Linear', 'Ptotal',
-            'Plinear', 'PFtotal', 'PFlinear', 'Pangle'
-        ]
         # Get sorted _index_ list of polarizations used
+        pol_ids = list(stokes_types.keys())
+        pol_names = list(stokes_types.values())
         idx_list = []
         for key in ps:
             for pol in ps[key].polarization.values:
-                idx_list.append(polarizations.index(pol))
-        sorted_idx = sorted(list(set(idx_list)))
+                idx_list.append(pol_names.index(pol))
+        sorted_pol_idx = sorted(list(set(idx_list)))
+
         try:
             # Select index from sorted index list
-            selected_idx = sorted_idx[index]
+            selected_pol_idx = sorted_pol_idx[index]
             # Return polarization for index
-            return polarizations[selected_idx]
+            return pol_names[selected_pol_idx]
         except IndexError:
             raise IndexError(f"Plot failed: {dim} selection {index} out of range {len(sorted_idx)}")
     else:
