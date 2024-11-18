@@ -14,7 +14,7 @@ def summary(ps, columns=None):
                 None:      Print all summary columns in ProcessingSet.
                 'by_msv4': Print formatted summary metadata by MSv4.
                 str, list: Print a subset of summary columns in ProcessingSet.
-                    Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                    Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
     '''
     pd.set_option("display.max_rows", len(ps))
     pd.set_option("display.max_columns", 12)
@@ -24,10 +24,10 @@ def summary(ps, columns=None):
         print(ps_summary)
     elif columns == "by_msv4":
         for row in ps_summary.itertuples(index=False):
-            name, obs_mode, shape, polarization, scan_number, spw_name, field_name, source_name, line_name, field_coords, start_frequency, end_frequency = row
+            name, intents, shape, polarization, scan_number, spw_name, field_name, source_name, line_name, field_coords, start_frequency, end_frequency = row
             print("-----")
             print(f"MSv4 name: {name}")
-            print(f"obs_mode: {obs_mode}")
+            print(f"intent: {intents}")
             print(f"shape: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
             print(f"polarization: {polarization}")
             print(f"scan_number: {scan_number}")

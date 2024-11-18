@@ -49,8 +49,8 @@ def _get_plot_title(xds, selection, vis_name):
             metadata_selection.append(f"field: {selection[key]}")
         elif key == 'source_name':
             metadata_selection.append(f"source: {selection[key]}")
-        elif key == 'obs_mode':
-            metadata_selection.append(f"obs mode: {selection[key]}")
+        elif key == 'intent':
+            metadata_selection.append(f"intent: {selection[key]}")
         else:
             # Add selected dimensions to title: name (index)
             label = get_coordinate_labels(xds, key)

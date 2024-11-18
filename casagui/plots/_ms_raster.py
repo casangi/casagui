@@ -61,7 +61,7 @@ class MSRaster:
                 None:      Print all summary columns in processing set.
                 'by_msv4': Print formatted summary metadata per MSv4.
                 str, list: Print a subset of summary columns in processing set.
-                           Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                           Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'line_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''
         summary(self._ps, columns)
 
@@ -77,19 +77,19 @@ class MSRaster:
             vis_axis (str): Visibility component (amp, phase, real, imag) and type if not data (corrected, model), e.g. 'phase_corrected'. Default 'amp'.
             selection (dict): selected data to plot. Options include:
               Processing set selection:
-                Summary column names: 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                Summary column names: 'name', 'intents', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
                 'query': for pandas query of summary columns.
                 Default: select first spw by id.
               Plot selection:
                 time, baseline, frequency, polarization: select data dimensions which are not plot axes. Default is index 0.
-            showgui (bool): whether to launch interactive GUI
+            showgui (bool): whether to launch interactive GUI in browser. Default False.
 
         If not showgui and plotting is successful, use show() or save() to view/save the plot only.
         '''
         start = time.time()
         self._check_plot_inputs(x_axis, y_axis, vis_axis, selection)
 
-        # Apply metadata selection to processing set (spw, field, source, obs_mode)
+        # Apply metadata selection to processing set (spw, field, source, intents)
         selected_ps, selection = self._select_ps(self._ps, selection, x_axis, y_axis)
 
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
@@ -117,11 +117,10 @@ class MSRaster:
             raise RuntimeError("Interactive GUI not implemented.")
         else:
             self._plot = raster_plot(raster_xds, x_axis, y_axis, vis_axis, selection, self._ms_path, color_limits, self._logger)
-            self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
-
             if self._plot is None:
                 raise RuntimeError("Plot failed.")
 
+        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
     def show(self):
         ''' 
@@ -176,7 +175,7 @@ class MSRaster:
 
 
     def _select_ps(self, ps, selection, x_axis, y_axis):
-        ''' Apply ps selection: spw_name, field_name, source_name, obs_mode '''
+        ''' Apply ps selection: spw_name, field_name, source_name, intents '''
         selected_ps = ps
 
         # Apply user selection
@@ -188,8 +187,8 @@ class MSRaster:
                 ps_selection['field_name'] = selection['field_name']
             if 'source_name' in selection:
                 ps_selection['source_name'] = selection['source_name']
-            if 'obs_mode' in selection:
-                ps_selection['obs_mode'] = selection['obs_mode']
+            if 'intents' in selection:
+                ps_selection['intents'] = selection['intents']
             if ps_selection:
                 self._logger.info(f"Applying user selection to processing set: {ps_selection}")
                 selected_ps = ps.sel(**ps_selection)
