@@ -9,6 +9,7 @@ import time
 from graphviper.utils.logger import setup_logger
 
 from ..data.measurement_set._ps_utils import summary
+from ..data.measurement_set._scatter_data import scatter_data
 from ..io import get_processing_set
 from ..plot import scatter_plot
 from ..plots._ms_plot import show, save
@@ -22,7 +23,7 @@ class MSScatter:
         log_level (str): logging threshold, default 'INFO'
 
     Example:
-        mss = MSScatter(vis='myvis.ms')
+        mss = MSScatter(ms='myms.ms')
         mss.summary()
         mss.plot(xaxis='time', yaxis='amp') # default, same as mss.plot() with no arguments
         mss.show()
@@ -31,16 +32,16 @@ class MSScatter:
 
     def __init__(self, ms, log_level="INFO"):
         # Logger
-        self._logger = setup_logger(logger_name="VisRaster", log_to_term=True, log_to_file=False, log_level=log_level)
+        self._logger = setup_logger(logger_name="MSScatter", log_to_term=True, log_to_file=False, log_level=log_level)
 
-        self._ps, self._vis_path = get_processing_set(vis)
-        # Vis name (no path) for plot title and save filename
-        self._vis_basename = os.path.splitext(os.path.basename(self._vis_path))[0]
+        self._ps, self._ms_path = get_processing_set(ms)
+        # MS name (no path) for plot title and save filename
+        self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
 
         n_datasets = len(self._ps)
         if n_datasets == 0:
             raise RuntimeError("Failed to read visibility file into processing set")
-        print(f"Processing {n_datasets} msv4 datasets")
+        self._logger.info(f"Processing set contains {n_datasets} msv4 datasets.")
 
         self._plot = None
 
@@ -51,32 +52,39 @@ class MSScatter:
                 None:      Print all summary columns in processing set.
                 'by_msv4': Print formatted summary metadata per MSv4.
                 str, list: Print a subset of summary columns in processing set.
-                           Options include 'name', 'obs_mode', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                           Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''
         summary(self._ps, columns)
 
 
-    def plot(self, xaxis='time', yaxis='amp'):
+    def plot(self, x_axis='time', y_axis='amp', selection=None, showgui=False):
         '''
         Create a scatter plot with specified xaxis and yaxis.
-            xaxis (str): Plot x-axis. Default 'time'.
-            yaxis (str): Plot y-axis. Default 'amp'.
-            interactive (bool): Whether to display plot in browser (no GUI). Default False.
+            x_axis (str): Plot x-axis. Default 'time'.
+            y_axis (str): Plot y-axis. Default 'amp'.
+            selection (dict): Selected data to plot.  Options include:
+                Summary column names: 'name', 'intents', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                'query': for pandas query of summary columns.
+            showgui (bool): Whether to launch interactive GUI in browser. Default False.
 
         TODO: add selection
         '''
         start = time.time()
-        self._plot = scatter_plot(self._ps, xaxis, yaxis)
-        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
-        if self._plot is None:
+        scatter_xds = scatter_data(self._ps, x_axis, y_axis, selection, self._logger)
+
+        if showgui:
+            raise RuntimeError("Interactive GUI not implemented.")
+        elif self._plot is None:
+            self._plot = scatter_plot(self._ps, xaxis, yaxis)
             raise RuntimeError("Plot failed.")
+        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
     def show(self):
         ''' 
         Show interactive Bokeh plot in a browser.
         Plot tools include pan, zoom, hover, and save.
         '''
-        title="VisScatter " + self._vis_basename
+        title="MSScatter " + self._ms_basename
         show(self._plot, title)
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
