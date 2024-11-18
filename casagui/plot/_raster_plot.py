@@ -7,7 +7,7 @@ import hvplot.pandas
 import os.path
 
 from ..data.measurement_set._ms_data import get_vis_spectrum_data_var
-from ._plot_axes import get_coordinate_label, get_axis_labels, get_vis_axis_labels
+from ._plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels
 
 def raster_plot(raster_xds, x_axis, y_axis, vis_axis, selection, vis_path, color_limits, logger):
     '''
@@ -53,15 +53,15 @@ def _get_plot_title(xds, selection, vis_name):
             metadata_selection.append(f"obs mode: {selection[key]}")
         else:
             # Add selected dimensions to title: name (index)
-            label = get_coordinate_label(xds, key)
+            label = get_coordinate_labels(xds, key)
             index = selection[key] if isinstance(selection[key], int) else None
-            dim_selection = f"{key}: {selection[key]}"
+            dim_selection = f"{key}: {label}"
             if index is not None:
                 index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
                 dim_selection += index_label
             dim_selections.append(dim_selection)
-    title += '\n'.join(metadata_selection)
-    title += '\n'.join(dim_selections)
+    title += '\n'.join(metadata_selection) + '\n'
+    title += ' '.join(dim_selections)
     return title
 
 def _plot_xds(xds, data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):

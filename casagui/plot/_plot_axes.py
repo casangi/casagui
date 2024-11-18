@@ -5,15 +5,8 @@ import numpy as np
 from pandas import to_datetime
 import xarray as xr
 
-def get_coordinate_label(xds, coordinate):
-    ''' Return single coordinate value as string '''
-    label = _get_coordinate_labels(xds, coordinate)
-    if coordinate == 'frequency':
-        label = f"{label} {xds.frequency.attrs['units']}"
-    return label
-
-def _get_coordinate_labels(xds, coordinate):
-    ''' Return coordinate values as list of string labels or None if numeric '''
+def get_coordinate_labels(xds, coordinate):
+    ''' Return coordinate values as string, list of string labels, or None if numeric '''
     if coordinate == 'time':
         return _get_time_labels(xds.time)
     elif coordinate == 'baseline':
@@ -51,7 +44,7 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.item():.4f}"
+        return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']}"
     else:
         return None # auto ticks from frequency values
 
@@ -72,7 +65,7 @@ def get_vis_axis_labels(xds, data_var, axis):
 
 def get_axis_labels(xds, axis):
     ''' Return axis name, label and ticks, reindex for regular axis '''
-    labels = _get_coordinate_labels(xds, axis)
+    labels = get_coordinate_labels(xds, axis)
     ticks = list(enumerate(labels)) if labels is not None else None
 
     if axis == "time":
