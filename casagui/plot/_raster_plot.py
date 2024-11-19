@@ -61,7 +61,7 @@ def _get_plot_title(xds, selection, vis_name):
                 dim_selection += index_label
             dim_selections.append(dim_selection)
     title += '\n'.join(metadata_selection) + '\n'
-    title += ' '.join(dim_selections)
+    title += '  '.join(dim_selections)
     return title
 
 def _plot_xds(xds, data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):

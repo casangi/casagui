@@ -44,7 +44,7 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']}"
+        return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer']}"
     else:
         return None # auto ticks from frequency values
 
@@ -85,8 +85,7 @@ def get_axis_labels(xds, axis):
         label = "Antenna"
         xds['antenna_name'] = np.array(range(xds.antenna_name.size))
     elif axis == "frequency":
-        unit = xds.frequency.frequency.attrs['units']
-        label =  f"Frequency ({unit})"
+        label = f"Frequency ({xds.frequency.attrs['units']}) {xds.frequency.attrs['observer']}"
     elif axis == "polarization":
         label =  "Polarization"
         # replace axis with index for plot range
