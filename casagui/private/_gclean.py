@@ -559,11 +559,12 @@ class gclean:
             self._exe_cmds_per_iter.append(0)
             try:
                 if self._convergence_result[1] is None:
-
                     # initial call to tclean(...) creates the initial dirty image with niter=0
 
                     # If calcres and calcpsf are False, no need to run initial tclean - assume image products already on disk.
                     if not (self._calcres == False and self._calcpsf == False):
+                        casalog.post('Running initial major cycle to create first residual image.', 'INFO')
+                        print('Running initial major cycle to create first residual image.')
                         tclean_ret = self._tclean( vis=self._vis, mask=self._mask, imagename=self._imagename, imsize=self._imsize, cell=self._cell, selectdata=self._selectdata, phasecenter=self._phasecenter, stokes=self._stokes,
                                               startmodel=self._startmodel, specmode=self._specmode, projection=self._projection, reffreq=self._reffreq, gridder=self._gridder, wprojplanes=self._wprojplanes, facets=self._facets,
                                               mosweight=self._mosweight, psfphasecenter = self._psfphasecenter, aterm=self._aterm, psterm=self._psterm, wbawp=self._wbawp, conjbeams=self._conjbeams, cfcache=self._cfcache,
@@ -582,7 +583,7 @@ class gclean:
                     deconv_ret = self._deconvolve(imagename=self._imagename, startmodel=self._startmodel,
                                                   deconvolver=self._deconvolver, scales=self._scales, nterms=self._nterms,
                                                   smallscalebias=self._smallscalebias, restoration=False, restoringbeam=self._restoringbeam,
-                                                  niter = self._niter, gain=self._gain, threshold=self._threshold, nsigma=self._nsigma,
+                                                  niter = 0, gain=self._gain, threshold=self._threshold, nsigma=self._nsigma,
                                                   interactive = False, fullsummary=True, fastnoise=self._fastnoise, usemask=self._usemask,
                                                   mask = self._mask, pbmask=self._pbmask, sidelobethreshold=self._sidelobethreshold,
                                                   noisethreshold=self._noisethreshold, lownoisethreshold=self._lownoisethreshold,
@@ -670,11 +671,13 @@ class gclean:
                         ## Decrement count for the major cycle just done...
                         self.__decrement_counts()
 
+                        cycleniterleft = self._cycleniter - self.current_imdict.returndict['iterdone']
+
                         # Use global imdict for convergence check
                         if deconv_ret['stopcode'] == 7:   ## Tell the convergence checker that the mask is zero and iterations were skipped
                             self.hasit, self.stopdescription = self.global_imdict.has_converged(self._niter, self._threshold, self._nmajor, masksum=0)
                         else:
-                            self.hasit, self.stopdescription = self.global_imdict.has_converged(self._niter, self._threshold, self._nmajor)
+                            self.hasit, self.stopdescription = self.global_imdict.has_converged(self._niter, self._threshold, self._nmajor, cycleniter=cycleniterleft)
 
 
                     self.global_imdict.returndict['stopcode'] = self.hasit

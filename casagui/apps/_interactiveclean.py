@@ -59,9 +59,13 @@ from ..utils import ContextMgrChain as CMC
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 try:
-    from casagui.private._gclean import gclean as _gclean
-except:
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+except:
+    import inspect as _insp
+    import os as _os
+    from casagui.private._gclean import gclean as _gclean
+    print( f'''>>>--caution--> Using cached gclean API from {_os.path.dirname(_os.path.abspath(_insp.getsourcefile(_gclean)))}''' )
+
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
 
@@ -254,14 +258,17 @@ class InteractiveClean:
                          cell=['1arcmin', '1arcmin']
                          cell = '1arcsec' is equivalent to ['1arcsec','1arcsec']
     phasecenter          Phase center of the image (string or field id); if the phasecenter is the name known major solar system object ('MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO', 'SUN', 'MOON') or is an ephemerides table then that source is tracked and the background sources get smeared. There is a special case, when phasecenter='TRACKFIELD', which will use the ephemerides or polynomial phasecenter in the FIELD table of the MS's as the source center to track.
-                         example: phasecenter=6
-                                  phasecenter='J2000 19h30m00 -40d00m00'
-                                  phasecenter='J2000 292.5deg  -40.0deg'
-                                  phasecenter='J2000 5.105rad  -0.698rad'
-                                  phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
-                                  phasecenter='myComet_ephem.tab'
-                                  phasecenter='MOON'
-                                  phasecenter='TRACKFIELD'
+
+                              Note : If unspecified, tclean will use the phase-center from the first data field of the MS (or list of MSs) selected for imaging.
+
+                         			example: phasecenter=6
+                         phasecenter='J2000 19h30m00 -40d00m00'
+                         phasecenter='J2000 292.5deg  -40.0deg'
+                         phasecenter='J2000 5.105rad  -0.698rad'
+                         phasecenter='ICRS 13:05:27.2780 -049.28.04.458'
+                         phasecenter='myComet_ephem.tab'
+                         phasecenter='MOON'
+                         phasecenter='TRACKFIELD'
     stokes               Stokes Planes to make
                          default='I'; example: stokes='IQUV';
                            Options: 'I','Q','U','V','IV','QU','IQ','UV','IQUV','RR','LL','XX','YY','RRLL','XXYY','pseudoI'
@@ -307,23 +314,23 @@ class InteractiveClean:
                                       please try using task imregrid to resample the starting model
                                       image onto a CASA image with the target shape and
                                       coordinate system before supplying it via startmodel ]
-    specmode             Spectral definition mode (mfs,cube,cubedata, cubesource)
+    specmode             Spectral definition mode (mfs,cube,cubedata, cubesource, mvc)
 
-                         mode='mfs' : Continuum imaging with only one output image channel.
-                                               (mode='cont' can also be used here)
+                         specmode='mfs' : Continuum imaging with only one output image channel.
+                                                        (mode='cont' can also be used here)
 
-                         mode='cube' : Spectral line imaging with one or more channels
-                                                 Parameters start, width,and nchan define the spectral
-                                                 coordinate system and can be specified either in terms
-                                                 of channel numbers, frequency or velocity in whatever
-                                                 spectral frame is specified in 'outframe'.
-                                                 All internal and output images are made with outframe as the
-                                                 base spectral frame. However imaging code internally uses the fixed
-                                                 spectral frame, LSRK for automatic internal software
-                                                 Doppler tracking so that a spectral line observed over an
-                                                 extended time range will line up appropriately.
-                                                 Therefore the output images have additional spectral frame conversion
-                                                 layer in LSRK on the top the base frame.
+                         specmode='cube' : Spectral line imaging with one or more channels
+                                                        Parameters start, width,and nchan define the spectral
+                                                       coordinate system and can be specified either in terms
+                                                       of channel numbers, frequency or velocity in whatever
+                                                       spectral frame is specified in 'outframe'.
+                                                       All internal and output images are made with outframe as the
+                                                       base spectral frame. However imaging code internally uses the fixed
+                                                       spectral frame, LSRK for automatic internal software
+                                                       Doppler tracking so that a spectral line observed over an
+                                                       extended time range will line up appropriately.
+                                                       Therefore the output images have additional spectral frame conversion
+                                                        layer in LSRK on the top the base frame.
 
 
                                                  (Note : Even if the input parameters are specified in a frame
@@ -337,7 +344,8 @@ class InteractiveClean:
 
 
 
-                          mode='cubedata' : Spectral line imaging with one or more channels
+
+                          specmode='cubedata' : Spectral line imaging with one or more channels
                                                           There is no internal software Doppler tracking so
                                                           a spectral line observed over an extended time range
                                                           may be smeared out in frequency. There is strictly
@@ -346,7 +354,7 @@ class InteractiveClean:
                                                           be labelled  "Undefined".
 
 
-                          mode='cubesource': Spectral line imaging while
+                          specmode='cubesource': Spectral line imaging while
                                                           tracking moving source (near field or solar system
                                                           objects). The velocity of the source is accounted
                                                           and the frequency reported is in the source frame.
@@ -355,6 +363,48 @@ class InteractiveClean:
                                                           velocity of a given line reported may be different from the rest frame
                                                           velocity if the emission region is moving w.r.t the systemic
                                                           velocity frame of the source)
+
+                          specmode='mvc' : Multiterm continuum imaging with cube major cycles.
+                                                          This mode requires deconvolver='mtmfs' with nterms>1
+                                                          and user-set choices of 'reffreq' and 'nchan'.
+
+                                                          The output images and minor cycle are similar to specmode='mfs'
+                                                          with deconvolver='mtmfs', but the major cycles are done in
+                                                          cube mode (and require a setting of 'reffreq' and 'nchan').
+                                                          By default, frequency-dependent primary beam correction is
+                                                          applied to each channel, before being combined across frequency
+                                                          to make the inputs to the 'mtmfs' deconvolver.  This results in
+                                                          implicit wideband pb-correction, with the deconvolver seeing only
+                                                          the sky spectral structure.
+
+                                                          Note : There is currently no option to turn off wideband pb correction
+                                                          as part of the flat-sky normalization between the major and minor cycles.
+                                                          Therefore, 'mvc' with the 'standard' and 'wproject' gridders will also apply
+                                                          pblimits per channel, masking all regions outside of pblimit.
+                                                          An option to retain sources outside the pblimit will be added in a future release.
+
+                                                          Note : Below is some guidance for choosing 'nchan' and 'reffreq' :
+
+                                                          The cube produced by the major cycle is used in a linear least square fits for Taylor
+                                                          polynomials per pixel. Therefore, one only needs as many channels in the cube, as
+                                                          required for an accurate polynomial fit for sources that have the strongest
+                                                          spectral structure.
+
+                                                          In general, 'nchan' needs to be greater than or equal to 'nterms', and the
+                                                          frequency range selected by the data will be evenly split into nchan channels.
+                                                          For a low-order polynomial fit, only a small number (around 10)
+                                                          channels are typically needed (for VLA/ALMA bandwidth ratios).
+                                                          'nchan=-1' applies a heuristic that results in a default of 10 cube channels
+                                                          for a 2:1 bandwidth ratio.
+
+                                                          nchan = MAX( bandwidth/(0.1*startfreq) ,  nterms+1 )
+
+                                                          Note: When running in parallel, the nchan selected may limit the speedup if it
+                                                          is smaller than the number of processes used.
+
+                                                          The 'reffreq' is the reference frequency used for the Taylor polynomial expansion.
+                                                          By default, in specmode='mvc', reffreq is set to the middle of the selected
+                                                          frequency range.
     reffreq              Reference frequency of the output image coordinate system
 
                          Example :  reffreq='1.5GHz'    as a string with units.
@@ -1110,10 +1160,30 @@ class InteractiveClean:
                                    ( where vp.tab is the name of the vpmanager file.
                                       See the inline help for the 'vptable' parameter )
 
-                         Note : Multi-term PB correction that includes a correction for the
-                                   spectral index of the PB has not been enabled for the 4.7 release.
-                                   Please use the widebandpbcor task instead.
-                                   ( Wideband PB corrections are required when the amplitude of the
+                         Note : For deconvolver='mtmfs', pbcor will divide each Taylor term image by the .tt0 average PB.
+                                    For all gridders, this calculation is accurate for small fractional bandwidths.
+
+                                    For large fractional bandwidths, please use one of the following options.
+
+                                    (a) For single pointings, run the tclean task with specmode='mfs', deconvolver='mtmfs',
+                                          and gridder='standard' with pbcor=True or False.
+                                          If a PB-corrected spectral index is required,
+                                          please use the widebandpbcor task to apply multi-tern PB-correction.
+
+                                    (b) For mosaics, run tclean task with specmode='mfs', deconvolver='mtmfs',
+                                          and gridder='awproject' , wbawp=True, conjbeams=True, with pbcor=True.
+                                          This option applies wideband PB correction as part of the gridding step and
+                                          pbcor=True will be accurate because the spectral index map will already
+                                          be PB-corrected.
+
+                                    (c) For mosaics, run tclean with specmode='mvc', deconvolver='mtmfs',
+                                          and gridder='standard' or 'mosaic' with pbcor=True.
+                                          This option applies wideband PB-correction to channelized residual images
+                                          prior to the minor cycle and pbcor=True will be accurate because the spectral
+                                          index map will already be PB-corrected.
+
+                          Note : Frequency-dependent PB corrections are typically required for full-band imaging with the VLA.
+                                      Wideband PB corrections are required when the amplitude of the
                                       brightest source is known accurately enough to be sensitive
                                       to the difference in the PB gain between the upper and lower
                                       end of the band at its location. As a guideline, the artificial spectral
@@ -2084,12 +2154,12 @@ class InteractiveClean:
                                                   line_color='red', x_range_name='residual_range', line_dash='dotted', line_width=2 )
             imdetails['gui']['convergence'].line(   'values', 'iterations',   source=imdetails['converge-data']['residual'],
                                                     line_color=self._converge_color['residual'], x_range_name='residual_range' )
-            imdetails['gui']['convergence'].circle( 'values', 'iterations',   source=imdetails['converge-data']['residual'],
-                                                    color=self._converge_color['residual'], x_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].scatter( 'values', 'iterations',   source=imdetails['converge-data']['residual'],
+                                                     color=self._converge_color['residual'], x_range_name='residual_range',size=10 )
             imdetails['gui']['convergence'].line(   'values', 'iterations', source=imdetails['converge-data']['flux'],
                                                     line_color=self._converge_color['flux'], x_range_name='flux_range' )
-            imdetails['gui']['convergence'].circle( 'values', 'iterations', source=imdetails['converge-data']['flux'],
-                                                    color=self._converge_color['flux'], x_range_name='flux_range', size=10 )
+            imdetails['gui']['convergence'].scatter( 'values', 'iterations', source=imdetails['converge-data']['flux'],
+                                                     color=self._converge_color['flux'], x_range_name='flux_range', size=10 )
 
             imdetails['gui']['convergence'].add_layout( LinearAxis( x_range_name='flux_range', axis_label='Total Flux',
                                                         axis_line_color=self._converge_color['flux'],
@@ -2108,12 +2178,12 @@ class InteractiveClean:
                                                   line_color='red', y_range_name='residual_range', line_dash='dotted', line_width=2 )
             imdetails['gui']['convergence'].line(   'iterations', 'values',   source=imdetails['converge-data']['residual'],
                                                     line_color=self._converge_color['residual'], y_range_name='residual_range' )
-            imdetails['gui']['convergence'].circle( 'iterations', 'values',   source=imdetails['converge-data']['residual'],
-                                                    color=self._converge_color['residual'], y_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].scatter( 'iterations', 'values',   source=imdetails['converge-data']['residual'],
+                                                     color=self._converge_color['residual'], y_range_name='residual_range',size=10 )
             imdetails['gui']['convergence'].line(   'iterations', 'values', source=imdetails['converge-data']['flux'],
                                                     line_color=self._converge_color['flux'], y_range_name='flux_range' )
-            imdetails['gui']['convergence'].circle( 'iterations', 'values', source=imdetails['converge-data']['flux'],
-                                                    color=self._converge_color['flux'], y_range_name='flux_range', size=10 )
+            imdetails['gui']['convergence'].scatter( 'iterations', 'values', source=imdetails['converge-data']['flux'],
+                                                     color=self._converge_color['flux'], y_range_name='flux_range', size=10 )
 
             imdetails['gui']['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
                                                         axis_line_color=self._converge_color['flux'],
