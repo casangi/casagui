@@ -91,7 +91,6 @@ class MSRaster:
 
         # Apply metadata selection to processing set (spw, field, source, intents)
         selected_ps, selection = self._select_ps(self._ps, selection, x_axis, y_axis)
-
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
@@ -181,24 +180,20 @@ class MSRaster:
         # Apply user selection
         if selection:
             ps_selection = {}
-            if 'spw_name' in selection:
-                ps_selection['spw_name'] = selection['spw_name']
-            if 'field_name' in selection:
-                ps_selection['field_name'] = selection['field_name']
-            if 'source_name' in selection:
-                ps_selection['source_name'] = selection['source_name']
-            if 'intents' in selection:
-                ps_selection['intents'] = selection['intents']
+            ps_selection_keys = ['spw_name', 'field_name', 'source_name', 'intents']
+            for key in selection:
+                if key in ps_selection_keys:
+                    ps_selection[key] = selection[key]
             if ps_selection:
                 self._logger.info(f"Applying user selection to processing set: {ps_selection}")
                 selected_ps = ps.sel(**ps_selection)
 
         # Select first spw (min id) if not user-selected
         if not selection or 'spw_name' not in selection:
-            spw_ps = selected_ps if selected_ps is not None else ps
-            first_spw_name = self._get_first_spw_name(spw_ps)
+            first_spw_name = self._get_first_spw_name(ps)
             spw_selection = {'spw_name': first_spw_name}
-            selected_ps = selected_ps.sel(**spw_selection) if selected_ps else ps.sel(**spw_selection)
+            selected_ps = selected_ps.sel(**spw_selection)
+            # Add spw selection to selection
             selection = selection | spw_selection if selection else spw_selection
 
         return selected_ps, selection
@@ -207,14 +202,16 @@ class MSRaster:
     def _get_first_spw_name(self, ps):
         ''' Return spw selection by name (str or list) or first by frequency if selection is None '''
         # Collect spw names by id
-        spw_names = {}
+        spw_id_names = {}
         for key in ps:
             freq_xds = ps[key].frequency
-            spw_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
+            spw_id_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
 
-        # spw not selected: select first spw by id
-        first_spw_id = min(spw_names)
-        first_spw_name = spw_names[first_spw_id]
+        # spw not selected: select first spw by id and return name
+        first_spw_id = min(spw_id_names)
+        first_spw_name = spw_id_names[first_spw_id]
+
+        # describe selected spw
         spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
         self._logger.info(f"Selecting first spw id {first_spw_id}: {first_spw_name} with range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
         return first_spw_name
@@ -224,19 +221,16 @@ class MSRaster:
         # Calculate colorbar limits from amplitude stats for unflagged data
         self._logger.info("Calculating stats for colorbar limits.")
         start = time.time()
-        min_val, max_val, mean, std = self._get_ms_stats(ps, vis_axis)
+        min_val, max_val, mean, std = calculate_ms_stats(ps, self._ms_path, vis_axis, self._logger)
+
         data_min = min(0.0, min_val)
         clip_min = max(data_min, mean - (3.0 * std))
         data_max = max(0.0, max_val)
         clip_max = min(data_max, mean + (3.0 * std))
+
         if clip_min == 0.0 and clip_max == 0.0:
             color_limits = None # flagged plot
         else:
             color_limits = (clip_min, clip_max)
         self._logger.debug(f"Stats elapsed time: {time.time() - start:.2f} s.")
         return color_limits
-
-
-    def _get_ms_stats(self, ps, vis_axis):
-        # Calculate stats (min, max, mean, std) for visibility axis in processing set
-        return calculate_ms_stats(ps, self._ms_path, vis_axis, self._logger)
