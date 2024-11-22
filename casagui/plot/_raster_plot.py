@@ -4,36 +4,34 @@ Functions to create a raster plot of visibility/spectrum data from xarray Datase
 
 import hvplot.xarray
 import hvplot.pandas
-import os.path
 
-from ..data.measurement_set._ms_data import get_vis_spectrum_data_var
 from ._plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels
+from ..data.measurement_set._ms_data import get_correlated_data
 
-def raster_plot(raster_xds, x_axis, y_axis, vis_axis, selection, vis_path, color_limits, logger):
+def raster_plot(xds, x_axis, y_axis, vis_axis, data_group, selection, ms_name, color_limits):
     '''
-    Create raster plot y_axis vs x_axis for vis axis in ddi.
-        raster_xds (xarray Dataset): selected dataset of MSv4 data to plot
+    Create raster plot for vis axis.
+        xds (xarray Dataset): selected dataset of MSv4 data to plot
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
         vis_axis (str): visibility component to plot (amp, phase, real, imag)
+        data_group (str): xds data group name of correlated data, flags, weights, and uvw
         selection (dict): select ddi, field, intent, time/baseline/channel/correlation
-        vis_path (str): path to visibility file
+        ms_name (str): base name of ms/zarr filename
         color_limits (tuple): color limits (min, max) for plotting amplitude
-        logger (graphviper logger): logger
 
     Returns: holoviews Image or Overlay (if flagged data)
     '''
     # Set title for all plots
-    title = _get_plot_title(raster_xds, selection, os.path.basename(vis_path))
+    title = _get_plot_title(xds, selection, ms_name)
 
     # Axes for plot (replaced with index for regular spacing where needed)
-    raster_xds, x_axis_labels = get_axis_labels(raster_xds, x_axis)
-    raster_xds, y_axis_labels = get_axis_labels(raster_xds, y_axis)
-    data_var = get_vis_spectrum_data_var(raster_xds, vis_axis)
-    c_axis_labels = get_vis_axis_labels(raster_xds, data_var, vis_axis)
+    xds, x_axis_labels = get_axis_labels(xds, x_axis)
+    xds, y_axis_labels = get_axis_labels(xds, y_axis)
+    correlated_data = get_correlated_data(xds, data_group)
+    c_axis_labels = get_vis_axis_labels(xds, correlated_data, vis_axis)
 
-    return _plot_xds(raster_xds, data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
-
+    return _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
 
 def _get_plot_title(xds, selection, vis_name):
     ''' Form string containing vis name and selected values '''
@@ -64,14 +62,14 @@ def _get_plot_title(xds, selection, vis_name):
     title += '  '.join(dim_selections)
     return title
 
-def _plot_xds(xds, data_var, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):
+def _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits, show_flagged = True):
     # create holoviews.element.raster.Image
     x_axis, x_label, x_ticks = x_axis_labels
     y_axis, y_label, y_ticks = y_axis_labels
     c_axis, c_label = c_axis_labels
 
-    unflagged_xda = xds[data_var].where(xds.FLAG == 0.0).rename(c_axis)
-    flagged_xda = xds[data_var].where(xds.FLAG == 1.0).rename(c_axis)
+    unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(c_axis)
+    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(c_axis)
 
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
     unflagged_colormap = "viridis"

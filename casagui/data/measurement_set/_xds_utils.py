@@ -5,49 +5,24 @@ Utility functions to manage xarray DataSets
 import numpy as np
 import xarray as xr
 
-def _set_baseline_coordinates(xds):
-    ''' Set baseline, ant1, and ant2 name coordinates.
-        Make baseline name a dimension of the xarray Dataset instead of id '''
+def set_baseline_coordinate(xds):
+    ''' Set baseline coordinate as string array (ant1_name & ant2_name).
+        Replace baseline_id dimension with baseline. '''
     ant1_names = xds.baseline_antenna1_name.values
     ant2_names = xds.baseline_antenna2_name.values
     baseline_names = []
 
+    # Create baseline name coordinate and make it dimension
     for idx in xds.baseline_id.values:
         baseline_name = f"{ant1_names[idx]} & {ant2_names[idx]}"
         baseline_names.append(baseline_name)
-
-    # Add baseline name coordinate and make it dimension
     xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
     xds = xds.swap_dims({"baseline_id": "baseline"})
 
-    # Raises error in concat when non-dim data var is string type ("dtype.hasobject not implemented for auto chunking")
-    # Drop antenna name coordinates: no longer needed since baseline names assigned as dim below
-    xds = xds.drop('baseline_antenna1_name')
-    xds = xds.drop('baseline_antenna2_name')
+    # Remove non-dimension unicode data vars for concat.  Antenna names now in baseline coord.
+    xds = xds.drop("baseline_antenna1_name")
+    xds = xds.drop("baseline_antenna2_name")
 
-    return xds
-
-def set_coordinates(xds):
-    ''' Set unit as string (not list) and convert freq to GHz for plotting '''
-    for coord in xds.coords:
-        if coord == 'baseline_id':
-            xds = _set_baseline_coordinates(xds)
-        elif coord in xds.coords: # not removed
-            coord_attrs = xds[coord].attrs
-            if 'units' in coord_attrs:
-                # reassign unit as string
-                unit = coord_attrs['units']
-                if isinstance(unit, list) and len(unit) == 1:
-                    unit = unit[0]
-                    coord_attrs['units'] = unit
-
-                if coord == 'frequency' and unit == 'Hz':
-                    # reassign frequencies in GHz
-                    freq_xda = xds.frequency / 1.0e9
-                    coord_attrs['units'] = 'GHz'
-                    xds['frequency'] = freq_xda.assign_attrs(coord_attrs)
-                else:
-                    xds[coord] = xds[coord].assign_attrs(coord_attrs)
     return xds
 
 def concat_ps_xds(ps, logger):
@@ -71,12 +46,11 @@ def concat_ps_xds(ps, logger):
         ms_xds_list.extend(split_ms_xds)
         first_time_values.extend(first_xds_times)
 
-    ms_xds_list_len = len(ms_xds_list)
-    if ms_xds_list_len < ps_len:
+    if len(ms_xds_list) < ps_len:
         logger.debug(f"Split {ps_len} datasets by time gap into {ms_xds_list_len} datasets.")
 
     # Create sorted xds list using sorted first values
-    sorted_xds = [None] * ms_xds_list_len
+    sorted_xds = [None] * len(ms_xds_list)
     first_time_values.sort()
     for ms_xds in ms_xds_list:
         first_xds_time = ms_xds['time'].values

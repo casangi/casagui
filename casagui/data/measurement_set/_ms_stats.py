@@ -9,23 +9,20 @@ import dask
 from dask.distributed import client
 import numpy as np
 
-from ._ms_data import get_vis_spectrum_data_var, get_axis_data
+from ._ms_data import get_correlated_data, get_axis_data
 
-def calculate_ms_stats(ps, ps_store, vis_axis, logger):
+def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
     '''
         Calculate stats for unflagged visibilities: min, max, mean, std
         ps (msv4 processing set): visibility data with flags
         ps_store (str): path to visibility file
         vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
     '''
-    data_var = get_vis_spectrum_data_var(ps, vis_axis)
-    if data_var is None:
-        raise RuntimeError(f"Invalid visibility axis {vis_axis}")
-
     input_params = {}
     input_params['input_data_store'] = ps_store
+    input_params['data_group'] = data_group
+    input_params['correlated_data'] = get_correlated_data(ps.get(0), data_group)
     input_params['vis_axis'] = vis_axis
-    input_params['data_var'] = data_var
 
     active_client = client._get_global_client()
     if active_client is not None:
@@ -82,10 +79,10 @@ def calculate_ms_stats(ps, ps_store, vis_axis, logger):
     logger.debug(f"stats: variance={data_variance:.4f}, stddev={data_stddev:.4f}")
     return (data_min, data_max, data_mean, data_stddev)
 
-def _get_stats_xda(xds, vis_axis):
+def _get_stats_xda(xds, vis_axis, data_group):
     ''' Return xda with only unflagged cross-corr visibility data '''
     # apply flags to get unflagged vis data
-    xda = get_axis_data(xds, vis_axis)
+    xda = get_axis_data(xds, vis_axis, data_group)
     unflagged_xda = xda.where(np.logical_not(xds.FLAG))
 
     if unflagged_xda.count() > 0 and "baseline_antenna1_name" in unflagged_xda.coords:
@@ -102,8 +99,9 @@ def _get_stats_xda(xds, vis_axis):
 
 def _map_stats(input_params):
     ''' Return min, max, sum, and count of data chunk '''
+    data_group = input_params['data_group']
+    correlated_data = input_params['correlated_data']
     vis_axis = input_params['vis_axis']
-    data_var = input_params['data_var']
     min_vals = []
     max_vals = []
     sum_vals = []
@@ -113,12 +111,12 @@ def _map_stats(input_params):
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],
-        data_variables=[data_var, 'FLAG'],
+        data_variables=[correlated_data, 'FLAG'],
         load_sub_datasets=False
     )
  
     for xds in ps_iter:
-        xda = _get_stats_xda(xds, vis_axis)
+        xda = _get_stats_xda(xds, vis_axis, data_group)
         if xda.count() > 0:
             xda_data = xda.values.ravel()
             try:
@@ -160,9 +158,10 @@ def _reduce_stats(graph_inputs, input_params):
 
 def _map_variance(input_params):
     ''' Return sum, count, of (xda - mean) squared '''
-    mean = input_params['mean']
+    data_group = input_params['data_group']
+    correlated_data = input_params['correlated_data']
     vis_axis = input_params['vis_axis']
-    data_var = input_params['data_var']
+    mean = input_params['mean']
 
     sq_diff_sum = 0.0
     sq_diff_count = 0
@@ -171,12 +170,12 @@ def _map_variance(input_params):
         input_params['data_selection'],
         input_params['input_data_store'],
         input_params['input_data'],
-        data_variables=[data_var, 'FLAG'],
+        data_variables=[correlated_data, 'FLAG'],
         load_sub_datasets=False
     )
 
     for xds in ps_iter:
-        xda = _get_stats_xda(xds, vis_axis)
+        xda = _get_stats_xda(xds, vis_axis, data_group)
         if xda.size > 0:
             sq_diff = (xda - mean) ** 2
             sq_diff_sum += np.nansum(sq_diff)

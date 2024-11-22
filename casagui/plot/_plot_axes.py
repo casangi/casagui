@@ -44,24 +44,16 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency string for single value, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer']}"
+        return f"{frequency_xda.item():.4e} {frequency_xda.attrs['units'][0]} {frequency_xda.attrs['observer']}"
     else:
         return None # auto ticks from frequency values
 
-def get_vis_axis_labels(xds, data_var, axis):
+def get_vis_axis_labels(xds, correlated_data, vis_axis):
     ''' Get vis axis label for colorbar '''
-    try:
-        name, data_type = axis.split('_')
-    except ValueError:
-        name = axis
-        data_type = None
-
-    label = f"{data_type.capitalize()} " if data_type else ''
-    label += name.capitalize()
-
-    if 'units' in xds[data_var].attrs:
-        label += f" ({xds[data_var].attrs['units']})"
-    return (name, label)
+    label = vis_axis.capitalize()
+    if 'units' in xds[correlated_data].attrs:
+        label += f" ({xds[correlated_data].attrs['units']})"
+    return (vis_axis, label)
 
 def get_axis_labels(xds, axis):
     ''' Return axis name, label and ticks, reindex for regular axis '''
@@ -70,7 +62,7 @@ def get_axis_labels(xds, axis):
 
     if axis == "time":
         start_date, end_date = _get_date_range(xds.time)
-        label =  f"Time ({start_date})"
+        label =  f"Time {xds.time.attrs['scale']} ({start_date})"
         if xds.time.size > 1:
             tick_inc = max(int(len(ticks) / 10), 1)
             ticks = ticks[::tick_inc]
@@ -85,7 +77,7 @@ def get_axis_labels(xds, axis):
         label = "Antenna"
         xds['antenna_name'] = np.array(range(xds.antenna_name.size))
     elif axis == "frequency":
-        label = f"Frequency ({xds.frequency.attrs['units']}) {xds.frequency.attrs['observer']}"
+        label = f"Frequency ({xds.frequency.attrs['units'][0]}) {xds.frequency.attrs['observer']}"
     elif axis == "polarization":
         label =  "Polarization"
         # replace axis with index for plot range

@@ -6,7 +6,7 @@ from xradio.measurement_set.processing_set import ProcessingSet
 import xradio.measurement_set._utils._utils.stokes_types
 
 from ._xds_utils import concat_ps_xds
-from ._ms_data import get_vis_spectrum_data_var, get_axis_data
+from ._ms_data import get_axis_data
 
 def scatter_data(ps, x_axis, y_axis, selection, logger):
     '''

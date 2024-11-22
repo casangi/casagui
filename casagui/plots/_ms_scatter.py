@@ -8,11 +8,10 @@ import time
 
 from graphviper.utils.logger import setup_logger
 
-from ..data.measurement_set._ps_utils import summary
 from ..data.measurement_set._scatter_data import scatter_data
-from ..io import get_processing_set
+from ..io._ms_io import get_processing_set
 from ..plot import scatter_plot
-from ..plots._ms_plot import show, save
+from ..plots._ms_plot import print_summary, list_data_groups, list_antennas, show, save
 
 class MSScatter:
     '''
@@ -54,8 +53,27 @@ class MSScatter:
                 str, list: Print a subset of summary columns in processing set.
                            Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''
-        summary(self._ps, columns)
+        print_summary(self._ps, columns)
 
+    def list_data_groups(self):
+        ''' List names of data groups (set of related correlated data, flag, weight, and uvw) in processing set '''
+        list_data_groups(self._ps, self._logger)
+
+    def list_antennas(self, plot_positions=False):
+        '''
+            List names of antennas in processing set.
+            plot_positions (bool): plot antenna positions Y vs X, Z vs X, Z vs Y.  Default False.
+                Exit each scatter plot (or press q) to advance to next plot then return to console.
+        '''
+        list_antennas(self._ps, self._logger, plot_positions)
+
+    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
+        '''
+            Plot the phase center locations of all fields in the Processing Set.
+            See https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/ps_vis.html#PS-Structure
+            Exit plot (or press q) to return to console.
+        '''
+        self._ps.plot_phase_centers(label_all_fields, data_group)
 
     def plot(self, x_axis='time', y_axis='amp', selection=None, showgui=False):
         '''

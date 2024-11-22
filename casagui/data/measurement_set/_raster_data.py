@@ -6,9 +6,9 @@ from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
 from ._xds_utils import concat_ps_xds
-from ._ms_data import get_vis_spectrum_data_var, get_axis_data
+from ._ms_data import get_correlated_data, get_axis_data
 
-def raster_data(ps, x_axis, y_axis, vis_axis, selection, logger):
+def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     '''
     Create raster xds: y_axis vs x_axis for vis axis.
         ps (xradio ProcessingSet): input MSv4 datasets
@@ -19,36 +19,33 @@ def raster_data(ps, x_axis, y_axis, vis_axis, selection, logger):
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
-    data_var = get_vis_spectrum_data_var(ps, vis_axis)
-    if 'SPECTRUM' in data_var:
-        x_axis = 'antenna_name' if x_axis in ['baseline', 'antenna'] else x_axis
-        y_axis = 'antenna_name' if y_axis in ['baseline', 'antenna'] else y_axis
+    # Select dimensions for raster data
+    correlated_data = get_correlated_data(ps.get(0), data_group)
+    raster_ps, selection = _select_ps(ps, x_axis, y_axis, correlated_data, selection, logger)
 
-    # capture all dimensions before selection
-    data_dims = ps.get(0)[data_var].dims
-    dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis)
-    logger.debug(f"Selecting dimensions {dims_to_select} for raster plane")
-
-    # xds selected for raster plane with visibility component (amp, phase, real, or imag)
-    return _get_plot_xds(ps, x_axis, y_axis, vis_axis, data_var, dims_to_select, selection, logger)
-
-def _get_plot_xds(ps, x_axis, y_axis, vis_axis, data_var, dims_to_select, selection, logger):
-    # User selection
-    selected_ps = _apply_user_selection(ps, dims_to_select, selection, logger)
-
-    # Raster plane selection (first index) if not selected by user; selection updated
-    raster_ps, selection = _apply_raster_selection(selected_ps, dims_to_select, selection, logger)
-
-    # xds for raster plot
+    # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
-    if raster_xds[data_var].count() == 0:
+    if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
     # Calculate complex component of vis data
-    raster_xds[data_var] = get_axis_data(raster_xds, vis_axis)
-    logger.debug(f"Plotting visibility data with shape: {raster_xds[data_var].shape}")
+    raster_xds[correlated_data] = get_axis_data(raster_xds, vis_axis, data_group)
 
+    logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
     return raster_xds, selection
+
+def _select_ps(ps, x_axis, y_axis, correlated_data, selection, logger):
+    ''' Select non-plot-axes dimensions to get raster plane '''
+    # Determine dims which must be selected for raster plot
+    data_dims = ps.get(0)[correlated_data].dims
+    dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis)
+    logger.debug(f"Selecting dimensions {dims_to_select} for raster plane")
+
+    # Apply user dim selection 
+    selected_ps = _apply_user_selection(ps, data_dims, selection, logger)
+
+    # Apply selection using first index if not selected by user
+    return _apply_raster_selection(selected_ps, dims_to_select, selection, logger)
 
 def _get_raster_selection_dims(data_dims, x_axis, y_axis):
     dims = list(data_dims)
@@ -64,6 +61,7 @@ def _apply_user_selection(ps, dims, selection, logger):
         return ps
 
     dim_selection = {}
+
     for dim in dims:
         if dim in selection:
             value = selection[dim]
@@ -79,7 +77,7 @@ def _apply_user_selection(ps, dims, selection, logger):
     logger.info(f"Applying user selection to data dimensions: {dim_selection}")
     selected_ps = _apply_xds_selection(ps, dim_selection)
 
-    if not selected_ps:
+    if len(selected_ps) == 0:
         raise RuntimeError("Plot failed: user selection yielded empty processing set.")
     return selected_ps
 
@@ -96,19 +94,19 @@ def _apply_raster_selection(ps, dims, selection, logger):
         return ps, selection
     logger.info(f"Applying default raster plane selection (first index): {dim_selection}")
     selected_ps = _apply_xds_selection(ps, dim_selection)
-    if not selected_ps:
+    if len(selected_ps) == 0:
         raise RuntimeError("Plot failed: default raster plane selection yielded empty processing set.")
     return selected_ps, selection | dim_selection
 
 def _apply_xds_selection(ps, selection):
-    ''' Return ProcessingSet of msxds where selection is applied.
-        Exclude msxds where selection cannot be applied.
+    ''' Return ProcessingSet of ms_xds where selection is applied.
+        Exclude ms_xds where selection cannot be applied (avoid exception in ps.ms_sel())
         Caller should check for empty ps.
     '''
     sel_ps = ProcessingSet()
-    for key, val in ps.items():
+    for name, xds in ps.items():
         try:
-            sel_ps[key] = val.sel(**selection)
+            sel_ps[name] = xds.sel(**selection)
         except KeyError:
             pass
     return sel_ps

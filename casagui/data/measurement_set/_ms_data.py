@@ -3,32 +3,13 @@ from astropy.constants import c
 
 from xradio.measurement_set.processing_set import ProcessingSet
 
-def is_vis_spectrum_axis(axis):
-    vis_spectrum_axes = ['amp', 'phase', 'real', 'imag']
-    return axis.split('_')[0] in vis_spectrum_axes
+def is_vis_axis(axis):
+    return axis in ['amp', 'phase', 'real', 'imag']
 
+def get_correlated_data(xds, data_group):
+    return xds.attrs['data_groups'][data_group]['correlated_data']
 
-def get_vis_spectrum_data_var(xds, vis_spectrum_axis):
-    ''' Returns name of xds data_var or raise exception '''
-    if isinstance(xds, ProcessingSet):
-        xds = xds.get(0)
-
-    data_type = vis_spectrum_axis.split('_')[1] if '_' in vis_spectrum_axis else 'data'
-    data_vars = {
-        'data': '',
-        'corrected': '_CORRECTED',
-        'model': '_MODEL'
-    }
-
-    if data_type not in data_vars:
-        raise ValueError(f"Invalid data type: {data_type}")
-
-    if "VISIBILITY" in xds.data_vars:
-        return "VISIBILITY" + data_vars[data_type]
-    else:
-        return "SPECTRUM" + data_vars[data_type]
-
-def get_axis_data(xds, axis):
+def get_axis_data(xds, axis, data_group=None):
     ''' Get requested axis data from xarray dataset.
     xds (dict): msv4 xarray.Dataset
     axis (str): axis data to retrieve.
@@ -59,12 +40,12 @@ def get_axis_data(xds, axis):
         'flag': 'FLAG',
     }
 
-    if is_vis_spectrum_axis(axis):
-        return _calc_vis_spectrum_axis(xds, axis)
+    if is_vis_axis(axis):
+        return _calc_vis_axis(xds, axis, data_group)
     elif axis in ['u', 'v', 'w', 'uvdist']:
-        return _calc_uvw_axis(xds, axis)
+        return _calc_uvw_axis(xds, axis, data_group)
     elif 'wave' in axis:
-        return _calc_wave_axis(xds, axis)
+        return _calc_wave_axis(xds, axis, data_group)
     elif axis in axis_to_xds:
         location = axis_to_xds[axis]
         if location in xds.attrs:
@@ -80,20 +61,18 @@ def get_axis_data(xds, axis):
         raise ValueError(f"Invalid/unsupported axis {axis}")
 
 
-def _calc_vis_spectrum_axis(xds, axis):
-    ''' Calculate axis from VISIBILITY xarray DataArray '''
-    data_var = get_vis_spectrum_data_var(xds, axis)
-    if data_var not in xds.data_vars:
-        raise ValueError(f"Invalid/unsupported axis {axis} for dataset")
-    xda = xds[data_var]
+def _calc_vis_axis(xds, axis, data_group):
+    ''' Calculate axis from correlated data '''
+    correlated_data = get_correlated_data(xds, data_group)
+    xda = xds[correlated_data]
 
-    # Single dish
-    if data_var == "SPECTRUM":
+    # Single dish spectrum
+    if correlated_data == "SPECTRUM":
         if axis in ['amp', 'real']:
             return xda.assign_attrs(units='Jy')
         raise ValueError(f"{axis} invalid for SPECTRUM dataset")
 
-    # Interferometry
+    # Interferometry visibilities
     if 'amp' in axis:
         return np.absolute(xda).assign_attrs(units='Jy')
     elif 'phase' in axis:
