@@ -27,6 +27,7 @@ def _get_time_labels(time_xda):
             times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
     else:
         times = to_datetime(time_xda, unit='s').strftime("%d-%b-%Y %H:%M:%S")
+        times += " " + time_xda.attrs['scale'].upper()
     return times if isinstance(times, str) else list(times.values)
 
 def _get_baseline_antenna_labels(baseline_antenna_xda):
@@ -62,7 +63,7 @@ def get_axis_labels(xds, axis):
 
     if axis == "time":
         start_date, end_date = _get_date_range(xds.time)
-        label =  f"Time {xds.time.attrs['scale']} ({start_date})"
+        label =  f"Time {xds.time.attrs['scale'].upper()} ({start_date})"
         if xds.time.size > 1:
             tick_inc = max(int(len(ticks) / 10), 1)
             ticks = ticks[::tick_inc]
@@ -77,7 +78,9 @@ def get_axis_labels(xds, axis):
         label = "Antenna"
         xds['antenna_name'] = np.array(range(xds.antenna_name.size))
     elif axis == "frequency":
-        label = f"Frequency ({xds.frequency.attrs['units'][0]}) {xds.frequency.attrs['observer']}"
+        unit = xds.frequency.attrs['units'][0]
+        xds.frequency.attrs['units'] = unit
+        label = f"Frequency ({unit}) {xds.frequency.attrs['observer']}"
     elif axis == "polarization":
         label =  "Polarization"
         # replace axis with index for plot range

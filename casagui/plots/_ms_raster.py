@@ -192,9 +192,10 @@ class MSRaster:
         if data_group not in get_data_groups(self._ps):
             raise ValueError(f"Invalid data_group {data_group}. Use list_data_groups() to see options.")
 
-        # Reassign default x_axis for spectrum data dimension
+        # Reassign x_axis or y_axis for spectrum data dimension
         correlated_data = get_correlated_data(self._ps.get(0), data_group)
         x_axis = "antenna_name" if x_axis == "baseline" and correlated_data == "SPECTRUM" else x_axis
+        y_axis = "antenna_name" if y_axis == "baseline" and correlated_data == "SPECTRUM" else y_axis
 
         valid_axes = list(self._ps.get(0)[correlated_data].dims)
         if x_axis not in valid_axes or y_axis not in valid_axes:

@@ -114,7 +114,6 @@ def _apply_xds_selection(ps, selection):
 def _get_value_for_index(ps, dim, index):
     if dim == "polarization":
         # Get sorted _index_ list of polarizations used
-        pol_ids = list(stokes_types.keys())
         pol_names = list(stokes_types.values())
         idx_list = []
         for key in ps:
