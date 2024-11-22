@@ -60,9 +60,13 @@ from ..utils import ContextMgrChain as CMC
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 try:
-    from casagui.private._gclean import gclean as _gclean
-except:
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
+except:
+    import inspect as _insp
+    import os as _os
+    from casagui.private._gclean import gclean as _gclean
+    print( f'''>>>--caution--> Using cached gclean API from {_os.path.dirname(_os.path.abspath(_insp.getsourcefile(_gclean)))}''' )
+
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
 
@@ -407,12 +411,12 @@ class InteractiveClean:
                                                   line_color='red', x_range_name='residual_range', line_dash='dotted', line_width=2 )
             imdetails['gui']['convergence'].line(   'values', 'iterations',   source=imdetails['converge-data']['residual'],
                                                     line_color=self._converge_color['residual'], x_range_name='residual_range' )
-            imdetails['gui']['convergence'].circle( 'values', 'iterations',   source=imdetails['converge-data']['residual'],
-                                                    color=self._converge_color['residual'], x_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].scatter( 'values', 'iterations',   source=imdetails['converge-data']['residual'],
+                                                     color=self._converge_color['residual'], x_range_name='residual_range',size=10 )
             imdetails['gui']['convergence'].line(   'values', 'iterations', source=imdetails['converge-data']['flux'],
                                                     line_color=self._converge_color['flux'], x_range_name='flux_range' )
-            imdetails['gui']['convergence'].circle( 'values', 'iterations', source=imdetails['converge-data']['flux'],
-                                                    color=self._converge_color['flux'], x_range_name='flux_range', size=10 )
+            imdetails['gui']['convergence'].scatter( 'values', 'iterations', source=imdetails['converge-data']['flux'],
+                                                     color=self._converge_color['flux'], x_range_name='flux_range', size=10 )
 
             imdetails['gui']['convergence'].add_layout( LinearAxis( x_range_name='flux_range', axis_label='Total Flux',
                                                         axis_line_color=self._converge_color['flux'],
@@ -431,12 +435,12 @@ class InteractiveClean:
                                                   line_color='red', y_range_name='residual_range', line_dash='dotted', line_width=2 )
             imdetails['gui']['convergence'].line(   'iterations', 'values',   source=imdetails['converge-data']['residual'],
                                                     line_color=self._converge_color['residual'], y_range_name='residual_range' )
-            imdetails['gui']['convergence'].circle( 'iterations', 'values',   source=imdetails['converge-data']['residual'],
-                                                    color=self._converge_color['residual'], y_range_name='residual_range',size=10 )
+            imdetails['gui']['convergence'].scatter( 'iterations', 'values',   source=imdetails['converge-data']['residual'],
+                                                     color=self._converge_color['residual'], y_range_name='residual_range',size=10 )
             imdetails['gui']['convergence'].line(   'iterations', 'values', source=imdetails['converge-data']['flux'],
                                                     line_color=self._converge_color['flux'], y_range_name='flux_range' )
-            imdetails['gui']['convergence'].circle( 'iterations', 'values', source=imdetails['converge-data']['flux'],
-                                                    color=self._converge_color['flux'], y_range_name='flux_range', size=10 )
+            imdetails['gui']['convergence'].scatter( 'iterations', 'values', source=imdetails['converge-data']['flux'],
+                                                     color=self._converge_color['flux'], y_range_name='flux_range', size=10 )
 
             imdetails['gui']['convergence'].add_layout( LinearAxis( y_range_name='flux_range', axis_label='Total Flux',
                                                         axis_line_color=self._converge_color['flux'],
