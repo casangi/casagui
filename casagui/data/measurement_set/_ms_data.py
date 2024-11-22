@@ -1,3 +1,5 @@
+''' Get MeasurementSet data from xarray Dataset '''
+
 import numpy as np
 from astropy.constants import c
 

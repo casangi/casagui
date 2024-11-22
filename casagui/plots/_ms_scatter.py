@@ -11,7 +11,7 @@ from graphviper.utils.logger import setup_logger
 from ..data.measurement_set._scatter_data import scatter_data
 from ..io._ms_io import get_processing_set
 from ..plot import scatter_plot
-from ..plots._ms_plot import print_summary, list_data_groups, list_antennas, show, save
+from ..plots._ms_plot import print_summary, get_data_groups, get_antennas, show, save
 
 class MSScatter:
     '''
@@ -55,17 +55,21 @@ class MSScatter:
         '''
         print_summary(self._ps, columns)
 
-    def list_data_groups(self):
-        ''' List names of data groups (set of related correlated data, flag, weight, and uvw) in processing set '''
-        list_data_groups(self._ps, self._logger)
-
-    def list_antennas(self, plot_positions=False):
+    def get_data_groups(self):
         '''
-            List names of antennas in processing set.
+            Get names of data groups (set of related correlated data, flag, weight, and uvw) in processing set.
+            Returns: set
+        '''
+        return get_data_groups(self._ps)
+
+    def get_antennas(self, plot_positions=False):
+        '''
+            Get antenna names in processing set.
+            Returns: list
             plot_positions (bool): plot antenna positions Y vs X, Z vs X, Z vs Y.  Default False.
                 Exit each scatter plot (or press q) to advance to next plot then return to console.
         '''
-        list_antennas(self._ps, self._logger, plot_positions)
+        return get_antennas(self._ps, plot_positions)
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
         '''

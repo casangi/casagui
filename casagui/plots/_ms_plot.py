@@ -1,5 +1,5 @@
 '''
-Common functions for ms raster and scatter plots
+Common functions for ms plots (raster and scatter)
 '''
 
 import hvplot
@@ -57,16 +57,11 @@ def get_data_groups(ps):
         data_groups.extend(list(ps[xds_name].attrs['data_groups']))
     return set(data_groups)
 
-def list_data_groups(ps, logger):
-    ''' Print data groups from all ProcessingSet ms_xds '''
-    logger.info(f"Processing set data groups: {get_data_groups(ps)}")
-
-def list_antennas(ps, logger, plot_positions):
+def get_antennas(ps, plot_positions):
     ''' Print antenna names in ProcessingSet antenna_xds, optionally plot antenna positions '''
-    antenna_names = ps.get_combined_antenna_xds().antenna_name.values.tolist()
-    logger.info(f"Antenna names: {antenna_names}")
     if plot_positions:
         ps.plot_antenna_positions()
+    return ps.get_combined_antenna_xds().antenna_name.values.tolist()
 
 def show(plot, title):
     ''' 
@@ -76,7 +71,7 @@ def show(plot, title):
     '''
     if plot is None:
         raise RuntimeError("No plot to show.  Run plot() to create plot.")
-    hvplot.show(plot, title=title, threaded=True)
+    hvplot.show(plot, title=title)
 
 
 def save(plot, filename, fmt, hist, backend, resources, toolbar, title):

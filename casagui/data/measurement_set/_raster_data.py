@@ -7,6 +7,7 @@ from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
 from ._xds_utils import concat_ps_xds
 from ._ms_data import get_correlated_data, get_axis_data
+from ._ms_select import select_ps
 
 def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     '''
@@ -21,7 +22,7 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     '''
     # Select dimensions for raster data
     correlated_data = get_correlated_data(ps.get(0), data_group)
-    raster_ps, selection = _select_ps(ps, x_axis, y_axis, correlated_data, selection, logger)
+    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, correlated_data, selection, logger)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
@@ -34,18 +35,23 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
     return raster_xds, selection
 
-def _select_ps(ps, x_axis, y_axis, correlated_data, selection, logger):
+def _select_raster_ps(ps, x_axis, y_axis, correlated_data, selection, logger):
     ''' Select non-plot-axes dimensions to get raster plane '''
-    # Determine dims which must be selected for raster plot
+    # Determine dims which must be selected
     data_dims = ps.get(0)[correlated_data].dims
     dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis)
-    logger.debug(f"Selecting dimensions {dims_to_select} for raster plane")
 
-    # Apply user dim selection 
-    selected_ps = _apply_user_selection(ps, data_dims, selection, logger)
+    dim_selection = {}
 
-    # Apply selection using first index if not selected by user
-    return _apply_raster_selection(selected_ps, dims_to_select, selection, logger)
+    for dim in dims_to_select:
+        if dim not in selection:
+            dim_selection[dim] = _get_first_dim_value(ps, dim)
+
+    if not dim_selection: # User selected all non-plot-axis dimensions
+        return ps, selection
+
+    logger.info(f"Applying default raster plane selection (first index): {dim_selection}")
+    return select_ps(ps, dim_selection, logger, data_dims), selection | dim_selection
 
 def _get_raster_selection_dims(data_dims, x_axis, y_axis):
     dims = list(data_dims)
@@ -55,87 +61,21 @@ def _get_raster_selection_dims(data_dims, x_axis, y_axis):
         dims.remove(y_axis)
     return dims
 
-def _apply_user_selection(ps, dims, selection, logger):
-    ''' Apply dimension selection '''
-    if selection is None:
-        return ps
-
-    dim_selection = {}
-
-    for dim in dims:
-        if dim in selection:
-            value = selection[dim]
-            if isinstance(value, int): # convert index selection to value
-                value = _get_value_for_index(ps, dim, value)
-            dim_selection[dim] = value
-
-    # No user selection
-    if not dim_selection:
-        return ps
-
-    # Select ps
-    logger.info(f"Applying user selection to data dimensions: {dim_selection}")
-    selected_ps = _apply_xds_selection(ps, dim_selection)
-
-    if len(selected_ps) == 0:
-        raise RuntimeError("Plot failed: user selection yielded empty processing set.")
-    return selected_ps
-
-def _apply_raster_selection(ps, dims, selection, logger):
-    ''' Select first index of unselected raster plane dims, add to selection '''
-    if not selection:
-        selection = {}
-    dim_selection = {}
-
-    for dim in dims:
-        if dim not in selection:
-            dim_selection[dim] = _get_value_for_index(ps, dim, 0) # select first
-    if not dim_selection:
-        return ps, selection
-    logger.info(f"Applying default raster plane selection (first index): {dim_selection}")
-    selected_ps = _apply_xds_selection(ps, dim_selection)
-    if len(selected_ps) == 0:
-        raise RuntimeError("Plot failed: default raster plane selection yielded empty processing set.")
-    return selected_ps, selection | dim_selection
-
-def _apply_xds_selection(ps, selection):
-    ''' Return ProcessingSet of ms_xds where selection is applied.
-        Exclude ms_xds where selection cannot be applied (avoid exception in ps.ms_sel())
-        Caller should check for empty ps.
-    '''
-    sel_ps = ProcessingSet()
-    for name, xds in ps.items():
-        try:
-            sel_ps[name] = xds.sel(**selection)
-        except KeyError:
-            pass
-    return sel_ps
-
-def _get_value_for_index(ps, dim, index):
+def _get_first_dim_value(ps, dim):
     if dim == "polarization":
-        # Get sorted _index_ list of polarizations used
+        # Get sorted list of polarization ids used
         pol_names = list(stokes_types.values())
-        idx_list = []
+        id_list = []
         for key in ps:
             for pol in ps[key].polarization.values:
-                idx_list.append(pol_names.index(pol))
-        sorted_pol_idx = sorted(list(set(idx_list)))
-
-        try:
-            # Select index from sorted index list
-            selected_pol_idx = sorted_pol_idx[index]
-            # Return polarization for index
-            return pol_names[selected_pol_idx]
-        except IndexError:
-            raise IndexError(f"Plot failed: {dim} selection {index} out of range {len(sorted_idx)}")
+                id_list.append(pol_names.index(pol))
+        sorted_pol_id = sorted(list(set(id_list)))
+        first_id = sorted_pol_id[0]
+        return pol_names[first_id]
     else:
         # Get sorted values list
         values = []
-        for key in ps:
-            values.extend(ps[key][dim].values.tolist())
+        for xds in ps.values():
+            values.extend(xds[dim].values.tolist())
         values = sorted(list(set(values)))
-        # Select index in sorted values list
-        try:
-            return values[index]
-        except IndexError:
-            raise IndexError(f"Plot failed: {dim} selection {index} out of range {len(values)}")
+        return values[0]

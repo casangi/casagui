@@ -33,8 +33,7 @@ from ._ms_scatter import MSScatter
 from ._ms_plot import (
     print_summary,
     get_data_groups,
-    list_data_groups,
-    list_antennas,
+    get_antennas,
     show,
     save,
 )

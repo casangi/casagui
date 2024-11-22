@@ -9,12 +9,13 @@ import time
 from graphviper.utils.logger import setup_logger
 
 from ..data.measurement_set._ms_data import is_vis_axis, get_correlated_data
-from ..data.measurement_set._raster_data import raster_data
+from ..data.measurement_set._ms_select import select_ps 
 from ..data.measurement_set._ms_stats import calculate_ms_stats 
+from ..data.measurement_set._raster_data import raster_data
 from ..data.measurement_set._xds_utils import set_baseline_coordinate
 from ..io._ms_io import get_processing_set
 from ..plot import raster_plot
-from ..plots._ms_plot import print_summary, get_data_groups, list_data_groups, list_antennas, show, save
+from ..plots._ms_plot import print_summary, get_data_groups, get_antennas, show, save
 
 class MSRaster:
     '''
@@ -51,12 +52,12 @@ class MSRaster:
             if 'baseline_id' in xds.coords:
                 self._ps[name] = set_baseline_coordinate(xds)
 
-        self._spw_color_limits = {}
         self._plot = None
 
 
     def summary(self, columns=None):
-        ''' Print processing set summary.
+        '''
+            Print processing set summary.
             Args: columns (None, str, list): type of metadata to list.
                 None:      Print all summary columns in processing set.
                 'by_msv4': Print formatted summary metadata per MSv4.
@@ -65,17 +66,21 @@ class MSRaster:
         '''
         print_summary(self._ps, columns)
 
-    def list_data_groups(self):
-        ''' List names of data groups (set of related correlated data, flag, weight, and uvw) in processing set '''
-        list_data_groups(self._ps, self._logger)
-
-    def list_antennas(self, plot_positions=False):
+    def get_data_groups(self):
         '''
-            List names of antennas in processing set.
+            Get data group names (related correlated data, flag, weight, and uvw) in processing set.
+            Returns: set
+        '''
+        return get_data_groups(self._ps)
+
+    def get_antennas(self, plot_positions=False):
+        '''
+            Get antenna names in processing set.
+            Returns: list.
             plot_positions (bool): plot antenna positions Y vs X, Z vs X, Z vs Y.  Default False.
                 Exit each scatter plot (or press q) to advance to next plot then return to console.
         '''
-        list_antennas(self._ps, self._logger, plot_positions)
+        return get_antennas(self._ps, plot_positions)
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
         '''
@@ -116,26 +121,21 @@ class MSRaster:
         start = time.time()
 
         # Validate input arguments
-        x_axis, y_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection)
+        x_axis, y_axis, data_dims = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection)
 
         # Apply selection to processing set
-        selected_ps, selection = self._select_ps(selection, x_axis, y_axis, data_group)
+        selected_ps, selection = self._select_ps(selection, x_axis, y_axis, data_group, data_dims)
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
-        # For amplitude, limit colorbar range using ms stats
-        color_limits = None
+        # Colorbar limits
         if vis_axis == 'amp':
-            selected_spw = selection['spw_name']
-            if selected_spw in self._spw_color_limits:
-                color_limits = self._spw_color_limits[selected_spw]
-            else:
-                color_limits = self._calc_amp_color_limits(selected_ps, data_group)
-                self._spw_color_limits[selected_spw] = color_limits
-        if color_limits is None:
-            self._logger.info("Autoscale colorbar limits")
-        else:
+            # For amplitude, limit colorbar range using ms stats
+            color_limits = self._calc_amp_color_limits(selected_ps, data_group)
             self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
+        else:
+            color_limits = None
+            self._logger.info("Autoscale colorbar limits")
 
         # Select data and concat into xarray Dataset for raster plot
         raster_xds, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, self._logger)
@@ -197,51 +197,33 @@ class MSRaster:
         x_axis = "antenna_name" if x_axis == "baseline" and correlated_data == "SPECTRUM" else x_axis
         y_axis = "antenna_name" if y_axis == "baseline" and correlated_data == "SPECTRUM" else y_axis
 
-        valid_axes = list(self._ps.get(0)[correlated_data].dims)
-        if x_axis not in valid_axes or y_axis not in valid_axes:
-            raise ValueError(f"Invalid x or y axis, please select from {valid_axes}")
+        data_dims = list(self._ps.get(0)[correlated_data].dims)
+        if x_axis not in data_dims or y_axis not in data_dims:
+            raise ValueError(f"Invalid x or y axis, please select from {data_dims}")
 
         if not is_vis_axis(vis_axis):
             raise ValueError(f"Invalid vis_axis {vis_axis}")
 
         if selection and not isinstance(selection, dict):
-            # TODO: check keys?
             raise RuntimeError("selection must be dictionary")
 
-        return x_axis, y_axis
+        return x_axis, y_axis, data_dims
 
-
-    def _select_ps(self, selection, x_axis, y_axis, data_group):
+    def _select_ps(self, selection, x_axis, y_axis, data_group, data_dims):
         ''' Apply ps selection: spw_name, field_name, source_name, intents '''
-        selected_ps = self._ps
-
         # Apply user selection
-        if selection:
-            ps_selection = {}
-            ps_selection_keys = self._ps.summary().columns
-            for key in selection:
-                if key in ps_selection_keys:
-                    ps_selection[key] = selection[key]
-            if ps_selection:
-                self._logger.info(f"Applying user selection to processing set: {ps_selection}")
-                selected_ps = self._ps.sel(**ps_selection)
+        selected_ps = select_ps(self._ps, selection, self._logger, data_dims, data_group)
 
-        # Select first spw (min id) if not user-selected
+        # Select first spw (minimum spectral_window_id) if not user-selected
         if not selection or 'spw_name' not in selection:
             first_spw_name = self._get_first_spw_name(selected_ps)
             spw_selection = {'spw_name': first_spw_name}
             selected_ps = selected_ps.sel(**spw_selection)
-            # Add spw selection to selection
             selection = selection | spw_selection if selection else spw_selection
-
-        # Select data group
-        for name, ms_xds in selected_ps.items():
-            selected_ps[name] = ms_xds.sel(data_group_name=data_group)
         return selected_ps, selection
 
-
     def _get_first_spw_name(self, ps):
-        ''' Return spw selection by name (str or list) or first by frequency if selection is None '''
+        ''' Return first spw id name '''
         # Collect spw names by id
         spw_id_names = {}
         for key in ps:
@@ -256,7 +238,6 @@ class MSRaster:
         spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
         self._logger.info(f"Selecting first spw id {first_spw_id}: {first_spw_name} with range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
         return first_spw_name
-
 
     def _calc_amp_color_limits(self, ps, data_group):
         # Calculate colorbar limits from amplitude stats for unflagged data
