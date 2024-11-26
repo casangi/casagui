@@ -1,8 +1,9 @@
 ''' Apply selection dict to ProcessingSet or MeasurementSetXds '''
 
 from xradio.measurement_set.processing_set import ProcessingSet
+from ._ms_data import get_correlated_data
 
-def select_ps(ps, selection, logger, data_dims, data_group=None):
+def select_ps(ps, selection, data_group, logger):
     '''
         Apply selection dict and optional data group to processing set.
         Select ProcessingSet first, then each MeasurementSetXds.
@@ -11,6 +12,9 @@ def select_ps(ps, selection, logger, data_dims, data_group=None):
     '''
     if not selection and not data_group:
         return ps
+
+    correlated_data = get_correlated_data(ps.get(0), data_group)
+    dimensions = ps.get(0)[correlated_data].dims
 
     ms_selection = {}
     ps_selection = {}
@@ -22,25 +26,28 @@ def select_ps(ps, selection, logger, data_dims, data_group=None):
         for key in selection:
             if key in ps_selection_keys:
                 ps_selection[key] = selection[key]
-            if key in data_dims:
+                if key in dimensions:
+                    # ps selection selects ms_xdss which _contain_ value but also need to _select_ value
+                    ms_selection[key] = selection[key]
+            else: # assume in ms_xds
                 ms_selection[key] = selection[key]
 
     # Do ProcessingSet selection
     if ps_selection:
-        logger.info(f"Applying selection to processing set: {ps_selection}")
+        logger.debug(f"Applying selection to processing set: {ps_selection}")
         selected_ps = ps.sel(**ps_selection)
         if len(selected_ps) == 0:
             raise RuntimeError("Selection failed: ps selection yielded empty processing set.")
     else:
         selected_ps = ps
 
-    # ProcessingSet selection only?
+    # Done if ProcessingSet selection only
     if not ms_selection and not data_group:
         return selected_ps
 
     # Do MeasurementSetXds selection
     if ms_selection:
-        logger.info(f"Applying selection to measurement set xds: {ms_selection}")
+        logger.debug(f"Applying selection to measurement set xds: {ms_selection}")
 
     selected_ms_ps = ProcessingSet()
     for name, ms_xds in selected_ps.items():

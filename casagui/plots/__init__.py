@@ -27,13 +27,5 @@
 ########################################################################
 '''End user plotting applications supplied by ``casagui``.'''
 
-from ._ms_raster import MSRaster
-from ._ms_scatter import MSScatter
-
-from ._ms_plot import (
-    print_summary,
-    get_data_groups,
-    get_antennas,
-    show,
-    save,
-)
+from ._ms_raster import MsRaster
+from ._ms_scatter import MsScatter

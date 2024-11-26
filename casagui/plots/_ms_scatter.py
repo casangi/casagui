@@ -1,5 +1,5 @@
 '''
-Implementation of the ``MSScatter`` application for plotting and editing
+Implementation of the ``MsScatter`` application for measurement set scatter plotting and editing
 visibility/spectrum data
 '''
 
@@ -9,11 +9,10 @@ import time
 from graphviper.utils.logger import setup_logger
 
 from ..data.measurement_set._scatter_data import scatter_data
-from ..io._ms_io import get_processing_set
 from ..plot import scatter_plot
-from ..plots._ms_plot import print_summary, get_data_groups, get_antennas, show, save
+from ..plots._ms_plot import MsPlot
 
-class MSScatter:
+class MsScatter(MsPlot):
     '''
     Plot MeasurementSet data as scatter plot.
 
@@ -22,7 +21,8 @@ class MSScatter:
         log_level (str): logging threshold, default 'INFO'
 
     Example:
-        mss = MSScatter(ms='myms.ms')
+        from casagui.plots import MsScatter
+        mss = MsScatter(ms='myms.ms')
         mss.summary()
         mss.plot(xaxis='time', yaxis='amp') # default, same as mss.plot() with no arguments
         mss.show()
@@ -30,84 +30,51 @@ class MSScatter:
     '''
 
     def __init__(self, ms, log_level="INFO"):
-        # Logger
-        self._logger = setup_logger(logger_name="MSScatter", log_to_term=True, log_to_file=False, log_level=log_level)
+        super().__init__(ms, log_level, logger_name="MsScatter")
 
-        self._ps, self._ms_path = get_processing_set(ms)
-        # MS name (no path) for plot title and save filename
-        self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
-
-        n_datasets = len(self._ps)
-        if n_datasets == 0:
-            raise RuntimeError("Failed to read visibility file into processing set")
-        self._logger.info(f"Processing set contains {n_datasets} msv4 datasets.")
-
-        self._plot = None
-
-
-    def summary(self, columns=None):
-        ''' Print processing set summary.
-            Args: columns (None, str, list): type of metadata to list.
-                None:      Print all summary columns in processing set.
-                'by_msv4': Print formatted summary metadata per MSv4.
-                str, list: Print a subset of summary columns in processing set.
-                           Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
-        '''
-        print_summary(self._ps, columns)
-
-    def get_data_groups(self):
-        '''
-            Get names of data groups (set of related correlated data, flag, weight, and uvw) in processing set.
-            Returns: set
-        '''
-        return get_data_groups(self._ps)
-
-    def get_antennas(self, plot_positions=False):
-        '''
-            Get antenna names in processing set.
-            Returns: list
-            plot_positions (bool): plot antenna positions Y vs X, Z vs X, Z vs Y.  Default False.
-                Exit each scatter plot (or press q) to advance to next plot then return to console.
-        '''
-        return get_antennas(self._ps, plot_positions)
-
-    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
-        '''
-            Plot the phase center locations of all fields in the Processing Set.
-            See https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/ps_vis.html#PS-Structure
-            Exit plot (or press q) to return to console.
-        '''
-        self._ps.plot_phase_centers(label_all_fields, data_group)
-
-    def plot(self, x_axis='time', y_axis='amp', selection=None, showgui=False):
+    def plot(self, x_axis='time', y_axis='amp', data_group='base', selection=None, showgui=False):
         '''
         Create a scatter plot with specified xaxis and yaxis.
             x_axis (str): Plot x-axis. Default 'time'.
             y_axis (str): Plot y-axis. Default 'amp'.
-            selection (dict): Selected data to plot.  Options include:
-                Summary column names: 'name', 'intents', 'shape', 'polarization', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
-                'query': for pandas query of summary columns.
-            showgui (bool): Whether to launch interactive GUI in browser. Default False.
+            data_group (str): xds data group name of correlated data, flags, weights, and uvw.  Default 'base'.
+                Use list_data_groups() to see options.
+            selection (dict): selected data to plot. Options include:
+                Processing set selection:
+                    'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency': select by summary() column names
+                    'query': for pandas query of summary() columns.
+                    Default: select first spw (first by id).
+                Dimension selection:
+                    Visibilities: 'baseline' 'time', 'frequency', 'polarization'
+                    Spectrum: 'antenna_name', 'time', 'frequency', 'polarization'
+                    Default is index 0 for non-axes dimensions.
+                    Use list_antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
+                    Use summary() to list frequencies and polarizations.
+                    TODO: how to select time?
+            reduce (str): function to reduce a dimension.  Options include "
+            showgui (bool): whether to launch interactive GUI in browser. Default False.
 
-        TODO: add selection
+        If not showgui and plotting is successful, use show() or save() to view/save the plot only.
         '''
         start = time.time()
-        scatter_xds = scatter_data(self._ps, x_axis, y_axis, selection, self._logger)
+        scatter_xds = scatter_data(self._ps, x_axis, y_axis, selection, data_group, self._logger)
 
         if showgui:
             raise RuntimeError("Interactive GUI not implemented.")
-        elif self._plot is None:
-            self._plot = scatter_plot(self._ps, xaxis, yaxis)
-            raise RuntimeError("Plot failed.")
+        else:
+            ms_name = os.path.basename(self._ms_path)
+            self._plot = scatter_plot(scatter_xds, x_axis, y_axis, ms_name, self._logger)
+            if self._plot is None:
+                raise RuntimeError("Plot failed.")
         self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
-    def show(self):
+    def show(self, hist=False):
         ''' 
-        Show interactive Bokeh plot in a browser.
-        Plot tools include pan, zoom, hover, and save.
+        Show interactive Bokeh plot in a browser. Plot tools include pan, zoom, hover, and save.
+            hist (bool): Whether to compute and adjoin histogram to plot.
         '''
-        title="MSScatter " + self._ms_basename
-        show(self._plot, title)
+        title="MsScatter " + self._ms_basename
+        super().show(title, hist)
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
         '''
@@ -123,10 +90,6 @@ class MSScatter:
         If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
 
         '''
-        start = time.time()
         if not filename:
-            filename = f"{self._vis_basename}_scatter.png"
-
-        save(self._plot, filename, fmt, hist, backend, resources, toolbar, title)
-        self._logger.info(f"Saved plot to {filename}.")
-        self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
+            filename = f"{self._ms_basename}_scatter.png"
+        super().save(filename, fmt, hist, backend, resources, toolbar, title)

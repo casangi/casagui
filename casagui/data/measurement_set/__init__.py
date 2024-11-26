@@ -6,10 +6,9 @@ from ._ms_data import (
 
 from ._ms_select import select_ps
 from ._ms_stats import calculate_ms_stats
+from ._ms_utils import (
+    concat_ps_xds,
+    set_baseline_coordinate,
+)
 from ._raster_data import raster_data
 from ._scatter_data import scatter_data
-
-from ._xds_utils import (
-    set_baseline_coordinate,
-    concat_ps_xds,
-)

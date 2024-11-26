@@ -5,25 +5,30 @@ Utility functions to manage xarray DataSets
 import numpy as np
 import xarray as xr
 
-def set_baseline_coordinate(xds):
+
+def set_baseline_coordinate(ps):
     ''' Set baseline coordinate as string array (ant1_name & ant2_name).
         Replace baseline_id dimension with baseline. '''
-    ant1_names = xds.baseline_antenna1_name.values
-    ant2_names = xds.baseline_antenna2_name.values
-    baseline_names = []
+    for name, xds in ps.items():
+        if 'baseline_id' not in xds.coords:
+            break
 
-    # Create baseline name coordinate and make it dimension
-    for idx in xds.baseline_id.values:
-        baseline_name = f"{ant1_names[idx]} & {ant2_names[idx]}"
-        baseline_names.append(baseline_name)
-    xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
-    xds = xds.swap_dims({"baseline_id": "baseline"})
+        ant1_names = xds.baseline_antenna1_name.values
+        ant2_names = xds.baseline_antenna2_name.values
+        baseline_names = []
 
-    # Remove non-dimension unicode data vars for concat.  Antenna names now in baseline coord.
-    xds = xds.drop("baseline_antenna1_name")
-    xds = xds.drop("baseline_antenna2_name")
+        # Create baseline name coordinate and make it dimension
+        for idx in xds.baseline_id.values:
+            baseline_name = f"{ant1_names[idx]} & {ant2_names[idx]}"
+            baseline_names.append(baseline_name)
+        xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
+        xds = xds.swap_dims({"baseline_id": "baseline"})
 
-    return xds
+        # Remove non-dimension unicode data vars for concat.  Antenna names now in baseline coord.
+        xds = xds.drop("baseline_antenna1_name")
+        xds = xds.drop("baseline_antenna2_name")
+
+        ps[name] = xds
 
 def concat_ps_xds(ps, logger):
     ''' Concatenate xarray Datasets in processing set by given dimension.

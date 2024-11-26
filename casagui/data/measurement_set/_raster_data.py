@@ -5,9 +5,9 @@ Functions to create a raster xarray Dataset of visibility/spectrum data from xra
 from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
-from ._xds_utils import concat_ps_xds
 from ._ms_data import get_correlated_data, get_axis_data
 from ._ms_select import select_ps
+from ._ms_utils import concat_ps_xds
 
 def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     '''
@@ -20,9 +20,8 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
-    # Select dimensions for raster data
     correlated_data = get_correlated_data(ps.get(0), data_group)
-    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, correlated_data, selection, logger)
+    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, selection, data_group, correlated_data, logger)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
@@ -35,8 +34,11 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
     return raster_xds, selection
 
-def _select_raster_ps(ps, x_axis, y_axis, correlated_data, selection, logger):
-    ''' Select non-plot-axes dimensions to get raster plane '''
+def _select_raster_ps(ps, x_axis, y_axis, selection, data_group, correlated_data, logger):
+    ''' Apply user selection and select default dimensions if needed for raster data '''
+    # Apply user selection first
+    selected_ps = select_ps(ps, selection, data_group, logger)
+
     # Determine dims which must be selected
     data_dims = ps.get(0)[correlated_data].dims
     dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis)
@@ -45,13 +47,11 @@ def _select_raster_ps(ps, x_axis, y_axis, correlated_data, selection, logger):
 
     for dim in dims_to_select:
         if dim not in selection:
-            dim_selection[dim] = _get_first_dim_value(ps, dim)
+            selection[dim] = _get_first_dim_value(ps, dim)
+            dim_selection[dim] = selection[dim]
+    logger.info(f"Applying default raster plane selection (using first index): {dim_selection}")
 
-    if not dim_selection: # User selected all non-plot-axis dimensions
-        return ps, selection
-
-    logger.info(f"Applying default raster plane selection (first index): {dim_selection}")
-    return select_ps(ps, dim_selection, logger, data_dims), selection | dim_selection
+    return select_ps(ps, selection, data_group, logger), selection
 
 def _get_raster_selection_dims(data_dims, x_axis, y_axis):
     dims = list(data_dims)

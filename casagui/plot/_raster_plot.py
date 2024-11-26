@@ -68,17 +68,17 @@ def _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_
     y_axis, y_label, y_ticks = y_axis_labels
     c_axis, c_label = c_axis_labels
 
-    unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(c_axis)
-    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(c_axis)
+    unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(c_axis.capitalize())
+    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename("Flagged_" + c_axis.capitalize())
 
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
     unflagged_colormap = "viridis"
     flagged_colormap = "kr"
 
     # Plot flagged data
-    flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, "Flagged " + c_label, title, x_label, y_label, x_ticks, y_ticks, flagged_colormap)
+    flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, flagged_colormap)
     # Plot unflagged data (hover shows values in last plot)
-    unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, c_label, title, x_label, y_label, x_ticks, y_ticks, unflagged_colormap)
+    unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, unflagged_colormap)
 
     if flagged_plot and unflagged_plot:
         return flagged_plot * unflagged_plot.opts(colorbar_position='left')
@@ -87,7 +87,7 @@ def _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_
     else:
         return flagged_plot
 
-def _plot_xda(xda, x_axis, y_axis, color_limits, c_label, title, x_label, y_label, x_ticks, y_ticks, colormap):
+def _plot_xda(xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap):
     if xda.count() == 0:
         return None
     #print("plot xda:", xda)

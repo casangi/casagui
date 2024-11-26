@@ -17,6 +17,7 @@ def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
         ps (msv4 processing set): visibility data with flags
         ps_store (str): path to visibility file
         vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
+        Returns: stats tuple (data_min, data_max, data_mean, data_stddev)
     '''
     input_params = {}
     input_params['input_data_store'] = ps_store
@@ -55,7 +56,7 @@ def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
 
     if data_count == 0.0:
         logger.debug("stats: no unflagged data")
-        return (0.0, 0.0)
+        return (0.0, 0.0, 0.0, 0.0)
 
     data_mean = data_sum / data_count
     input_params['mean'] = data_mean

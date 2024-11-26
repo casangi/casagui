@@ -1,23 +1,19 @@
 '''
-Implementation of the ``VisRaster`` application for plotting and editing
+Implementation of the ``MsRaster`` application for measurement set raster plotting and editing
 visibilities
 '''
 
 import os
 import time
 
-from graphviper.utils.logger import setup_logger
-
 from ..data.measurement_set._ms_data import is_vis_axis, get_correlated_data
 from ..data.measurement_set._ms_select import select_ps 
 from ..data.measurement_set._ms_stats import calculate_ms_stats 
 from ..data.measurement_set._raster_data import raster_data
-from ..data.measurement_set._xds_utils import set_baseline_coordinate
-from ..io._ms_io import get_processing_set
 from ..plot import raster_plot
-from ..plots._ms_plot import print_summary, get_data_groups, get_antennas, show, save
+from ..plots._ms_plot import MsPlot
 
-class MSRaster:
+class MsRaster(MsPlot):
     '''
     Plot MeasurementSet data as raster plot.
 
@@ -26,69 +22,17 @@ class MSRaster:
         log_level (str): logging threshold, default 'INFO'
 
     Example:
-        msr = MSRaster(vis='myvis.ms')
+        from casagui.plots import MsRaster
+        msr = MsRaster(vis='myvis.ms')
         msr.summary()
-        msr.plot(x_axis='baseline_id', y_axis='time', vis_axis='amp') # default, same as msr.plot() with no arguments
+        msr.plot(x_axis='frequency', y_axis='time', vis_axis='amp', data_group='base')
         msr.show()
         msr.save() # saves as {ms name}_raster.png
     '''
 
     def __init__(self, ms, log_level="INFO"):
-        # Logger
-        self._logger = setup_logger(logger_name="MSRaster", log_to_term=True, log_to_file=False, log_level=log_level)
-
-        # Processing set
-        self._ps, self._ms_path = get_processing_set(ms)
-
-        # ms name (no path) for plot title and save filename
-        self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
-
-        n_datasets = len(self._ps)
-        if n_datasets == 0:
-            raise RuntimeError("Failed to read visibility file into processing set")
-        self._logger.info(f"Processing set contains {n_datasets} msv4 datasets.")
-
-        for name, xds in self._ps.items():
-            if 'baseline_id' in xds.coords:
-                self._ps[name] = set_baseline_coordinate(xds)
-
-        self._plot = None
-
-
-    def summary(self, columns=None):
-        '''
-            Print processing set summary.
-            Args: columns (None, str, list): type of metadata to list.
-                None:      Print all summary columns in processing set.
-                'by_msv4': Print formatted summary metadata per MSv4.
-                str, list: Print a subset of summary columns in processing set.
-                           Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'line_name', 'field_coords', 'start_frequency', 'end_frequency'
-        '''
-        print_summary(self._ps, columns)
-
-    def get_data_groups(self):
-        '''
-            Get data group names (related correlated data, flag, weight, and uvw) in processing set.
-            Returns: set
-        '''
-        return get_data_groups(self._ps)
-
-    def get_antennas(self, plot_positions=False):
-        '''
-            Get antenna names in processing set.
-            Returns: list.
-            plot_positions (bool): plot antenna positions Y vs X, Z vs X, Z vs Y.  Default False.
-                Exit each scatter plot (or press q) to advance to next plot then return to console.
-        '''
-        return get_antennas(self._ps, plot_positions)
-
-    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
-        '''
-            Plot the phase center locations of all fields in the Processing Set.
-            See https://xradio.readthedocs.io/en/latest/measurement_set/tutorials/ps_vis.html#PS-Structure
-            Exit plot (or press q) to return to console.
-        '''
-        self._ps.plot_phase_centers(label_all_fields, data_group)
+        super().__init__(ms, log_level, logger_name="MsRaster")
+        self._spw_color_limits = {}
 
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, showgui=False):
         '''
@@ -121,20 +65,27 @@ class MSRaster:
         start = time.time()
 
         # Validate input arguments
-        x_axis, y_axis, data_dims = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection)
+        x_axis, y_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection)
 
-        # Apply selection to processing set
-        selected_ps, selection = self._select_ps(selection, x_axis, y_axis, data_group, data_dims)
+        # Apply selection to processing set (select spw before calculating colorbar limits)
+        selected_ps, selection = self._select_spw(selection)
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
         self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
 
         # Colorbar limits
         if vis_axis == 'amp':
             # For amplitude, limit colorbar range using ms stats
-            color_limits = self._calc_amp_color_limits(selected_ps, data_group)
-            self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
+            spw_name = selection['spw_name']
+            if spw_name in self._spw_color_limits:
+                color_limits = self._spw_color_limits[spw_name]
+            else:
+                color_limits = self._calc_amp_color_limits(selected_ps, data_group)
+                self._spw_color_limits[spw_name] = color_limits
         else:
             color_limits = None
+        if color_limits:
+            self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
+        else:
             self._logger.info("Autoscale colorbar limits")
 
         # Select data and concat into xarray Dataset for raster plot
@@ -151,16 +102,13 @@ class MSRaster:
 
         self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
-    def show(self):
+    def show(self, hist=False):
         ''' 
-        Show interactive Bokeh plot in a browser.
-        Plot tools include pan, zoom, hover, and save.
+        Show interactive Bokeh plot in a browser. Plot tools include pan, zoom, hover, and save.
+            hist (bool): Whether to compute and adjoin histogram to plot.
         '''
-        if self._plot is None:
-            raise RuntimeError("No plot to show.")
-
-        title="MSRaster " + self._ms_basename
-        show(self._plot, title)
+        title="MsRaster " + self._ms_basename
+        super().show(title, hist)
 
     def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
         '''
@@ -176,21 +124,14 @@ class MSRaster:
         If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
 
         '''
-        if self._plot is None:
-            raise RuntimeError("No plot to save.")
-
-        start = time.time()
         if not filename:
             filename = f"{self._ms_basename}_raster.png"
-        save(self._plot, filename, fmt, hist, backend, resources, toolbar, title)
-        self._logger.info(f"Saved plot to {filename}.")
-        self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
-
+        super().save(filename, fmt, hist, backend, resources, toolbar, title)
 
     def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection):
         ''' Check plot parameters against processing set xds variables '''
-        if data_group not in get_data_groups(self._ps):
-            raise ValueError(f"Invalid data_group {data_group}. Use list_data_groups() to see options.")
+        if data_group not in self.get_data_groups():
+            raise ValueError(f"Invalid data_group {data_group}. Use get_data_groups() to see options.")
 
         # Reassign x_axis or y_axis for spectrum data dimension
         correlated_data = get_correlated_data(self._ps.get(0), data_group)
@@ -207,19 +148,19 @@ class MSRaster:
         if selection and not isinstance(selection, dict):
             raise RuntimeError("selection must be dictionary")
 
-        return x_axis, y_axis, data_dims
+        return x_axis, y_axis
 
-    def _select_ps(self, selection, x_axis, y_axis, data_group, data_dims):
-        ''' Apply ps selection: spw_name, field_name, source_name, intents '''
-        # Apply user selection
-        selected_ps = select_ps(self._ps, selection, self._logger, data_dims, data_group)
-
-        # Select first spw (minimum spectral_window_id) if not user-selected
+    def _select_spw(self, selection):
+        ''' Select first spw (minimum spectral_window_id) if not user-selected '''
         if not selection or 'spw_name' not in selection:
-            first_spw_name = self._get_first_spw_name(selected_ps)
+            first_spw_name = self._get_first_spw_name(self._ps)
             spw_selection = {'spw_name': first_spw_name}
-            selected_ps = selected_ps.sel(**spw_selection)
-            selection = selection | spw_selection if selection else spw_selection
+        else:
+            spw_selection = {'spw_name': selection['spw_name']}
+
+        self._logger.info(f"Applying spw selection to processing set: {spw_selection}")
+        selected_ps = self._ps.sel(**spw_selection)
+        selection = selection | spw_selection if selection else spw_selection
         return selected_ps, selection
 
     def _get_first_spw_name(self, ps):
