@@ -49,11 +49,13 @@ def _get_frequency_labels(frequency_xda):
     else:
         return None # auto ticks from frequency values
 
-def get_vis_axis_labels(xds, correlated_data, vis_axis):
+def get_vis_axis_labels(xds, data_group, correlated_data, vis_axis):
     ''' Get vis axis label for colorbar '''
     label = vis_axis.capitalize()
+    if data_group != 'base':
+        label += f":{data_group.capitalize()}"
     if 'units' in xds[correlated_data].attrs:
-        label += f" ({xds[correlated_data].attrs['units']})"
+        label += f" ({xds[correlated_data].units})"
     return (vis_axis, label)
 
 def get_axis_labels(xds, axis):

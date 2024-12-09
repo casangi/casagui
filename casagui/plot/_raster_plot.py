@@ -29,7 +29,7 @@ def raster_plot(xds, x_axis, y_axis, vis_axis, data_group, selection, ms_name, c
     xds, x_axis_labels = get_axis_labels(xds, x_axis)
     xds, y_axis_labels = get_axis_labels(xds, y_axis)
     correlated_data = get_correlated_data(xds, data_group)
-    c_axis_labels = get_vis_axis_labels(xds, correlated_data, vis_axis)
+    c_axis_labels = get_vis_axis_labels(xds, data_group, correlated_data, vis_axis)
 
     return _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_labels, color_limits)
 
