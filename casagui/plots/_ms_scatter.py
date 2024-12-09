@@ -19,20 +19,24 @@ class MsScatter(MsPlot):
     Args:
         ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
         log_level (str): logging threshold, default 'INFO'
+        interactive (bool): whether to launch interactive GUI in browser. Default False.
+
 
     Example:
         from casagui.plots import MsScatter
         mss = MsScatter(ms='myms.ms')
         mss.summary()
-        mss.plot(xaxis='time', yaxis='amp') # default, same as mss.plot() with no arguments
+        mss.plot(xaxis='frequency', yaxis='amp')
         mss.show()
         mss.save() # saves as {ms name}_scatter.png
     '''
 
-    def __init__(self, ms, log_level="INFO"):
-        super().__init__(ms, log_level, logger_name="MsScatter")
+    def __init__(self, ms, log_level="INFO", interactive=False):
+        super().__init__(ms, log_level, "MsScatter", interactive)
+        if interactive:
+            self._logger.warn("Interactive GUI not implemented.")
 
-    def plot(self, x_axis='time', y_axis='amp', data_group='base', selection=None, showgui=False):
+    def plot(self, x_axis='time', y_axis='amp', data_group='base', selection=None):
         '''
         Create a scatter plot with specified xaxis and yaxis.
             x_axis (str): Plot x-axis. Default 'time'.
@@ -43,21 +47,19 @@ class MsScatter(MsPlot):
                 Processing set selection:
                     'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency': select by summary() column names
                     'query': for pandas query of summary() columns.
-                    Default: select first spw (first by id).
-                Dimension selection:
-                    Visibilities: 'baseline' 'time', 'frequency', 'polarization'
-                    Spectrum: 'antenna_name', 'time', 'frequency', 'polarization'
-                    Default is index 0 for non-axes dimensions.
+                MSv4 selection:
+                    Visibility dims: 'baseline' 'time', 'frequency', 'polarization'
+                    Spectrum dims: 'antenna_name', 'time', 'frequency', 'polarization'
                     Use list_antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
                     Use summary() to list frequencies and polarizations.
                     TODO: how to select time?
-            reduce (str): function to reduce a dimension.  Options include "
-            showgui (bool): whether to launch interactive GUI in browser. Default False.
 
-        If not showgui and plotting is successful, use show() or save() to view/save the plot only.
+        If not interactive and plotting is successful, use show() or save() to view/save the plot.
         '''
         start = time.time()
-        scatter_xds = scatter_data(self._ps, x_axis, y_axis, selection, data_group, self._logger)
+        scatter_ps = scatter_data(self._ps, x_axis, y_axis, selection, data_group, self._logger)
+        for xds in scatter_ps.values():
+            print("scatter ps xds:", xds)
 
         if showgui:
             raise RuntimeError("Interactive GUI not implemented.")

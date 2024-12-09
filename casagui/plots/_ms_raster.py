@@ -20,6 +20,7 @@ class MsRaster(MsPlot):
     Args:
         ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
         log_level (str): logging threshold, default 'INFO'
+        interactive (bool): whether to launch interactive GUI in browser. Default False.
 
     Example:
         from casagui.plots import MsRaster
@@ -30,11 +31,13 @@ class MsRaster(MsPlot):
         msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, ms, log_level="INFO"):
-        super().__init__(ms, log_level, logger_name="MsRaster")
+    def __init__(self, ms, log_level="INFO", interactive=False):
+        super().__init__(ms, log_level, "MsRaster", interactive)
+        if interactive:
+            self._logger.warn("Interactive GUI not implemented.")
         self._spw_color_limits = {}
 
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, showgui=False):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -58,9 +61,8 @@ class MsRaster(MsPlot):
                     Use list_antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
                     Use summary() to list frequencies and polarizations.
                     TODO: how to select time?
-            showgui (bool): whether to launch interactive GUI in browser. Default False.
 
-        If not showgui and plotting is successful, use show() or save() to view/save the plot only.
+        If not interactive and plotting is successful, use show() or save() to view/save the plot only.
         '''
         start = time.time()
 

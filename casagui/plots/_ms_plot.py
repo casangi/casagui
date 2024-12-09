@@ -14,21 +14,22 @@ from ..data.measurement_set._ms_utils import set_baseline_coordinate
 from ..io._ms_io import get_processing_set
 
 class MsPlot:
-    def __init__(self, ms, log_level="INFO", logger_name="MsPlot"):
+    def __init__(self, ms, log_level="INFO", logger_name="MsPlot", interactive=False):
         # Logger
         self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level)
 
-        # COnvert ms to zarr, get ProcessingSet
+        # Convert ms to zarr, get ProcessingSet
         self._ps, self._ms_path = get_processing_set(ms, self._logger)
 
         # ms basename (no path) for plot title and save filename
         self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
 
-        # Set baseline names instead of ids
-        set_baseline_coordinate(self._ps)
+        # Set baseline names instead of ids.
+        set_baseline_coordinate(self._ps, logger_name)
 
-        # For show() and save()
+        self._interactive = interactive
         self._plot = None
+
 
     def summary(self, columns=None):
         ''' Print ProcessingSet summary.
@@ -73,14 +74,14 @@ class MsPlot:
                     print(f"Ignoring invalid summary column: {column}")
             print(ps_summary[summary_columns])
 
-    def get_data_groups(self):
+    def data_groups(self):
         ''' Get data groups from all ProcessingSet ms_xds. Returns set. '''
         data_groups = []
         for xds_name in self._ps:
-            data_groups.extend(list(self._ps[xds_name].attrs['data_groups']))
+            data_groups.extend(list(self._ps[xds_name].data_groups))
         return set(data_groups)
 
-    def get_antennas(self, plot_positions=False):
+    def antennas(self, plot_positions=False):
         ''' Print antenna names in ProcessingSet antenna_xds, optionally plot antenna positions '''
         if plot_positions:
             self._ps.plot_antenna_positions()
