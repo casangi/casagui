@@ -8,7 +8,7 @@ import hvplot
 import pandas as pd
 
 from xradio.measurement_set.processing_set import ProcessingSet
-from graphviper.utils.logger import setup_logger
+from toolviper.utils.logger import setup_logger
 
 from ..data.measurement_set._ms_utils import set_baseline_coordinate
 from ..io._ms_io import get_processing_set
