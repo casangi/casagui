@@ -19,7 +19,7 @@ class MsRaster(MsPlot):
 
     Args:
         ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
-        log_level (str): logging threshold, default 'INFO'
+        log_level (str): logging threshold'. Options include "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL". Default "INFO".
         interactive (bool): whether to launch interactive GUI in browser. Default False.
 
     Example:
@@ -49,18 +49,17 @@ class MsRaster(MsPlot):
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
             data_group (str): xds data group name of correlated data, flags, weights, and uvw.  Default 'base'.
-                Use list_data_groups() to see options.
+                Call data_groups() to see options.
             selection (dict): selected data to plot. Options include:
-                Processing set selection:
-                    'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency': select by summary() column names
+                Processing Set selection: by summary column names. Call summary() to see options.
                     'query': for pandas query of summary() columns.
-                    Default: select first spw (first by id).
+                    Default: select first spw (by id).
                 Dimension selection:
                     Visibilities: 'baseline' 'time', 'frequency', 'polarization'
                     Spectrum: 'antenna_name', 'time', 'frequency', 'polarization'
                     Default is index 0 for non-axes dimensions.
-                    Use list_antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
-                    Use summary() to list frequencies and polarizations.
+                    Call antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
+                    Call summary() to list frequencies and polarizations.
                     TODO: how to select time?
 
         If not interactive and plotting is successful, use show() or save() to view/save the plot only.
@@ -156,7 +155,12 @@ class MsRaster(MsPlot):
     def _select_spw(self, selection):
         ''' Select first spw (minimum spectral_window_id) if not user-selected '''
         if not selection or 'spw_name' not in selection:
-            first_spw_name = self._get_first_spw_name(self._ps)
+            if selection:
+                # Find first spw in user-selected ps
+                selected_ps = self._ps.sel(**selection)
+            else:
+                selected_ps = self._ps
+            first_spw_name = self._get_first_spw_name(selected_ps)
             spw_selection = {'spw_name': first_spw_name}
         else:
             spw_selection = {'spw_name': selection['spw_name']}
@@ -180,7 +184,7 @@ class MsRaster(MsPlot):
 
         # describe selected spw
         spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
-        self._logger.info(f"Selecting first spw id {first_spw_id}: {first_spw_name} with range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
+        self._logger.info(f"Selecting first spw id {first_spw_id} with frequency range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
         return first_spw_name
 
     def _calc_amp_color_limits(self, ps, data_group):
