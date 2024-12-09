@@ -71,14 +71,10 @@ def _plot_xds(xds, correlated_data, title, x_axis_labels, y_axis_labels, c_axis_
     unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(c_axis.capitalize())
     flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename("Flagged_" + c_axis.capitalize())
 
+    # Plot data
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
-    unflagged_colormap = "viridis"
-    flagged_colormap = "kr"
-
-    # Plot flagged data
-    flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, flagged_colormap)
-    # Plot unflagged data (hover shows values in last plot)
-    unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, unflagged_colormap)
+    flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, "kr")
+    unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, "viridis")
 
     if flagged_plot and unflagged_plot:
         return flagged_plot * unflagged_plot.opts(colorbar_position='left')

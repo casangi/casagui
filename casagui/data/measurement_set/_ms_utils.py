@@ -6,9 +6,10 @@ import numpy as np
 import xarray as xr
 
 
-def set_baseline_coordinate(ps):
+def set_baseline_coordinate(ps, drop_ant_names):
     ''' Set baseline coordinate as string array (ant1_name & ant2_name).
-        Replace baseline_id dimension with baseline. '''
+        Replace baseline_id dimension with new baseline coordinate.
+        If drop_ant_names, remove antenna name coordinates. '''
     for name, xds in ps.items():
         if 'baseline_id' not in xds.coords:
             break
@@ -24,9 +25,11 @@ def set_baseline_coordinate(ps):
         xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
         xds = xds.swap_dims({"baseline_id": "baseline"})
 
-        # Remove non-dimension unicode data vars for concat.  Antenna names now in baseline coord.
-        xds = xds.drop("baseline_antenna1_name")
-        xds = xds.drop("baseline_antenna2_name")
+        if drop_ant_names:
+            # Remove non-dimension unicode data_vars for concat (raster plot).
+            # Antenna names now in baseline coord "ant1 & ant2".
+            xds = xds.drop("baseline_antenna1_name")
+            xds = xds.drop("baseline_antenna2_name")
 
         ps[name] = xds
 

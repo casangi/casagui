@@ -35,6 +35,7 @@ class MsRaster(MsPlot):
         super().__init__(ms, log_level, "MsRaster", interactive)
         if interactive:
             self._logger.warn("Interactive GUI not implemented.")
+            self._interactive = False
         self._spw_color_limits = {}
 
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None):
@@ -94,8 +95,8 @@ class MsRaster(MsPlot):
         raster_xds, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, self._logger)
 
         # Plot selected xds
-        if showgui:
-            raise RuntimeError("Interactive GUI not implemented.")
+        if self._interactive:
+            pass # send data to gui
         else:
             ms_name = os.path.basename(self._ms_path)
             self._plot = raster_plot(raster_xds, x_axis, y_axis, vis_axis, data_group, selection, ms_name, color_limits)
@@ -132,7 +133,7 @@ class MsRaster(MsPlot):
 
     def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection):
         ''' Check plot parameters against processing set xds variables '''
-        if data_group not in self.get_data_groups():
+        if data_group not in self.data_groups():
             raise ValueError(f"Invalid data_group {data_group}. Use get_data_groups() to see options.")
 
         # Reassign x_axis or y_axis for spectrum data dimension

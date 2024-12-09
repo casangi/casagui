@@ -35,6 +35,7 @@ class MsScatter(MsPlot):
         super().__init__(ms, log_level, "MsScatter", interactive)
         if interactive:
             self._logger.warn("Interactive GUI not implemented.")
+            self._interactive = False
 
     def plot(self, x_axis='time', y_axis='amp', data_group='base', selection=None):
         '''
@@ -61,13 +62,13 @@ class MsScatter(MsPlot):
         for xds in scatter_ps.values():
             print("scatter ps xds:", xds)
 
-        if showgui:
-            raise RuntimeError("Interactive GUI not implemented.")
+        if self._interactive:
+            pass # send scatter_data to gui
         else:
             ms_name = os.path.basename(self._ms_path)
             self._plot = scatter_plot(scatter_xds, x_axis, y_axis, ms_name, self._logger)
-            if self._plot is None:
-                raise RuntimeError("Plot failed.")
+        if self._plot is None:
+            raise RuntimeError("Plot failed.")
         self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
     def show(self, hist=False):
