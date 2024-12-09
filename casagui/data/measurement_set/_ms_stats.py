@@ -145,14 +145,16 @@ def _map_stats(input_params):
 
 def _reduce_stats(graph_inputs, input_params):
     ''' Compute min, max, sum, and count of all data'''
-    try:
-        data_min = min(0.0, np.nanmin([input[0] for input in graph_inputs]))
-    except ValueError:
-        data_min = 0.0
-    try:
-        data_max = max(0.0, np.nanmax([input[1] for input in graph_inputs]))
-    except ValueError:
-        data_max = 0.0
+    data_min = 0.0
+    mins = [input[0] for input in graph_inputs]
+    if not np.isnan(mins).all():
+        data_min = min(0.0, np.nanmin(mins))
+
+    data_max = 0.0
+    maxs = [input[1] for input in graph_inputs]
+    if not np.isnan(maxs).all():
+        data_max = max(0.0, np.nanmax(maxs))
+
     data_sum = sum([input[2] for input in graph_inputs])
     data_count = sum([input[3] for input in graph_inputs])
     return (data_min, data_max, data_sum, data_count)
