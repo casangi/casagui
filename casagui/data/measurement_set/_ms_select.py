@@ -14,7 +14,6 @@ def select_ps(ps, selection, data_group, logger):
         return ps
 
     correlated_data = get_correlated_data(ps.get(0), data_group)
-    dimensions = ps.get(0)[correlated_data].dims
 
     ms_selection = {}
     ps_selection = {}
@@ -23,10 +22,13 @@ def select_ps(ps, selection, data_group, logger):
         ps_selection_keys = list(ps.summary().columns.array)
         ps_selection_keys.append('query')
 
+        ms_selection_keys = []
+        ms_selection_keys.extend(ps.get(0).coords.keys())
+
         for key in selection:
             if key in ps_selection_keys:
                 ps_selection[key] = selection[key]
-                if key in dimensions:
+                if key in ms_selection_keys:
                     # ps selection selects ms_xdss which _contain_ value but also need to _select_ value
                     ms_selection[key] = selection[key]
             else: # assume in ms_xds

@@ -3,33 +3,47 @@ Utility functions to manage xarray DataSets
 '''
 
 import numpy as np
+from pandas import to_datetime
 import xarray as xr
 
 
-def set_baseline_coordinate(ps, drop_ant_names):
-    ''' Set baseline coordinate as string array (ant1_name & ant2_name).
+def set_coordinates(ps, drop_ant_names):
+    ''' Set coordinate unit as string, convert time to datetime.
+        Set baseline coordinate as string array "ant1_name & ant2_name".
         Replace baseline_id dimension with new baseline coordinate.
-        If drop_ant_names, remove antenna name coordinates. '''
+        If drop_ant_names, remove antenna name coordinates (for raster plot). '''
     for name, xds in ps.items():
-        if 'baseline_id' not in xds.coords:
-            break
+        for coord in xds.coords:
+            # Plots need unit to be string not list
+            if 'units' in xds[coord].attrs:
+                units = xds[coord].units
+                if isinstance(units, list) and len(units) == 1:
+                    xds[coord].attrs['units'] = units[0]
 
-        ant1_names = xds.baseline_antenna1_name.values
-        ant2_names = xds.baseline_antenna2_name.values
-        baseline_names = []
+            # Convert float64 to datetime64
+            if coord == 'time':
+                time_attrs = xds.time.attrs # to_datetime xda loses attrs
+                xds['time'] = to_datetime(xds.time, unit=time_attrs['units'], origin=xds.time.format)
+                xds['time'].attrs = time_attrs
 
-        # Create baseline name coordinate and make it dimension
-        for idx in xds.baseline_id.values:
-            baseline_name = f"{ant1_names[idx]} & {ant2_names[idx]}"
-            baseline_names.append(baseline_name)
-        xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
-        xds = xds.swap_dims({"baseline_id": "baseline"})
+        # Add baseline coordinate = "ant1 & ant2" string
+        if 'baseline_id' in xds.coords:
+            ant1_names = xds.baseline_antenna1_name.values
+            ant2_names = xds.baseline_antenna2_name.values
+            baseline_names = []
 
-        if drop_ant_names:
-            # Remove non-dimension unicode data_vars for concat (raster plot).
-            # Antenna names now in baseline coord "ant1 & ant2".
-            xds = xds.drop("baseline_antenna1_name")
-            xds = xds.drop("baseline_antenna2_name")
+            # Create baseline name coordinate and make it dimension
+            for idx in xds.baseline_id.values:
+                baseline_name = f"{ant1_names[idx]} & {ant2_names[idx]}"
+                baseline_names.append(baseline_name)
+            xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
+            xds = xds.swap_dims({"baseline_id": "baseline"})
+
+            if drop_ant_names:
+                # Remove non-dimension unicode data_vars for xr concat (raster plot).
+                # Antenna names preserved in baseline coord "ant1 & ant2".
+                xds = xds.drop("baseline_antenna1_name")
+                xds = xds.drop("baseline_antenna2_name")
 
         ps[name] = xds
 
@@ -76,10 +90,10 @@ def concat_ps_xds(ps, logger):
 
 def _get_sorted_times(ps):
     values = []
-    for key in ps:
-        time_values = ps[key].time.values
+    for name in ps:
+        time_values = ps[name].time.values
         if time_values.size > 1:
-            values.extend(time_values.tolist())
+            values.extend(time_values)
         else:
             values.append(time_values)
     return sorted(values)

@@ -2,7 +2,7 @@
 Functions for plot axes labels
 '''
 import numpy as np
-from pandas import to_datetime
+#from pandas import to_datetime
 import xarray as xr
 
 def get_coordinate_labels(xds, coordinate):
@@ -20,15 +20,12 @@ def get_coordinate_labels(xds, coordinate):
 
 def _get_time_labels(time_xda):
     ''' Return time string or list of time strings '''
-    if time_xda.size > 1:
-        if time_xda.integration_time['data'] < 1.0:
-            times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S.%f")
-        else:
-            times = to_datetime(time_xda, unit='s').strftime("%H:%M:%S")
+    if time_xda.size == 1:
+        time = time_xda.strftime("%d-%b-%Y %H:%M:%S")
+        time += " " + time_xda.attrs['scale'].upper()
+        return time
     else:
-        times = to_datetime(time_xda, unit='s').strftime("%d-%b-%Y %H:%M:%S")
-        times += " " + time_xda.attrs['scale'].upper()
-    return times if isinstance(times, str) else list(times.values)
+        return None
 
 def _get_baseline_antenna_labels(baseline_antenna_xda):
     ''' Return baseline pair string or list of strings '''
@@ -66,12 +63,6 @@ def get_axis_labels(xds, axis):
     if axis == "time":
         start_date, end_date = _get_date_range(xds.time)
         label =  f"Time {xds.time.attrs['scale'].upper()} ({start_date})"
-        if xds.time.size > 1:
-            tick_inc = max(int(len(ticks) / 10), 1)
-            ticks = ticks[::tick_inc]
-        # Set time axis as time index
-        xds['time'] = np.array(range(xds.time.size))
-        xds['timestamp'] = xr.DataArray(np.array(labels), dims=xds.time.dims)
     elif axis == "baseline":
         label = "Baseline Antenna1"
         ticks = _get_baseline_ant1_ticks(ticks)

@@ -10,7 +10,7 @@ import pandas as pd
 from xradio.measurement_set.processing_set import ProcessingSet
 from toolviper.utils.logger import setup_logger
 
-from ..data.measurement_set._ms_utils import set_baseline_coordinate
+from ..data.measurement_set._ms_utils import set_coordinates
 from ..io._ms_io import get_processing_set
 
 class MsPlot:
@@ -24,8 +24,8 @@ class MsPlot:
         # ms basename (no path) for plot title and save filename
         self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
 
-        # Set baseline names instead of ids.
-        set_baseline_coordinate(self._ps, logger_name)
+        # Set baseline names instead of ids. Drop antenna name coords for raster plots.
+        set_coordinates(self._ps, logger_name=="MsRaster")
 
         self._interactive = interactive
         self._plot = None
