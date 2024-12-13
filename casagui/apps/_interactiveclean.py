@@ -60,11 +60,12 @@ from ..utils import ContextMgrChain as CMC
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
 try:
     from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-except:
+except Exception as e:
     import inspect as _insp
     import os as _os
     from casagui.private._gclean import gclean as _gclean
     print( f'''>>>--caution--> Using cached gclean API from {_os.path.dirname(_os.path.abspath(_insp.getsourcefile(_gclean)))}''' )
+    print( f'''                {e}''' )
 
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
