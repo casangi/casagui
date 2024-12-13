@@ -4,7 +4,7 @@
  */
 import { object_id } from './object_id'
 //import { map, reduce } from "./functional"
-import { map } from "./functional"
+import { map, reduce } from "./functional"
 import { is_empty, minmax, sorted } from './array_funcs'
 import { strparse_intranges, intlist_to_rangestr } from './string_funcs'
 import { forexpr } from './loop_funcs'
@@ -61,6 +61,7 @@ var casalib = {
     strparse_intranges,
     intlist_to_rangestr,
     map,
+    reduce,
     zip,
     unzip,
     forexpr,
@@ -86,7 +87,17 @@ if ( typeof Bokeh !== "undefined" ) {
     }
 }
 
+
+/********************************************************************************
+*** Export some symbols directly for use with Bokeh:                          ***
+***                                                                           ***
+***    hasprop: robust check for property within an object                    ***
+***    zip:     zip two lists                                                 ***
+***    casalib: all exported casalib symbols                                  ***
+********************************************************************************/
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).casalib = casalib;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).hasprop = hasprop;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).zip = zip;
