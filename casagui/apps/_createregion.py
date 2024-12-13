@@ -265,9 +265,9 @@ class CreateRegion:
                                Div(text='<div>Line</div>'),
                                row(*imdetails['gui']['region-styling']['nofocus']['line']) ) )
         nohover.styles = { "border": "1px solid black", "padding": "1px" }
-        return column( Div(text='<div><b>Focus Style</b></div>'),
+        return column( Div(text='<div><b>Styling for Region with Focus</b></div>'),
                        hover,
-                       Div(text='<div><b>Non-focus Style</b></div>'),
+                       Div(text='<div><b>Default Style for New Regions</b></div>'),
                        nohover )
 
     def _create_location_panel( self, imdetails, width=410 ):
@@ -361,6 +361,7 @@ class CreateRegion:
         tab_panels = list( map( self._create_image_panel, self._region_state.items( ) ) )
 
         for imid, imdetails in self._region_state.items( ):
+            print( '>>>>>---region_state------>>>>', imid, imdetails )
             imdetails['gui']['cube'].connect( )
 
         image_tabs = Tabs( tabs=tab_panels, tabs_location='below', height_policy='max', width_policy='max' )
