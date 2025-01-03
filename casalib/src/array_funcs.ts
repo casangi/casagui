@@ -23,3 +23,7 @@ export function sorted( coll: number[] | Set<number> ): number[] {
 
     throw new Error( `unexpected parameter type (${typeof coll})` )
 }
+
+export function arrayeq<T>( arr1: T[], arr2: T[] ): boolean {
+    return arr1.length === arr2.length && arr1.every((val, index) => val === arr2[index])
+}

@@ -10,6 +10,10 @@ import { strparse_intranges, intlist_to_rangestr } from './string_funcs'
 import { forexpr } from './loop_funcs'
 import { ReconnectState } from "./reconnect_state"
 import { zip, unzip } from "./zip"
+import { BiMap } from "./bimap_class"
+import { BoundedBiMap } from "./boundedbimap_class"
+import { EqSet } from "./eqset_class"
+import { eq } from "./equals"
 
 import * as coordtxl from 'coordtxl'
 import hotkeys from 'hotkeys-js'
@@ -70,6 +74,8 @@ var casalib = {
     hotkeys,
     ReconnectState,
     polyArea,
+    BiMap, BoundedBiMap,
+    EqSet, eq,
     d3: { contours, polygonContains, polygonArea },
     // TypeScript is poor
     // ------------------
@@ -94,6 +100,9 @@ if ( typeof Bokeh !== "undefined" ) {
 ***    hasprop: robust check for property within an object                    ***
 ***    zip:     zip two lists                                                 ***
 ***    casalib: all exported casalib symbols                                  ***
+***    EqSet: set class that accepts an equality function, e.g. for sets      ***
+***           containing arrays                                               ***
+***    BiMap: bi-directional map                                              ***
 ********************************************************************************/
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).casalib = casalib;
@@ -101,3 +110,9 @@ if ( typeof Bokeh !== "undefined" ) {
 (window as any).hasprop = hasprop;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).zip = zip;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).EqSet = EqSet;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).BiMap = BiMap;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).BoundedBiMap = BoundedBiMap;
