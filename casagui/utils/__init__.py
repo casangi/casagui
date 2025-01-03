@@ -31,6 +31,7 @@ import inspect
 import itertools
 import urllib.request
 import urllib.error
+from os.path import dirname, join
 import sys
 
 from itertools import groupby, chain
@@ -89,7 +90,14 @@ def path_to_url(path):
     str
         ``path`` converted to a URL if ``path`` exists, otherwise ``path`` unchanged
     '''
-    return "file://" + __path.abspath(path) if __path.exists(path) else path
+    if __path.exists(path):
+        return "file://" + __path.abspath(path)
+    else:
+        jslib_path = join(dirname(dirname(__file__)),'__js__',path)
+        if __path.exists(jslib_path):
+            return "file://" + __path.abspath(jslib_path)
+        else:
+            return path
 
 
 def find_ws_address(address='127.0.0.1'):
