@@ -25,6 +25,7 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
+# pylint: disable=wrong-import-position
 '''End user applications supplied by ``casagui``.'''
 
 from ._plotants import plotants

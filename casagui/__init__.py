@@ -33,7 +33,7 @@ import os as __os
 
 try:
     from .__version__ import __version__
-except:
+except ModuleNotFoundError:
     ###
     ### __version__.py is generated as part of the build, but if the source tree
     ### for casagui is used directly for development, no __version__.py will be
