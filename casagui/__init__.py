@@ -43,9 +43,16 @@ except ModuleNotFoundError:
 
 
 def xml_interface_defs( ):
+    '''This function may eventually return XML files for use in generating casashell bindings. An
+       indentically named function provided by casatasks allows casagui to generate an
+       interactive clean task interface using the tclean XML file from casatasks.
+    '''
     return { }
 
 __mustache_interface_templates__ = { 'iclean': __os.path.join( __os.path.dirname(__file__), "private", "casashell", "iclean.mustache" ) }
 def mustache_interface_templates( ):
+    '''This provides a list of mustache files provided by casagui. It may eventually allow
+       casashell to generate all of its bindings at startup time. This would allow casashell
+       to be consistent with any version of casatasks that is availale.
+    '''
     return __mustache_interface_templates__
-
