@@ -1723,7 +1723,7 @@ class CubeMask:
                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                                   contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
                                                                else mask_add_chan( )''' )
         self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
@@ -1736,7 +1736,7 @@ class CubeMask:
                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                                   contour_ds=self._bitmask_contour_ds,
                                                                   status=self._status_div ),
-                                                       code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
                                                             '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
                                                                else mask_sub_chan( )''' )
 
@@ -1749,9 +1749,9 @@ class CubeMask:
                                                                    mask_region_icons=self._mask_icons_,
                                                                    source=self._image_source,
                                                                    status=self._status_div ),
-                                                        code=self._js['contour-maskmod'] + self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
-                                                             '''if ( mask_region_button.icon == mask_region_icons['on'] ) maskmod_region_clear( )
-                                                                else maskmod_region_set( region )''' )
+                                                        code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                             '''if ( mask_region_button.icon == mask_region_icons['on'] ) source._mask.clear( )
+                                                                else source.mask.set( region )''' )
 
 
         if self._slider:
@@ -1988,36 +1988,54 @@ class CubeMask:
                                                              code='''isource._freeze_cursor_update = false
                                                                      cb.map( (e) => e.execute( this, e ) )''' ) )
 
+        ########################################################################################################################
+        ###  Image source initialization                                                                                     ###
+        ########################################################################################################################
+        if self._mask_path is None:
+            ###
+            ### Region creation WITHOUT an on-disk bitmap
+            ###
+            init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                            id=self._image_source.id,
+                            stats_source=self._statistics_source, chan_slider=self._slider,
+                            mask_region_button=self._mask_add_sub['mask'],
+                            mask_region_icons=self._mask_icons_,
+                            mask_region_ds=self._bitmask_contour_maskmod_ds,
+                            contour_ds=self._bitmask_contour_ds,
+                            status=self._status_div, statprec=7,
+                            user_init_script = self._user_init_script,
+                            stokes_labels=[ k for k,_ in self._region_controls['coord']['chan'].items( ) ],
+                            status_line=self._region_controls['coord']['status'],
+                            #default_region_color=self._region_controls['tracking']['color-picker'],
+                            #chan_select = [ v for k,v in self._region_controls['coord']['chan'].items( ) ],
+                            freeze_cb = self._image_freeze_cb,
+                            styling={ 'fill': { 'color': self._region_controls['style']['default']['fill']['color'].child,
+                                                'alpha': self._region_controls['style']['default']['fill']['alpha'].child,
+                                                'hatch': self._region_controls['style']['default']['fill']['hatch'].child },
+                                      'line': { 'color': self._region_controls['style']['default']['line']['color'].child,
+                                                'width': self._region_controls['style']['default']['line']['width'].child,
+                                                'alpha': self._region_controls['style']['default']['line']['alpha'].child,
+                                                'dash': self._region_controls['style']['default']['line']['dash'].child } } )
+        else:
+            ###
+            ### On-disk bitmask creation
+            ###
+            init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                            stats_source=self._statistics_source, chan_slider=self._slider,
+                            mask_region_button=self._mask_add_sub['mask'],
+                            mask_region_icons=self._mask_icons_,
+                            mask_region_ds=self._bitmask_contour_maskmod_ds,
+                            contour_ds=self._bitmask_contour_ds,
+                            status=self._status_div, statprec=7,
+                            selector=self._bitmask_color_selector,
+                            user_init_script = self._user_init_script,
+                            freeze_cb = self._image_freeze_cb )
 
-        ## this is in the connect function to allow for access to self._statistics_source
-        import traceback as tb
-        tb.print_stack()
-        self._image_source.init_script = CustomJS( args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                                                              id=self._image_source.id,
-                                                              stats_source=self._statistics_source, chan_slider=self._slider,
-                                                              mask_region_button=self._mask_add_sub['mask'],
-                                                              mask_region_icons=self._mask_icons_,
-                                                              mask_region_ds=self._bitmask_contour_maskmod_ds,
-                                                              contour_ds=self._bitmask_contour_ds,
-                                                              status=self._status_div, statprec=7,
-                                                              user_init_script = self._user_init_script,
-                                                              stokes_labels=[ k for k,_ in self._region_controls['coord']['chan'].items( ) ],
-                                                              status_line=self._region_controls['coord']['status'],
-                                                              #default_region_color=self._region_controls['tracking']['color-picker'],
-                                                              #chan_select = [ v for k,v in self._region_controls['coord']['chan'].items( ) ],
-                                                              freeze_cb = self._image_freeze_cb,
-                                                              styling={ 'fill': { 'color': self._region_controls['style']['default']['fill']['color'].child,
-                                                                                  'alpha': self._region_controls['style']['default']['fill']['alpha'].child,
-                                                                                  'hatch': self._region_controls['style']['default']['fill']['hatch'].child },
-                                                                        'line': { 'color': self._region_controls['style']['default']['line']['color'].child,
-                                                                                  'width': self._region_controls['style']['default']['line']['width'].child,
-                                                                                  'alpha': self._region_controls['style']['default']['line']['alpha'].child,
-                                                                                  'dash': self._region_controls['style']['default']['line']['dash'].child } } ),
-                                                              code='''let source = cb_obj;''' +
-                                                                   ( self._js['mask-state-init'] + self._js['func-curmasks']( ) +
-                                                                     self._js['contour-maskmod'] +
-                                                                     self._js['key-state-funcs'] + self._js['setup-key-mgmt']
-                                                                     if self._mask_path is None else self._js['contour-maskmod'] + self._js['setup-key-mgmt'] ) +
+        self._image_source.init_script = CustomJS( args=init_args,
+                                                              code='''let source = cb_obj;''' + self._js['mask-state-init'] + 
+                                                                   ( self._js['func-curmasks']( ) +
+                                                                     self._js['key-state-funcs']
+                                                                     if self._mask_path is None else '' )  + self._js['setup-key-mgmt'] +
                                                                    """// This function is called to collect the masks and/or stop
                                                                       // -->> collect_masks( ) is only defined if bitmask cube is NOT used
                                                                       document._done = ( final_polys=null, cb=null ) => {
@@ -2068,13 +2086,14 @@ class CubeMask:
         ### self._bitmask_color_selector
         ###
         if self._bitmask_color_selector:
-            self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( bitmask=self._bitmask,
+            self._bitmask_color_selector.js_on_change( 'color', CustomJS( args=dict( source=self._image_source,
+                                                                                     bitmask=self._bitmask,
                                                                                      contour=self._bitmask_contour,
                                                                                      region=self._bitmask_contour_maskmod,
                                                                                      bitrep=self._bitmask_transparency_button,
                                                                                      annotations=self._annotations ),
                                                          code= ( "" if self._mask_path is None else
-                                                                 '''annotations[0].line_color = cb_obj.color;''' ) +
+                                                                 '''source._mask.get( ).line_color = cb_obj.color;''' ) +
                                                                  '''let cm = bitmask.glyph.color_mapper
                                                                     if ( bitmask._transparent == null ) {
                                                                         bitmask._transparent = cm.palette[0]
@@ -2098,42 +2117,39 @@ class CubeMask:
                                                       mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                       region_newpoly = self._region_controls_newpoly,
                                                       stokes_labels=[ k for k,_ in self._region_controls['coord']['chan'].items( ) ],
-                                                      status_line=self._region_controls['coord']['status'],
+                                                      status_line=self._region_controls['coord']['status'] if self._mask_path is None else None,
                                                       chan_select = [ v.child for k,v in self._region_controls['coord']['chan'].items( ) ] ),
-                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) + self._js['contour-maskmod'] +
+                                           code= ( self._js['func-newpoly'] + self._js['func-curmasks']( ) +
                                                    self._js['mask-state-init'] + self._js_mode_code['no-bitmask-tool-selection'] )
-                                                   if self._mask_path is None else  self._js['contour-maskmod'] + (
+                                                   if self._mask_path is None else  "" + (
                                                    ### selector indicates if a on-disk mask is being used
                                                    ''';if ( source.masking_on( ) ) {
                                                           const geometry = cb_obj['geometry']
                                                           if ( geometry.type === 'rect' ) {
                                                               // rectangle drawing complete
-                                                              maskmod_region_set( annotations[0],
-                                                                                  [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
-                                                                                  [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
+                                                              source._mask.set( [ geometry.x0, geometry.x0, geometry.x1, geometry.x1 ],
+                                                                                [ geometry.y0, geometry.y1, geometry.y1, geometry.y0 ] )
                                                           } else if ( geometry.type === 'poly' && cb_obj.final ) {
                                                               // polygon drawing complete
-                                                              maskmod_region_set( annotations[0],
-                                                                                  [ ].slice.call(geometry.x),
-                                                                                  [ ].slice.call(geometry.y) )
+                                                              source._mask.set( [ ].slice.call(geometry.x),
+                                                                                [ ].slice.call(geometry.y) )
                                                           }
                                                       }''' ) ) )
 
-        if self._mask_path is None:
-            ###
-            ### when the user types enter (e.g. within one of the TextEdit widgets)...
-            ###      a SelectionGeometry is generated with a zero vertex polygon
-            ### this is complicated by the fact that when the TextInput are reused the
-            ###      referenced 'source' that is associated with the TextInput is out
-            ###      of sync with the image. Because of this, the state for
-            ###      source.enable_masking( )/source.disable_masking( ) is indexed
-            ###      off of 'document' based on the 'source.id' when the
-            ###      enable/disable functions are created
-            ###
-            self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ),
-                                                           code='''source.enable_masking( )''' ) )
-            self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ),
-                                                           code='''source.disable_masking( )''' ) )
+        ###
+        ### when the user types enter (e.g. within one of the TextEdit widgets)...
+        ###      a SelectionGeometry is generated with a zero vertex polygon
+        ### this is complicated by the fact that when the TextInput are reused the
+        ###      referenced 'source' that is associated with the TextInput is out
+        ###      of sync with the image. Because of this, the state for
+        ###      source.enable_masking( )/source.disable_masking( ) is indexed
+        ###      off of 'document' based on the 'source.id' when the
+        ###      enable/disable functions are created
+        ###
+        self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source ),
+                                                       code='''source.enable_masking( )''' ) )
+        self._image.js_on_event( MouseLeave, CustomJS( args=dict( source=self._image_source ),
+                                                       code='''source.disable_masking( )''' ) )
 
 
 
@@ -2229,19 +2245,20 @@ class CubeMask:
                                                   if ( msg.result == 'success' ) {
                                                       if ( 'update' in msg && 'clear_region' in msg.update && msg.update.clear_region ) {
                                                           /* if the src mask on disk has changed the maskmod region is no longer valid */
-                                                          maskmod_region_clear( )
+                                                          source._mask.clear( )
                                                       }
                                                       source.refresh( msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
-                                                  if ( annotations[0].xs.length > 0 && annotations[0].ys.length > 0 ) {
+                                                  const anno = source._mask.get( )
+                                                  if ( anno.xs.length > 0 && anno.ys.length > 0 ) {
                                                       ctrl.send( ids['mask-mod'],
                                                                  { scope: 'chan',
                                                                    action: 'addition',
                                                                    value: { chan: source.cur_chan,
-                                                                            xs: annotations[0].xs,
-                                                                            ys: annotations[0].ys } },
+                                                                            xs: anno.xs,
+                                                                            ys: anno.ys } },
                                                                  mask_mod_result )
                                                   } else if ( ! casalib.is_empty(mask_region_ds.data.xs) && ! casalib.is_empty(mask_region_ds.data.ys) ) {
                                                       ctrl.send( ids['mask-mod'],
@@ -2315,7 +2332,7 @@ class CubeMask:
                                               }
                                               casalib.hotkeys( 'escape', { scope: source._hotkeys.id },
                                                                (e) => { e.preventDefault( )
-                                                                        maskmod_region_clear( ) } )
+                                                                        source._mask.clear( ) } )
                                               casalib.hotkeys( 'f', { scope: source._hotkeys.id },
                                                                (e) => { source._freeze_cursor_update = true
                                                                         freeze_cb.map( (e) => e.execute( this, e ) ) } )
@@ -2478,6 +2495,42 @@ class CubeMask:
                                                                                      if ( e.key === 'Control' && casalib.hotkeys.option )
                                                                                          state_initialize_cursor( )
                                                                                  } } )''',
+            'bitmask-init':             '''function _create_mask_mgr( annos ) {
+                                               const mask_anno = annos[0]
+                                               return {
+                                                   clear: ( ) => { mask_anno.xs = [ ]
+                                                                   mask_anno.ys = [ ]
+                                                                   mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                                  mask_region_button.icon = mask_region_icons['off'] },
+                                                   set: ( xs=[ ], ys=[ ] ) => { if ( xs.length > 0 && ys.length > 0 ) {
+                                                                                            mask_anno.xs = xs
+                                                                                            mask_anno.ys = ys
+                                                                                            mask_region_ds.data = { xs: [ [[[]]] ], ys: [ [[[]]] ] }
+                                                                                            mask_region_button.icon = mask_region_icons['off']
+                                                                                        } else if ( ! casalib.is_empty(contour_ds.data.xs) &&
+                                                                                                    ! casalib.is_empty(contour_ds.data.ys) ) {
+                                                                                            mask_anno.xs = [ ]
+                                                                                            mask_anno.ys = [ ]
+                                                                                            mask_region_ds.data = contour_ds.data
+                                                                                            mask_region_ds._src_chan = source.cur_chan
+                                                                                            mask_region_button.icon = mask_region_icons['on']
+                                                                                        } else {
+                                                                                            if ( status ) status.text = '<p>no region found</p>'
+                                                                                            return
+                                                                                        }
+                                                                                        mask_anno.fill_color = 'rgba(0, 0, 0, 0)'
+                                                                                        mask_anno.line_width = 3
+                                                                                        mask_anno.line_alpha = 0.7
+                                                                                        mask_anno.line_dash = 'dashed'
+                                                                                        mask_anno.line_color = selector.color
+                                                                                      },
+                                                   get: ( ) => { return mask_anno }
+
+                                               }
+                                           }
+                                           if ( source._mask === undefined ) {
+                                               source._mask = _create_mask_mgr( annotations )
+                                           }''',
             'no-bitmask-init':          '''function _create_poly_mgr( annos, stokes_labels ) {
                                                const chan2polys = { }
 
@@ -2635,19 +2688,19 @@ class CubeMask:
                                                    list: ( ) => { return polys }
                                                }
                                            }
-                                           if ( typeof(source._polys) === 'undefined' ) {
+                                           if ( source._polys === undefined ) {
                                                source._polys = _create_poly_mgr(annotations,stokes_labels)
                                            }
-                                           if ( typeof(source._stokes) === 'undefined' ) {
+                                           if ( source._stokes === undefined ) {
                                                source._stokes = { }
                                            }
-                                           if ( typeof(source._mask_breadcrumbs) === 'undefined' ) {
+                                           if ( source._mask_breadcrumbs === undefined ) {
                                                source._mask_breadcrumbs = ''
                                            }
-                                           if ( typeof(source._cur_chan_prev) === 'undefined' ) {
+                                           if ( source._cur_chan_prev === undefined ) {
                                                source._cur_chan_prev = source.cur_chan
                                            }
-                                           if ( typeof(source._oldpolys) === 'undefined' ) {
+                                           if ( source._oldpolys === undefined ) {
                                                source._oldpolys = [ ]           //  [ { id: int,
                                                                                 //      type: string,
                                                                                 //      geometry: { xs: [ float, ... ], ys: [ float, ... ] } } ]
@@ -2677,7 +2730,7 @@ class CubeMask:
                                                                                 // OPT-CTRL-left moves to previous stokes channel
                                                                                 // OPT-CTRL-right moves to next stokes channel
                                            }
-                                           if ( typeof(source._copy_buffer) === 'undefined' ) {
+                                           if ( source._copy_buffer === undefined ) {
                                                // Buffer that will contain copied selection so that the selection from one channel can be pasted
                                                // into this channel, another channel, or multiple channels...
                                                //              vvvvvvvvvv------------------------------------------- polygon index to be pasted
@@ -2690,7 +2743,7 @@ class CubeMask:
                                                // to the pasted polygon (using a newly aquired annotation from the cache)
                                                source._copy_buffer = [ [ ], [ ] ]
                                            }
-                                           if ( typeof(source._chanmasks) === 'undefined' ) {
+                                           if ( source._chanmasks === undefined ) {
                                                // Primary axis:   stokes
                                                // Secondary axis: frequency                  vvvvvvvvvvvvvvvvvvv------ polygons drawn on this channel
                                                //                 [ [ [ANNOTATION-ID, ... ], [ POLY-INDEX, ... ], [ [ dx, dy ], ... ], [ INDEX, ... ], CHAN ], ... ]
@@ -2922,7 +2975,7 @@ class CubeMask:
                      ###
                      ### mask breadcrumbs
                      ###
-                     'mask-state-init': self._js_mode_code['no-bitmask-init'],
+                     'mask-state-init': self._js_mode_code['no-bitmask-init'] if self._mask_path is None else self._js_mode_code['bitmask-init'],
                      ###
                      ### code to update stokes after stokes selection from dropdown
                      ###
@@ -3266,7 +3319,7 @@ class CubeMask:
                      ###     //*** Alt+Shift+Up and Alt+Shift+Down when an      ***
                      ###     //*** image with multiple stokes axes is available ***
                      ###     //****************************************************
-                     'setup-key-mgmt':  '''if ( typeof(source._hotkeys) === 'undefined' ) {
+                     'setup-key-mgmt':  '''if ( source._hotkeys === undefined ) {
                                                source._hotkeys = { id: '%s' }
                                                // next channel -- all modes
                                                casalib.hotkeys( 'alt+up,ctrl+up,command+up', {scope: source._hotkeys.id},
