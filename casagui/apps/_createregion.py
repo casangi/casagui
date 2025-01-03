@@ -254,21 +254,25 @@ class CreateRegion:
         self.__result_future = None
 
     def _create_style_adjust( self, imdetails ):
-        self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_style_ctrl( reuse=self._image_region_controls, button_type='light' )
+
+        if 'region-styling' not in imdetails['gui']:
+            ### also used in self._create_location_panel
+            self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_style_ctrl( reuse=self._image_region_controls, button_type='light' )
+
         hover = row( column( Div(text='<div>Fill</div>'),
-                             row(*imdetails['gui']['region-styling']['focus']['fill']),
+                             row(*imdetails['gui']['region-styling']['hover']['fill']),
                              Div(text='<div>Line</div>'),
-                             row(*imdetails['gui']['region-styling']['focus']['line']) ) )
+                             row(*imdetails['gui']['region-styling']['hover']['line']) ) )
         hover.styles = {"border": "1px solid black", "padding": "1px" }
-        nohover = row( column( Div(text='<div>Fill</div>'),
-                               row(*imdetails['gui']['region-styling']['nofocus']['fill']),
+        default = row( column( Div(text='<div>Fill</div>'),
+                               row(*imdetails['gui']['region-styling']['default']['fill']),
                                Div(text='<div>Line</div>'),
-                               row(*imdetails['gui']['region-styling']['nofocus']['line']) ) )
-        nohover.styles = { "border": "1px solid black", "padding": "1px" }
+                               row(*imdetails['gui']['region-styling']['default']['line']) ) )
+        default.styles = { "border": "1px solid black", "padding": "1px" }
         return column( Div(text='<div><b>Styling for Region with Focus</b></div>'),
                        hover,
                        Div(text='<div><b>Default Style for New Regions</b></div>'),
-                       nohover )
+                       default )
 
     def _create_location_panel( self, imdetails, width=410 ):
         pos = imdetails['gui']['cube'].region_position_ctrl( )
@@ -286,11 +290,26 @@ class CreateRegion:
         coord_section.styles = {"border": "1px solid black", "padding": "1px" }
         chan_section.styles = {"border": "1px solid black", "padding": "1px" }
 
+        tracking = column( Div(text='<b>Tracking</b>', styles={"margin-top": "10px"} ), row( *pos['tracking'] ), sizing_mode='stretch_width' )
+        tracking.styles = {"border": "1px solid black", "padding": "1px" }
+
+        if 'region-styling' not in imdetails['gui']:
+            ### also used in self._create_style_adjust
+            self._image_region_controls = imdetails['gui']['region-styling'] = imdetails['gui']['cube'].region_style_ctrl( reuse=self._image_region_controls, button_type='light' )
+
+        style = row( column( Div(text='<div>Fill</div>'),
+                             row(*imdetails['gui']['region-styling']['selected']['fill']),
+                             Div(text='<div>Line</div>'),
+                             row(*imdetails['gui']['region-styling']['selected']['line']) ) )
+        style.styles = {"border": "1px solid black", "padding": "1px" }
+
         return column( coord_section,
                        chan_section,
                        row( pos['status'] ),
-                       row( Div(text='<b>Region Label:</b>', styles={"margin-top": "10px"} ), pos['label'], sizing_mode='stretch_width' ),
-                       row( Div(text='<b>Tracking state:</b>', styles={"margin-top": "10px"} ), *pos['tracking'] ) )
+                       row( column( pos['label'],
+                                    tracking, width=140 ),
+                            Spacer(width=4),
+                            style ) )
 
     def _create_colormap_adjust( self, imdetails ):
         palette = imdetails['gui']['cube'].palette( reuse=self._cube_palette )
@@ -299,16 +318,16 @@ class CreateRegion:
 
 
     def _create_control_image_tab( self, imid, imdetails ):
-        result = Tabs( tabs= ( [ TabPanel( child=self._create_location_panel(imdetails),
+        result = Tabs( tabs= [ TabPanel( child=self._create_location_panel(imdetails),
                                            title='Placement' ),
-                                 TabPanel( child=imdetails['gui']['spectrum'],
-                                           title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
-                               [ TabPanel( child=self._create_colormap_adjust(imdetails),
-                                           title='Colormap' ),
-                                 TabPanel( child=imdetails['gui']['cube'].statistics( ),
-                                           title='Statistics' ),
                                  TabPanel( child=self._create_style_adjust(imdetails),
-                                           title='Styling' ) ],
+                                           title='Config' ) ] + 
+                             ( [ TabPanel( child=imdetails['gui']['spectrum'],
+                                           title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
+                             [ TabPanel( child=self._create_colormap_adjust(imdetails),
+                                         title='Colormap' ),
+                               TabPanel( child=imdetails['gui']['cube'].statistics( ),
+                                         title='Statistics' ) ],
                        width=500, sizing_mode='stretch_height', tabs_location='below' )
 
         if not hasattr(self,'_image_control_tab_groups'):
