@@ -2,12 +2,15 @@
 Functions to create a raster xarray Dataset of visibility/spectrum data from xradio ProcessingSet
 '''
 
+import numpy as np
+import xarray as xr
+
 from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
+from ._ms_concat import concat_ps_xds
 from ._ms_data import get_correlated_data, get_axis_data
 from ._ms_select import select_ps
-from ._ms_utils import concat_ps_xds
 
 def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     '''
@@ -28,7 +31,7 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
-    # Calculate complex component of vis data
+    # Set complex component of vis data
     raster_xds[correlated_data] = get_axis_data(raster_xds, vis_axis, data_group)
 
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
@@ -79,3 +82,18 @@ def _get_first_dim_value(ps, dim):
             values.extend(xds[dim].values.tolist())
         values = sorted(list(set(values)))
         return values[0]
+
+def _add_index_dimensions(xds):
+    ''' Add index coordinates for plotting if coord has dimension '''
+    # Baseline/antenna id
+    if "baseline" in xds.coords and xds.baseline.dims:
+        xds = xds.assign_coords({"baseline_id": (xds.baseline.dims, np.array(range(xds.baseline.size)))})
+        xds = xds.swap_dims({"baseline": "baseline_id"})
+    elif "antenna_name" in xds.coords and xds.antenna_name.dims:
+        xds = xds.assign_coords({"antenna_id": (xds.antenna_name.dims, np.array(range(xds.antenna_name.size)))})
+
+    # Polarization id
+    if "polarization" in xds.coords and xds.polarization.dims:
+        xds = xds.assign_coords({"polarization_id": (xds.polarization.dims, np.array(range(xds.polarization.size)))})
+
+    return xds

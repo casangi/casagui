@@ -3,6 +3,7 @@
 import numpy as np
 import xarray as xr
 from astropy.constants import c
+from pandas import to_datetime
 
 from xradio.measurement_set.processing_set import ProcessingSet
 
@@ -21,10 +22,11 @@ def get_axis_data(xds, axis, data_group=None):
 
     group_info = xds.data_groups[data_group]
 
-    if axis == 'channel':
+    if _is_coordinate_axis(axis):
+        return xds[axis]
+    elif axis == 'channel':
         return xr.DataArray(np.array(range(xds.frequency.size)), dtype=np.int32)
     elif axis == 'field':
-        correlated_data = xds[group_info['correlated_data']]
         return xr.DataArray([xds[group_info['correlated_data']].field_and_source_xds.field_name])
     elif axis == 'flag':
         return xds[group_info['flag']]
@@ -32,8 +34,6 @@ def get_axis_data(xds, axis, data_group=None):
         return xr.DataArray(["".join(xds.partition_info['intents'])])
     elif 'spw' in axis:
         return _get_spw_axis(xds, axis)
-    elif _is_coordinate_axis(axis):
-        return xds[axis]
     elif _is_antenna_axis(axis):
         return _get_antenna_axis(xds, axis)
     elif is_vis_axis(axis):
@@ -51,8 +51,8 @@ def get_axis_data(xds, axis, data_group=None):
 
 def _is_coordinate_axis(axis):
     return axis in ['scan_number', 'time', 'frequency', 'polarization',
-        # TODO?
         #'velocity': 'frequency', # calculate
+        # TODO?
         #'observation':  no id, xds.observation_info (observer, project, release date)
         #'feed1':  no id, xds.antenna_xds
         #'feed2':  no id, xds.antenna_xds

@@ -2,11 +2,12 @@
 Functions for plot axes labels
 '''
 import numpy as np
-#from pandas import to_datetime
 import xarray as xr
 
+from ..data.measurement_set._ms_data import get_correlated_data
+
 def get_coordinate_labels(xds, coordinate):
-    ''' Return coordinate values as string, list of string labels, or None if numeric '''
+    ''' Return coordinate values as string or list of strings, or None if numeric '''
     if coordinate == 'time':
         return _get_time_labels(xds.time)
     elif coordinate == 'baseline':
@@ -19,7 +20,7 @@ def get_coordinate_labels(xds, coordinate):
         return _get_polarization_labels(xds.polarization)
 
 def _get_time_labels(time_xda):
-    ''' Return time string or list of time strings '''
+    ''' Return time as formatted string, or None to autogenerate ticks '''
     if time_xda.size == 1:
         time = time_xda.strftime("%d-%b-%Y %H:%M:%S")
         time += " " + time_xda.attrs['scale'].upper()
@@ -28,31 +29,41 @@ def _get_time_labels(time_xda):
         return None
 
 def _get_baseline_antenna_labels(baseline_antenna_xda):
-    ''' Return baseline pair string or list of strings '''
+    ''' Return baseline pairs as string or list of strings '''
     if baseline_antenna_xda.size == 1:
         return baseline_antenna_xda.values
     return baseline_antenna_xda.values.ravel().tolist()
 
 def _get_polarization_labels(polarization_xda):
-    ''' Return polarization string or list of polarization strings '''
+    ''' Return polarization as single string or list of strings '''
     if polarization_xda.size == 1: # string
         return polarization_xda.values
     return list(polarization_xda.values) # array of strings
 
 def _get_frequency_labels(frequency_xda):
-    ''' Return frequency string for single value, or None to autogenerate ticks '''
+    ''' Return frequency as formatted string, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.item():.4e} {frequency_xda.attrs['units'][0]} {frequency_xda.attrs['observer'].upper()}"
+        return f"{frequency_xda.item():.4e} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer'].upper()}"
     else:
         return None # auto ticks from frequency values
 
-def get_vis_axis_labels(xds, data_group, correlated_data, vis_axis):
-    ''' Get vis axis label for colorbar '''
+def get_vis_axis_labels(xds, data_group, vis_axis, include_unit=True):
+    ''' Get vis axis label for colorbar. Returns (axis, label, ticks) '''
     label = vis_axis.capitalize()
     if data_group != 'base':
         label += f":{data_group.capitalize()}"
-    if 'units' in xds[correlated_data].attrs:
-        label += f" ({xds[correlated_data].units})"
+
+    if include_unit:
+        units = None
+        if vis_axis in xds.data_vars and 'units' in xds[vis_axis].attrs:
+            units = xds[vis_axis].units
+        else:
+            correlated_data = get_correlated_data(xds, data_group)
+            if 'units' in xds[correlated_data].attrs:
+                units = xds[correlated_data].units
+        if units:
+            label += f" ({units})"
+
     return (vis_axis, label)
 
 def get_axis_labels(xds, axis):
@@ -66,19 +77,14 @@ def get_axis_labels(xds, axis):
     elif axis == "baseline":
         label = "Baseline Antenna1"
         ticks = _get_baseline_ant1_ticks(ticks)
-        xds['baseline'] = np.array(range(xds.baseline.size))
     elif axis == "antenna_name":
         label = "Antenna"
-        xds['antenna_name'] = np.array(range(xds.antenna_name.size))
+        plot_axis = "antenna_id"
     elif axis == "frequency":
-        unit = xds.frequency.attrs['units'][0]
-        xds.frequency.attrs['units'] = unit
-        label = f"Frequency ({unit}) {xds.frequency.attrs['observer'].upper()}"
+        label = f"Frequency ({xds.frequency.attrs['units']}) {xds.frequency.attrs['observer'].upper()}"
     elif axis == "polarization":
         label =  "Polarization"
-        # replace axis with index for plot range
-        xds['polarization'] = np.array(range(xds.polarization.size))
-    return xds, (axis, label, ticks)
+    return (axis, label, ticks)
 
 def _get_date_range(time_xda):
     ''' Return date as dd-Mon-yyyy e.g. 23-Aug-2010 '''
@@ -91,12 +97,13 @@ def _get_date_range(time_xda):
         return (start_date, end_date)
 
 def _get_baseline_ant1_ticks(baseline_ticks):
-    ''' Return labels for each new ant1 name '''
-    # space by minimum increment to avoid overlapping tick labels
-    min_increment = max(int(len(baseline_ticks) / 50), 1)
+    ''' Return labels for each new ant1 name in baselines '''
     ant1_ticks = []
     last_ant1 = None
     last_idx = None
+
+    # space by minimum increment to avoid overlapping tick labels
+    min_increment = max(int(len(baseline_ticks) / 50), 1)
 
     for idx, tick in baseline_ticks:
         ant1_name = tick.split(' & ')[0]

@@ -1,13 +1,12 @@
+import dask
+import numpy as np
+
 from xradio.measurement_set.load_processing_set import ProcessingSetIterator
-from graphviper.dask.client import local_client
 from graphviper.graph_tools import generate_dask_workflow
 from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
 from graphviper.graph_tools.map import map
 from graphviper.graph_tools.reduce import reduce
-
-import dask
-from dask.distributed import client
-import numpy as np
+from toolviper.dask.client import get_client
 
 from ._ms_data import get_correlated_data, get_axis_data
 
@@ -25,19 +24,13 @@ def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
     input_params['correlated_data'] = get_correlated_data(ps.get(0), data_group)
     input_params['vis_axis'] = vis_axis
 
-    active_client = client._get_global_client()
-    if active_client is not None:
-        n_threads = len(active_client.nthreads())
-        logger.debug(f"vis stats: dask client has {n_threads} threads.")
-    else:
-        n_threads = 1
-        logger.debug("vis stats: no dask client created.")
-    n_chunks = max(n_threads, 8)
-    logger.debug(f"Setting {n_chunks} n_chunks for parallel coords.")
+    active_client = get_client()
+    n_threads = active_client.thread_info()['n_threads'] if active_client is not None else 4
+    logger.debug(f"Setting {n_threads} n_chunks for parallel coords.")
 
     # Calculate min, max, mean using frequency parallel coords
     frequencies = ps.get_ps_freq_axis()
-    parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_chunks)}
+    parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_threads)}
     node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
 
     graph = map(

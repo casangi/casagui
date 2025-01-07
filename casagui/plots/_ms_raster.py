@@ -10,7 +10,7 @@ from ..data.measurement_set._ms_data import is_vis_axis, get_correlated_data
 from ..data.measurement_set._ms_select import select_ps 
 from ..data.measurement_set._ms_stats import calculate_ms_stats 
 from ..data.measurement_set._raster_data import raster_data
-from ..plot import raster_plot
+from ..plot import raster_plot_params, raster_plot
 from ..plots._ms_plot import MsPlot
 
 class MsRaster(MsPlot):
@@ -38,7 +38,7 @@ class MsRaster(MsPlot):
             self._interactive = False
         self._spw_color_limits = {}
 
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, title=None):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -91,14 +91,14 @@ class MsRaster(MsPlot):
             self._logger.info("Autoscale colorbar limits")
 
         # Select data and concat into xarray Dataset for raster plot
-        raster_xds, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, self._logger)
+        plot_data, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, self._logger)
+        plot_params = raster_plot_params(plot_data, x_axis, y_axis, vis_axis, data_group, selection, title, self._ms_basename, color_limits)
 
         # Plot selected xds
         if self._interactive:
             pass # send data to gui
         else:
-            ms_name = os.path.basename(self._ms_path)
-            self._plot = raster_plot(raster_xds, x_axis, y_axis, vis_axis, data_group, selection, ms_name, color_limits)
+            self._plot = raster_plot(plot_data, plot_params)
             if self._plot is None:
                 raise RuntimeError("Plot failed.")
 
@@ -135,10 +135,10 @@ class MsRaster(MsPlot):
         if data_group not in self.data_groups():
             raise ValueError(f"Invalid data_group {data_group}. Use get_data_groups() to see options.")
 
-        # Reassign x_axis or y_axis for spectrum data dimension
+        # Reassign "baseline" x_axis or y_axis for data dimension
         correlated_data = get_correlated_data(self._ps.get(0), data_group)
-        x_axis = "antenna_name" if x_axis == "baseline" and correlated_data == "SPECTRUM" else x_axis
-        y_axis = "antenna_name" if y_axis == "baseline" and correlated_data == "SPECTRUM" else y_axis
+        x_axis = 'antenna_name' if x_axis == 'baseline' and correlated_data == "SPECTRUM" else x_axis
+        y_axis = 'antenna_name' if y_axis == 'baseline' and correlated_data == "SPECTRUM" else y_axis
 
         data_dims = list(self._ps.get(0)[correlated_data].dims)
         if x_axis not in data_dims or y_axis not in data_dims:

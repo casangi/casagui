@@ -10,8 +10,8 @@ import pandas as pd
 from xradio.measurement_set.processing_set import ProcessingSet
 from toolviper.utils.logger import setup_logger
 
-from ..data.measurement_set._ms_utils import set_coordinates
 from ..io._ms_io import get_processing_set
+from ..data.measurement_set._ms_coords import set_coordinate_unit, set_datetime_coordinate, set_baseline_coordinate
 
 class MsPlot:
     def __init__(self, ms, log_level="INFO", logger_name="MsPlot", interactive=False):
@@ -21,11 +21,13 @@ class MsPlot:
         # Convert ms to zarr, get ProcessingSet
         self._ps, self._ms_path = get_processing_set(ms, self._logger)
 
+        for name, ms_xds in self._ps.items():
+            set_coordinate_unit(ms_xds)
+            set_datetime_coordinate(ms_xds)
+            self._ps[name] = set_baseline_coordinate(ms_xds)
+
         # ms basename (no path) for plot title and save filename
         self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
-
-        # Set baseline names instead of ids. Drop antenna name coords for raster plots.
-        set_coordinates(self._ps, logger_name=="MsRaster")
 
         self._interactive = interactive
         self._plot = None
@@ -104,9 +106,9 @@ class MsPlot:
             raise RuntimeError("No plot to show.  Run plot() to create plot.")
 
         if hist:
-            hvplot.show(self._plot.hist(), title=title)
+            hvplot.show(self._plot.hist(), title=title, threaded=True)
         else:
-            hvplot.show(self._plot, title=title)
+            hvplot.show(self._plot, title=title, threaded=True)
 
 
     def save(self, filename='ms_plot.png', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
