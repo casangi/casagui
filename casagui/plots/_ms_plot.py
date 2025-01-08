@@ -23,7 +23,6 @@ class MsPlot:
 
         for name, ms_xds in self._ps.items():
             set_coordinate_unit(ms_xds)
-            set_datetime_coordinate(ms_xds)
             self._ps[name] = set_baseline_coordinate(ms_xds)
 
         # ms basename (no path) for plot title and save filename

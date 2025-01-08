@@ -9,6 +9,7 @@ from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
 from ._ms_concat import concat_ps_xds
+from ._ms_coords import set_datetime_coordinate
 from ._ms_data import get_correlated_data, get_axis_data
 from ._ms_select import select_ps
 
@@ -30,6 +31,9 @@ def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
     raster_xds = concat_ps_xds(raster_ps, logger)
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
+
+    # Set float time to datetime
+    set_datetime_coordinate(raster_xds)
 
     # Set complex component of vis data
     raster_xds[correlated_data] = get_axis_data(raster_xds, vis_axis, data_group)
