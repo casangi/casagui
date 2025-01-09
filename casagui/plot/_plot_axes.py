@@ -22,7 +22,7 @@ def get_coordinate_labels(xds, coordinate):
 def _get_time_labels(time_xda):
     ''' Return time as formatted string, or None to autogenerate ticks '''
     if time_xda.size == 1:
-        time = time_xda.strftime("%d-%b-%Y %H:%M:%S")
+        time = time_xda.values.astype('datetime64[s]').item().strftime("%d-%b-%Y %H:%M:%S")
         time += " " + time_xda.attrs['scale'].upper()
         return time
     else:
