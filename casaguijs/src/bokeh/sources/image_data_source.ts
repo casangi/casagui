@@ -35,6 +35,7 @@ export class ImageDataSource extends ColumnDataSource {
     declare properties: ImageDataSource.Props
 
     imid: string
+    last_chan: [number, number]
 
     static __module__ = "casagui.bokeh.sources._image_data_source"
 
@@ -75,6 +76,9 @@ export class ImageDataSource extends ColumnDataSource {
             const mask = <Array<any>>this.data.msk
             this._mask_contour_source.data = this._mask_contour( mask )
         }
+        if ( typeof(this.last_chan) == 'undefined' ) {
+            this.last_chan = [ this.cur_chan[0].valueOf( ), this.cur_chan[1].valueOf( ) ]
+        }
         const _execute = () => {
             if ( this.init_script != null ) void execute( this.init_script, this )
         }
@@ -86,6 +90,7 @@ export class ImageDataSource extends ColumnDataSource {
                                    (data: any) => {
                                        if ( typeof data === 'undefined' || typeof data.chan === 'undefined' )
                                            console.log( 'ImageDataSource ERROR ENCOUNTERED <1>', data )
+                                       this.last_chan = [ this.cur_chan[0].valueOf( ), this.cur_chan[1].valueOf( ) ]
                                        this.cur_chan = [ s, c ]
                                        if ( this._mask_contour_source != null && 'chan' in data && 'msk' in data.chan ) {
                                            data.msk_contour = this._mask_contour( data.chan.msk )

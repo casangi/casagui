@@ -110,7 +110,7 @@ class CreateMask:
             path,file = splitpath(impath)
             if len(path) > 0 and not exists(path):
                 raise RuntimeError( f'''CreateMask: mask path '{path}' does not exist''' )
-            basename,ext = splitext(file)
+            basename,_ = splitext(file)
             return join( path, f'''{basename}{uniq}.mask''')
 
         ### python zip etc can only be read once
@@ -208,7 +208,7 @@ class CreateMask:
         ###
         ### Create mask paths if necessary
         ###
-        if create == False:
+        if not create:
             self._paths = self.__expand_mask_paths( zip(image_paths, mask_paths) )
             for _,msk in self._paths:
                 if not exists(msk):
@@ -244,7 +244,7 @@ class CreateMask:
             ###
             imdetails['gui']['cube'] = CubeMask( paths[0], mask=paths[1],
                                                  init_script = None if initialization_registered else \
-                                                               CustomJS( args=dict( ), code='''
+                                                               CustomJS( args={ }, code='''
                                                                          window.addEventListener( 'beforeunload',
                                                                                                   (event) => {
                                                                                                       function donePromise( ) {
@@ -266,8 +266,9 @@ class CreateMask:
             imdetails['gui']['image']['fig'] = imdetails['gui']['cube'].image( grid=False, height_policy='max', width_policy='max' )
 
             if self._fig['help'] is None:
-                 self._fig['help'] = self._ctrl_state['help'] = imdetails['gui']['cube'].help( rows=[ '<tr><td><i>stop button</i></td><td>clicking the stop button will close the dialog and control to python</td></tr>' ],
-                                                                                 position='right' )
+                self._fig['help'] = self._ctrl_state['help'] = imdetails['gui']['cube'].help( rows=[
+                    '<tr><td><i>stop button</i></td><td>clicking the stop button will close the dialog and control to python</td></tr>' ],
+                                                                                              position='right' )
             imdetails['gui']['channel-ctrl'] = imdetails['gui']['cube'].channel_ctrl( )
             imdetails['gui']['cursor-pixel-text'] = imdetails['gui']['cube'].pixel_tracking_text( margin=(-3, 5, 3, 30) )
 
@@ -316,7 +317,7 @@ class CreateMask:
             self._image_control_tab_groups = { }
 
         self._image_control_tab_groups[imid] = result
-        result.js_on_change( 'active', CustomJS( args=dict( ),
+        result.js_on_change( 'active', CustomJS( args={ },
                                                  code='''document._casa_last_control_tab = cb_obj.active''' ) )
         return result
 
@@ -344,16 +345,15 @@ class CreateMask:
         '''
         self.__initialized = True
 
-        width = 35
-        height = 35
         cwidth = 64
         cheight = 40
 
         self._ctrl_state['stop'] = TipButton( button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
                                               icon=svg_icon(icon_name="iclean-stop", size=18),
-                                              tooltip=Tooltip( content=HTML( '''Clicking this button will cause this tab to close and control will return to Python.''' ), position='left' ) )
+                                              tooltip=Tooltip( content=HTML( '''Clicking this button will cause this tab to close and control will return to Python.''' ),
+                                                               position='left' ) )
 
-        self._ctrl_state['stop'].js_on_click( CustomJS( args=dict( ),
+        self._ctrl_state['stop'].js_on_click( CustomJS( args={ },
                                                         code='''if ( confirm( "Are you sure you want to end this mask creation session and close the GUI?" ) ) {
                                                                     document._done( )
                                                                 }''' ) )

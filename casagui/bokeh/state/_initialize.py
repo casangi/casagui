@@ -32,14 +32,11 @@ import os
 import re
 from os import path
 from os.path import dirname, join, basename, abspath
+from urllib.parse import urlparse
 from bokeh import resources
 from ...utils import path_to_url, static_vars, have_network
 
 
-###!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-###!!!!! Later 'do_local_subst' should be used to substitute local cached Bokeh !!!!!
-###!!!!! javascript libraries when no network is available.                     !!!!!
-###!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @static_vars( initialized=False,
               do_local_subst=not have_network( ) )
 def initialize_bokeh( bokehjs_subst=None ):
@@ -120,6 +117,21 @@ def initialize_bokeh( bokehjs_subst=None ):
 
         user_bokehjs_replacement = expand_paths(bokehjs_subst)
         sys_urls = resources.Resources._old_js_files.fget(self)
+        if initialize_bokeh.do_local_subst:
+            local_urls = [ ]
+            for url in sys_urls:
+                pieces = urlparse(url)
+                if pieces.scheme != 'file':
+                    lib = basename(pieces.path)
+                    url = path_to_url(lib)
+                    if lib != url:
+                        local_urls.append(url)
+                    else:
+                        raise RuntimeError( '''Cannot confirm internet access and could not find local cached versions of Bokeh's libraries''' )
+                else:
+                    local_urls.append(url)
+            sys_urls = local_urls
+
         if len(user_bokehjs_replacement) == 0:
             ### move casaguijs library after Bokeh libraries
             return [x for x in sys_urls if not casaguijs_predicate(x)] + [x for x in sys_urls if casaguijs_predicate(x)]

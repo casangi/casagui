@@ -33,7 +33,7 @@ import os as __os
 
 try:
     from .__version__ import __version__
-except:
+except ModuleNotFoundError:
     ###
     ### __version__.py is generated as part of the build, but if the source tree
     ### for casagui is used directly for development, no __version__.py will be
@@ -43,9 +43,16 @@ except:
 
 
 def xml_interface_defs( ):
+    '''This function may eventually return XML files for use in generating casashell bindings. An
+       indentically named function provided by casatasks allows casagui to generate an
+       interactive clean task interface using the tclean XML file from casatasks.
+    '''
     return { }
 
 __mustache_interface_templates__ = { 'iclean': __os.path.join( __os.path.dirname(__file__), "private", "casashell", "iclean.mustache" ) }
 def mustache_interface_templates( ):
+    '''This provides a list of mustache files provided by casagui. It may eventually allow
+       casashell to generate all of its bindings at startup time. This would allow casashell
+       to be consistent with any version of casatasks that is availale.
+    '''
     return __mustache_interface_templates__
-
