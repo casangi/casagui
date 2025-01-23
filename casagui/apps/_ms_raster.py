@@ -1,17 +1,16 @@
 '''
 Implementation of the ``MsRaster`` application for measurement set raster plotting and editing
-visibilities
 '''
 
 import os
 import time
 
-from ..data.measurement_set._ms_data import is_vis_axis, get_correlated_data
-from ..data.measurement_set._ms_select import select_ps 
-from ..data.measurement_set._ms_stats import calculate_ms_stats 
-from ..data.measurement_set._raster_data import raster_data
-from ..plot import raster_plot_params, raster_plot
-from ..plots._ms_plot import MsPlot
+from casagui.plots._ms_plot import MsPlot
+from casagui.data.measurement_set._ms_data import is_vis_axis, get_correlated_data, get_dimension_values
+from casagui.data.measurement_set._ms_select import select_ps 
+from casagui.data.measurement_set._ms_stats import calculate_ms_stats 
+from casagui.data.measurement_set._raster_data import raster_data
+from casagui.plot import raster_plot_params, raster_plot
 
 class MsRaster(MsPlot):
     '''
@@ -19,7 +18,7 @@ class MsRaster(MsPlot):
 
     Args:
         ms (str): path in MSv2 (.ms) or MSv4 (.zarr) format.
-        log_level (str): logging threshold'. Options include "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL". Default "INFO".
+        log_level (str): logging threshold'. Options include "debug", "info", "warning", "error", "critical". Default "info".
         interactive (bool): whether to launch interactive GUI in browser. Default False.
 
     Example:
@@ -31,24 +30,24 @@ class MsRaster(MsPlot):
         msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, ms, log_level="INFO", interactive=False):
+    def __init__(self, ms, log_level="info", interactive=False):
         super().__init__(ms, log_level, "MsRaster", interactive)
         if interactive:
             self._logger.warn("Interactive GUI not implemented.")
             self._interactive = False
         self._spw_color_limits = {}
 
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, title=None):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, aggregator=None, agg_axis=None, iter_axis= None, iter_slice=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
-        Dimensions not set as plot axes can be selected, else the first will be used.
+        Dimensions not set as plot axes can be selected, else the first value will be used, unless aggregated.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna_name' for spectrum data).
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
-            data_group (str): xds data group name of correlated data, flags, weights, and uvw.  Default 'base'.
+            data_group (str): xds data group name for correlated data, flags, weights, and uvw.  Default 'base'.
                 Call data_groups() to see options.
             selection (dict): selected data to plot. Options include:
                 Processing Set selection: by summary column names. Call summary() to see options.
@@ -61,21 +60,33 @@ class MsRaster(MsPlot):
                     Call antennas() for antenna names. Select 'baseline' as "<name1> & <name2>".
                     Call summary() to list frequencies and polarizations.
                     TODO: how to select time?
+            aggregator (str): reduction for rasterization. Default None.
+                Options include 'max', 'mean', 'min', 'std', 'sum', 'var'.
+            agg_axis (str, list): which dimension to apply aggregator across. Default None.
+                Options include one or more dimensions. Non-agg dimension will be selected.
+                If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
+            iter_axis (str): dimension over which to iterate values (starting at layout start).
+            iter_slice (tuple or None): (start, end, step) or (end,) for selecting iteration values. Default None iterates all values.
+            title (str): Plot title, default None (generate title from ms and selection).
+            clear_plots (bool): whether to clear list of plots.
 
         If not interactive and plotting is successful, use show() or save() to view/save the plot only.
         '''
         start = time.time()
+        if clear_plots:
+            super().clear_plots()
 
         # Validate input arguments
-        x_axis, y_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection)
+        x_axis, y_axis, agg_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice)
 
         # Apply selection to processing set (select spw before calculating colorbar limits)
         selected_ps, selection = self._select_spw(selection)
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
-        self._logger.debug(f"Processing set maximum dimensions: {selected_ps.get_ps_max_dims()}")
+        self._logger.info(f"Maximum dimensions for spw: {selected_ps.get_ps_max_dims()}")
 
-        # Colorbar limits
-        if vis_axis == 'amp':
+        # Colorbar limits if not interactive (user can adjust interactively)
+        color_limits = None
+        if not self._interactive and not aggregator and vis_axis == 'amp':
             # For amplitude, limit colorbar range using ms stats
             spw_name = selection['spw_name']
             if spw_name in self._spw_color_limits:
@@ -83,36 +94,39 @@ class MsRaster(MsPlot):
             else:
                 color_limits = self._calc_amp_color_limits(selected_ps, data_group)
                 self._spw_color_limits[spw_name] = color_limits
-        else:
-            color_limits = None
         if color_limits:
             self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
         else:
             self._logger.info("Autoscale colorbar limits")
 
-        # Select data and concat into xarray Dataset for raster plot
-        plot_data, selection = raster_data(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, self._logger)
-        plot_params = raster_plot_params(plot_data, x_axis, y_axis, vis_axis, data_group, selection, title, self._ms_basename, color_limits)
-
-        # Plot selected xds
-        if self._interactive:
-            pass # send data to gui
+        if iter_axis:
+            iter_values = get_dimension_values(selected_ps, iter_axis)
+            if iter_slice:
+                if len(iter_slice) == 1:
+                    iter_values = iter_values[:iter_slice[0]]
+                else:
+                    iter_values = iter_values[iter_slice[0]:iter_slice[1]:iter_slice[2]]
+            for value in iter_values:
+                # Select iteration value and make plot
+                self._logger.info(f"Plot {iter_axis} iteration value {value}")
+                selection[iter_axis] = value
+                self._do_plot(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, title, color_limits)
         else:
-            self._plot = raster_plot(plot_data, plot_params)
-            if self._plot is None:
-                raise RuntimeError("Plot failed.")
+            self._do_plot(selected_ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, title, color_limits)
 
         self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
-    def show(self, hist=False):
+    def show(self, hist=False, layout=None):
         ''' 
-        Show interactive Bokeh plot in a browser. Plot tools include pan, zoom, hover, and save.
-            hist (bool): Whether to compute and adjoin histogram to plot.
+        Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
+        Multiple plots will be shown in one plot according to the layout.
+            hist (bool): Whether to compute and adjoin histogram to each plot.
+            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
         '''
         title="MsRaster " + self._ms_basename
-        super().show(title, hist)
+        super().show(hist, title, layout)
 
-    def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
+    def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None, layout=None):
         '''
         Save plot to file.
             filename (str): Name of file to save. Default '': see below.
@@ -122,35 +136,62 @@ class MsRaster(MsPlot):
             resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file. Default 'online'.
             toolbar (bool, None): Whether to include the toolbar in the exported plot (True) or not (False). Default None: display the toolbar unless plotfile is png.
             title (str): Custom title for exported HTML file.
+            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
 
-        If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.png.
+        If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
+        Multiple plots will be saved in one plot according to the layout, else if no layout saved individually with plot index appended {filename}_{index}.{ext}.
 
         '''
         if not filename:
             filename = f"{self._ms_basename}_raster.png"
-        super().save(filename, fmt, hist, backend, resources, toolbar, title)
+        super().save(filename, fmt, hist, backend, resources, toolbar, title, layout)
 
-    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection):
+    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice):
         ''' Check plot parameters against processing set xds variables '''
         if data_group not in self.data_groups():
             raise ValueError(f"Invalid data_group {data_group}. Use get_data_groups() to see options.")
 
-        # Reassign "baseline" x_axis or y_axis for data dimension
+        # Rename "baseline" x_axis or y_axis for SPECTRUM data dimension
         correlated_data = get_correlated_data(self._ps.get(0), data_group)
         x_axis = 'antenna_name' if x_axis == 'baseline' and correlated_data == "SPECTRUM" else x_axis
         y_axis = 'antenna_name' if y_axis == 'baseline' and correlated_data == "SPECTRUM" else y_axis
 
         data_dims = list(self._ps.get(0)[correlated_data].dims)
         if x_axis not in data_dims or y_axis not in data_dims:
-            raise ValueError(f"Invalid x or y axis, please select from {data_dims}")
+            raise ValueError(f"Invalid x or y axis, please select from {data_dims}.")
 
         if not is_vis_axis(vis_axis):
-            raise ValueError(f"Invalid vis_axis {vis_axis}")
+            raise ValueError(f"Invalid vis_axis {vis_axis}.")
 
         if selection and not isinstance(selection, dict):
-            raise RuntimeError("selection must be dictionary")
+            raise RuntimeError("Invalid selection: must be dictionary.")
 
-        return x_axis, y_axis
+        valid_aggs = ['max', 'mean', 'min', 'std', 'sum', 'var']
+        if aggregator and aggregator not in valid_aggs:
+            raise RuntimeError(f"Invalid aggregator {aggregator}. Options include {valid_aggs}.")
+
+        if aggregator and not agg_axis:
+            agg_axis = data_dims
+            agg_axis.remove(x_axis)
+            agg_axis.remove(y_axis)
+
+        if agg_axis:
+            if not isinstance(agg_axis, list) and not isinstance(agg_axis, str):
+                raise RuntimeError(f"Invalid agg axis {agg_axis}. Options include one or more dimensions {data_dims}.")
+            if isinstance(agg_axis, str):
+                agg_axis = [agg_axis]
+            for axis in agg_axis:
+                if axis not in data_dims or axis in (x_axis, y_axis):
+                    raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
+
+        if iter_axis and (iter_axis in (x_axis, y_axis) or iter_axis not in data_dims):
+                    raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
+        if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
+            raise RuntimeError(f"Invalid iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
+        if iter_slice and len(iter_slice) not in [1, 3]:
+            raise RuntimeError(f"Invalid iteration slice {iter_slice}. Must be one (end) or three (start, end, step) values.")
+
+        return x_axis, y_axis, agg_axis
 
     def _select_spw(self, selection):
         ''' Select first spw (minimum spectral_window_id) if not user-selected '''
@@ -204,3 +245,18 @@ class MsRaster(MsPlot):
             color_limits = (clip_min, clip_max)
         self._logger.debug(f"Stats elapsed time: {time.time() - start:.2f} s.")
         return color_limits
+
+    def _do_plot(self, ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, title, color_limits):
+        # Select data and concat into xarray Dataset for raster plot
+        plot_data, selection = raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, self._logger)
+
+        # Get options needed for plot
+        plot_params = raster_plot_params(plot_data, x_axis, y_axis, vis_axis, data_group, selection, title, self._ms_basename, color_limits, aggregator)
+
+        if self._interactive:
+            pass # send data to gui
+        else:
+            plot = raster_plot(plot_data, plot_params)
+            if plot is None:
+                raise RuntimeError("Plot failed.")
+            self._plots.append(plot)

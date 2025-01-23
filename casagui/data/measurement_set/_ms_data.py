@@ -1,9 +1,9 @@
 ''' Get MeasurementSet data from xarray Dataset '''
 
 import numpy as np
-import xarray as xr
 from astropy.constants import c
 from pandas import to_datetime
+import xarray as xr
 
 from xradio.measurement_set.processing_set import ProcessingSet
 
@@ -48,6 +48,15 @@ def get_axis_data(xds, axis, data_group=None):
         return _calc_weight_axis(xds, axis)
     else:
         raise ValueError(f"Invalid/unsupported axis {axis}")
+
+def get_dimension_values(ps, dimension):
+    values = []
+    for xds in ps.values():
+        try:
+            values.extend(xds[dimension].values.tolist())
+        except TypeError:
+            values.append(xds[dimension].values.item())
+    return sorted(set(values))
 
 def _is_coordinate_axis(axis):
     return axis in ['scan_number', 'time', 'frequency', 'polarization',
@@ -144,3 +153,4 @@ def _get_antenna_axis(xds, axis):
     if axis == 'baseline':
         return xds.baseline
     raise ValueError(f"Invalid antenna/baseline axis {axis}")
+

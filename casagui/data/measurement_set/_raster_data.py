@@ -2,6 +2,8 @@
 Functions to create a raster xarray Dataset of visibility/spectrum data from xradio ProcessingSet
 '''
 
+import time
+
 import numpy as np
 import xarray as xr
 
@@ -13,59 +15,66 @@ from ._ms_coords import set_datetime_coordinate
 from ._ms_data import get_correlated_data, get_axis_data
 from ._ms_select import select_ps
 
-def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, logger):
+def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, logger):
     '''
     Create raster xds: y_axis vs x_axis for vis axis.
         ps (xradio ProcessingSet): input MSv4 datasets
         x_axis (str): x-axis to plot
         y_axis (str): y-axis to plot
         vis_axis (str): visibility component to plot (amp, phase, real, imag)
+        data_group (str): xds data group name for correlated data, flags, weights, and uvw.
+        agg_axis (list): one or more axes to aggregate
         selection (dict): selected data dimensions (time, baseline, channel, polarization)
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
     correlated_data = get_correlated_data(ps.get(0), data_group)
-    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, selection, data_group, correlated_data, logger)
+    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, agg_axis, selection, data_group, correlated_data, logger)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
-    # Set float time to datetime
-    set_datetime_coordinate(raster_xds)
-
     # Set complex component of vis data
     raster_xds[correlated_data] = get_axis_data(raster_xds, vis_axis, data_group)
+
+    set_datetime_coordinate(raster_xds)
+
+    if aggregator and agg_axis:
+        raster_xds = aggregate_data(raster_xds, aggregator, agg_axis, logger)
 
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
     return raster_xds, selection
 
-def _select_raster_ps(ps, x_axis, y_axis, selection, data_group, correlated_data, logger):
+def _select_raster_ps(ps, x_axis, y_axis, agg_axis, selection, data_group, correlated_data, logger):
     ''' Apply user selection and select default dimensions if needed for raster data '''
     # Apply user selection first
     selected_ps = select_ps(ps, selection, data_group, logger)
 
-    # Determine dims which must be selected
+    # Determine which dims must be selected, add to selection, and do selection
     data_dims = ps.get(0)[correlated_data].dims
-    dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis)
+    dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis, agg_axis)
+    if dims_to_select:
+        dim_selection = {}
+        for dim in dims_to_select:
+            if dim not in selection:
+                selection[dim] = _get_first_dim_value(selected_ps, dim)
+                dim_selection[dim] = selection[dim]
+        if dim_selection:
+            logger.info(f"Applying default raster plane selection (using first index): {dim_selection}")
+            return select_ps(selected_ps, dim_selection, data_group, logger), selection
+    return selected_ps, selection
 
-    dim_selection = {}
-
-    for dim in dims_to_select:
-        if dim not in selection:
-            selection[dim] = _get_first_dim_value(ps, dim)
-            dim_selection[dim] = selection[dim]
-    logger.info(f"Applying default raster plane selection (using first index): {dim_selection}")
-
-    return select_ps(ps, selection, data_group, logger), selection
-
-def _get_raster_selection_dims(data_dims, x_axis, y_axis):
+def _get_raster_selection_dims(data_dims, x_axis, y_axis, agg_axis):
     dims = list(data_dims)
     if x_axis in dims:
         dims.remove(x_axis)
     if y_axis in dims:
         dims.remove(y_axis)
+    if agg_axis:
+        for axis in agg_axis:
+            dims.remove(axis)
     return dims
 
 def _get_first_dim_value(ps, dim):
@@ -101,3 +110,20 @@ def _add_index_dimensions(xds):
         xds = xds.assign_coords({"polarization_id": (xds.polarization.dims, np.array(range(xds.polarization.size)))})
 
     return xds
+
+def aggregate_data(xds, aggregator, agg_axis, logger):
+    logger.debug(f"Applying {aggregator} to {agg_axis}.")
+    if aggregator == 'max':
+        return xds.max(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'mean':
+        return xds.mean(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'median':
+        return xds.median(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'min':
+        return xds.min(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'std':
+        return xds.std(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'sum':
+        return xds.sum(dim=agg_axis, keep_attrs=True)
+    if aggregator == 'var':
+        return xds.var(dim=agg_axis, keep_attrs=True)

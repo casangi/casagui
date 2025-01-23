@@ -25,7 +25,6 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''End user plotting applications supplied by ``casagui``.'''
+''' Base plotting application supplied by ``casagui``.'''
 
-from ._ms_raster import MsRaster
-from ._ms_scatter import MsScatter
+from ._ms_plot import MsPlot

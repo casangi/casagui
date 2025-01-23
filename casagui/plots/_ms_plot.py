@@ -1,35 +1,32 @@
 '''
-Common functions for ms plots (raster and scatter)
+Parent class for ms plots (raster and scatter)
 '''
 import os
 import time
 
-import hvplot
 import pandas as pd
 
 from xradio.measurement_set.processing_set import ProcessingSet
 from toolviper.utils.logger import setup_logger
-
-from ..io._ms_io import get_processing_set
-from ..data.measurement_set._ms_coords import set_coordinate_unit, set_datetime_coordinate, set_baseline_coordinate
+from casagui.io._ms_io import get_processing_set
+from casagui.data.measurement_set._ms_coords import set_coordinates
 
 class MsPlot:
     def __init__(self, ms, log_level="INFO", logger_name="MsPlot", interactive=False):
         # Logger
-        self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level)
+        self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
 
         # Convert ms to zarr, get ProcessingSet
         self._ps, self._ms_path = get_processing_set(ms, self._logger)
 
         for name, ms_xds in self._ps.items():
-            set_coordinate_unit(ms_xds)
-            self._ps[name] = set_baseline_coordinate(ms_xds)
+            self._ps[name] = set_coordinates(ms_xds)
 
         # ms basename (no path) for plot title and save filename
         self._ms_basename = os.path.splitext(os.path.basename(self._ms_path))[0]
 
         self._interactive = interactive
-        self._plot = None
+        self._plots = []
 
 
     def summary(self, columns=None):
@@ -95,22 +92,38 @@ class MsPlot:
         '''
         self._ps.plot_phase_centers(label_all_fields, data_group)
 
-    def show(self, title='MsPlot', hist=False):
+    def clear_plots(self):
+        self._plots.clear()
+
+    def show(self, hist=False, title='MsPlot', layout=None):
         ''' 
-        Show interactive Bokeh plot in a browser.  Plot tools include pan, zoom, hover, and save.
-            title (str): Browser tab title.
+        Show interactive Bokeh plots in a browser.  Plot tools include pan, zoom, hover, and save.
+        Multiple plots (through iteration) will display up to 4 plots in two columns.
             hist (bool): Whether to compute and adjoin histogram to plot.
+            title (str): Browser tab title.
+            layout (tuple): (start, rows, columns) settings for multiple plots.
         '''
-        if self._plot is None:
-            raise RuntimeError("No plot to show.  Run plot() to create plot.")
+        if not self._plots:
+            raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
-        if hist:
-            hvplot.show(self._plot.hist(), title=title, threaded=True)
+        # Single plot or combine plots into layout
+        plot, num_plots, columns = self._layout_plots(hist, layout)
+
+        try:
+            import hvplot
+        except:
+            from casagui.utils import warn_import
+            warn_import("hvplot")
+            raise RuntimeError("Cannot show plot")
+
+        if num_plots > 1:
+            # Show plots in columns
+            hvplot.show(plot.cols(columns), title=title, threaded=True)
         else:
-            hvplot.show(self._plot, title=title, threaded=True)
+            # Show single plot
+            hvplot.show(plot.opts(width=900, height=600), title=title, threaded=True)
 
-
-    def save(self, filename='ms_plot.png', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None):
+    def save(self, filename='ms_plot.png', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None, layout=None):
         '''
         Save plot to file.
             filename (str): Name of file to save.
@@ -120,17 +133,75 @@ class MsPlot:
             resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file.
             toolbar (bool): Whether to include the toolbar in the exported plot.
             title (str): Custom title for exported HTML file.
+            layout (tuple): layout (start, rows, columns) settings for multiple plots.
         '''
-        if self._plot is None:
+        if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
+
+        # Single plot or combine plots into layout
+        plot, num_plots, columns = self._layout_plots(hist, layout)
+
+        try:
+            import hvplot
+        except:
+            from casagui.utils import warn_import
+            warn_import("hvplot")
+            raise RuntimeError("Cannot save plot")
 
         start = time.time()
         # embed BokehJS resources inline for offline use, else use content delivery network
         resources = 'inline' if resources == 'offline' else 'cdn'
 
-        if hist:
-            hvplot.save(self._plot.hist(), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+        if num_plots > 1:
+            # Save plots combined into layout
+            hvplot.save(plot.cols(columns), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+            self._logger.info(f"Saved plot to {filename}.")
         else:
-            hvplot.save(self._plot, filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
-        self._logger.info(f"Saved plot to {filename}.")
+            # Save plots individually with index appended
+            num_plots = len(self._plots)
+            name, ext = os.path.splitext(filename)
+            for i in range(num_plots):
+                plot = self._plots[i].opts(height=900, width=600)
+
+                if num_plots > 1:
+                    exportname = f"{name}_{i}{ext}"
+                else:
+                    exportname = filename
+
+                if hist:
+                    hvplot.save(plot.hist(), filename=exportname, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+                else:
+                    hvplot.save(plot, filename=exportname, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+                self._logger.info(f"Saved plot to {exportname}.")
+
         self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
+
+    def _layout_plots(self, hist, layout):
+        if layout:
+            if len(layout) != 3:
+                raise RuntimeError("Layout should contain (start, rows, columns)")
+            start, rows, columns = layout
+        else:
+            start, rows, columns = (0, 1, 1)
+
+        num_plots = len(self._plots)
+        if start >= num_plots:
+            raise IndexError(f"layout start {start} out of range {num_plots}.")
+
+        num_layout_plots = rows * columns
+        if num_plots < num_layout_plots:
+            num_layout_plots = num_plots
+
+        # Combine plots into layout
+        num_combined_plots = 0
+        combined_plot = None
+        for i in range(start, start + num_layout_plots):
+            if i >= num_plots:
+                break
+            plot = self._plots[i]
+            if hist:
+                combined_plot = plot.hist() if combined_plot is None else combined_plot + plot.hist()
+            else:
+                combined_plot = plot if combined_plot is None else combined_plot + plot
+            num_combined_plots += 1
+        return combined_plot, num_combined_plots, columns

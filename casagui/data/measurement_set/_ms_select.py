@@ -1,6 +1,7 @@
 ''' Apply selection dict to ProcessingSet or MeasurementSetXds '''
 
 from xradio.measurement_set.processing_set import ProcessingSet
+
 from ._ms_data import get_correlated_data
 
 def select_ps(ps, selection, data_group, logger):
@@ -62,7 +63,7 @@ def select_ps(ps, selection, data_group, logger):
             try:
                 selected_ms_xds = selected_ms_xds.sel(**ms_selection)
                 selected_ms_ps[name] = selected_ms_xds
-            except KeyError: # selection not in this xds, do not include in returned ps
+            except KeyError as ke: # selection not in this xds, do not include in returned ps
                 pass
         else:
             selected_ms_ps[name] = selected_ms_xds
