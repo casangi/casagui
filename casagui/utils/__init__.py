@@ -62,6 +62,7 @@ from ._conversion import serialize, deserialize
 from ._static import static_vars, static_dir
 from ._tiles import TMSTiles
 from ._contextmgrchain import ContextMgrChain
+from ._import_protected_module import ImportProtectedModule
 
 @static_vars(mgr=None)
 def resource_manager( ):

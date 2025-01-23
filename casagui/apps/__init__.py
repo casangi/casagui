@@ -27,16 +27,16 @@
 ########################################################################
 # pylint: disable=wrong-import-position
 '''End user applications supplied by ``casagui``.'''
-
-from ._plotants import plotants
-from ._plotbandpass import plotbandpass
-from ._createmask import CreateMask
-from ._createregion import CreateRegion
-from ._interactiveclean import InteractiveClean
+import sys
+from ..utils import copydoc, ImportProtectedModule
 from ..bokeh.state import initialize_session
-from ..utils import copydoc
 initialize_session()
 
-from ..private.casatasks.iclean import iclean
-from ..private.casatasks.createmask import createmask
-from ..private.casatasks.createregion import createregion
+sys.modules[__name__].__class__ = ImportProtectedModule( __name__, { 'plotants': '._plotants',
+                                                                     'plotbandpass': '._plotbandpass',
+                                                                     'CreateMask': '._createmask',
+                                                                     'CreateRegion': '._createregion',
+                                                                     'InteractiveClean': '._interactiveclean',
+                                                                     'iclean': '..private.casatasks.iclean',
+                                                                     'createmask': '..private.casatasks.createmask',
+                                                                     'createregion': '..private.casatasks.createregion' } )
