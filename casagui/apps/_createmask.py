@@ -38,6 +38,7 @@ from bokeh.models import Button, CustomJS, TabPanel, Tabs, Spacer, Div
 from casagui.toolbox import CubeMask, AppContext
 from casagui.bokeh.utils import svg_icon
 from bokeh.io import reset_output as reset_bokeh_output
+from bokeh.io import output_notebook
 from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
 from ..utils import resource_manager, reset_resource_manager, is_notebook
@@ -448,7 +449,7 @@ class CreateMask:
         GUI dialog between Python and JavaScript and this function would return it'''
         if isinstance(self._error_result,Exception):
             raise self._error_result
-        elif self._error_result is not None:
+        if self._error_result is not None:
             return self._error_result
         return self._paths
 
