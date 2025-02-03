@@ -32,3 +32,4 @@ from ._data_pipe import DataPipe
 from ._image_pipe import ImagePipe
 from ._image_data_source import ImageDataSource
 from ._spectra_data_source import SpectraDataSource
+from ._updatable_data_source import UpdatableDataSource
