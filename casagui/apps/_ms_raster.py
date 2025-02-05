@@ -80,9 +80,16 @@ class MsRaster(MsPlot):
         x_axis, y_axis, agg_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice)
 
         # Apply selection to processing set (select spw before calculating colorbar limits)
-        selected_ps, selection = self._select_spw(selection)
+        if selection:
+            selected_ps = self._do_user_ps_selection(selection)
+        else:
+            selected_ps = self._ps
+            selection = {}
+
+        if 'spw_name' not in selection:
+            selected_ps, selection = self._select_first_spw(selected_ps, selection)
         self._logger.info(f"Plotting {len(selected_ps)} msv4 datasets.")
-        self._logger.info(f"Maximum dimensions for spw: {selected_ps.get_ps_max_dims()}")
+        self._logger.info(f"Maximum dimensions for selected spw: {selected_ps.get_ps_max_dims()}")
 
         # Colorbar limits if not interactive (user can adjust interactively)
         color_limits = None
@@ -116,26 +123,23 @@ class MsRaster(MsPlot):
 
         self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
 
-    def show(self, hist=False, layout=None):
+    def show(self, title=None, port=0, layout=None):
         ''' 
         Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
-        Multiple plots will be shown in one plot according to the layout.
-            hist (bool): Whether to compute and adjoin histogram to each plot.
+        Multiple plots can be shown in a panel layout.  Default is to show the first plot only.
+            title (str): browser tab title.  Default is "MsRaster {ms_name}".
+            port (int): optional port number to use.  Default 0 will select a port number.
             layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
         '''
-        title="MsRaster " + self._ms_basename
-        super().show(hist, title, layout)
+        if not title:
+            title="MsRaster " + self._ms_basename
+        super().show(title, port, layout)
 
-    def save(self, filename='', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None, layout=None):
+    def save(self, filename='', fmt='auto', layout=None):
         '''
         Save plot to file.
             filename (str): Name of file to save. Default '': see below.
             fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
-            hist (bool): Whether to compute and adjoin histogram.  Default False.
-            backend (str): rendering backend, 'bokeh' or 'matplotlib'.  Default None = 'bokeh'.
-            resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file. Default 'online'.
-            toolbar (bool, None): Whether to include the toolbar in the exported plot (True) or not (False). Default None: display the toolbar unless plotfile is png.
-            title (str): Custom title for exported HTML file.
             layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
 
         If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
@@ -144,7 +148,7 @@ class MsRaster(MsPlot):
         '''
         if not filename:
             filename = f"{self._ms_basename}_raster.png"
-        super().save(filename, fmt, hist, backend, resources, toolbar, title, layout)
+        super().save(filename, fmt, layout)
 
     def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice):
         ''' Check plot parameters against processing set xds variables '''
@@ -185,7 +189,7 @@ class MsRaster(MsPlot):
                     raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
 
         if iter_axis and (iter_axis in (x_axis, y_axis) or iter_axis not in data_dims):
-                    raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
+            raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
         if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
             raise RuntimeError(f"Invalid iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
         if iter_slice and len(iter_slice) not in [1, 3]:
@@ -193,30 +197,34 @@ class MsRaster(MsPlot):
 
         return x_axis, y_axis, agg_axis
 
-    def _select_spw(self, selection):
-        ''' Select first spw (minimum spectral_window_id) if not user-selected '''
-        if not selection or 'spw_name' not in selection:
-            if selection:
-                # Find first spw in user-selected ps
-                selected_ps = self._ps.sel(**selection)
-            else:
-                selected_ps = self._ps
-            first_spw_name = self._get_first_spw_name(selected_ps)
-            spw_selection = {'spw_name': first_spw_name}
-        else:
-            spw_selection = {'spw_name': selection['spw_name']}
+    def _do_user_ps_selection(self, selection):
+        if not selection:
+            return self._ps
 
-        self._logger.info(f"Applying spw selection to processing set: {spw_selection}")
-        selected_ps = self._ps.sel(**spw_selection)
+        # Select summary columns or by query
+        ps_selection = {}
+        summary_columns = self._ps.summary().columns
+        for key in selection:
+            if key == 'query' or key in summary_columns:
+                ps_selection[key] = selection[key]
+        return self._ps.sel(**ps_selection)
+  
+    def _select_first_spw(self, ps, selection):
+        ''' Select first spw (minimum spectral_window_id) if not user-selected '''
+        first_spw_name = self._get_first_spw_name()
+        spw_selection = {'spw_name': first_spw_name}
+        selected_ps = ps.sel(**spw_selection)
+
+        # Add to selection for plot title
         selection = selection | spw_selection if selection else spw_selection
         return selected_ps, selection
 
-    def _get_first_spw_name(self, ps):
+    def _get_first_spw_name(self):
         ''' Return first spw id name '''
         # Collect spw names by id
         spw_id_names = {}
-        for key in ps:
-            freq_xds = ps[key].frequency
+        for xds in self._ps.values():
+            freq_xds = xds.frequency
             spw_id_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
 
         # spw not selected: select first spw by id and return name
@@ -224,7 +232,7 @@ class MsRaster(MsPlot):
         first_spw_name = spw_id_names[first_spw_id]
 
         # describe selected spw
-        spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
+        spw_df = self._ps.summary()[self._ps.summary()['spw_name'] == first_spw_name]
         self._logger.info(f"Selecting first spw id {first_spw_id} with frequency range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
         return first_spw_name
 

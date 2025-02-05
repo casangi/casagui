@@ -4,15 +4,19 @@ Parent class for ms plots (raster and scatter)
 import os
 import time
 
+import numpy as np
 import pandas as pd
+import hvplot
 
 from xradio.measurement_set.processing_set import ProcessingSet
 from toolviper.utils.logger import setup_logger
+
 from casagui.io._ms_io import get_processing_set
 from casagui.data.measurement_set._ms_coords import set_coordinates
+from casagui.data.measurement_set._ms_data import is_vis_axis
 
 class MsPlot:
-    def __init__(self, ms, log_level="INFO", logger_name="MsPlot", interactive=False):
+    def __init__(self, ms, log_level="info", logger_name="MsPlot", interactive=False):
         # Logger
         self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
 
@@ -38,6 +42,7 @@ class MsPlot:
                     'by_msv4': Print formatted summary metadata by MSv4.
                     str, list: Print a subset of summary columns in ProcessingSet.
                         Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+            Returns: list of unique values when single column is requested, else None
         '''
         pd.set_option("display.max_rows", len(self._ps))
         pd.set_option("display.max_columns", 12)
@@ -64,13 +69,11 @@ class MsPlot:
         else:
             if isinstance(columns, str):
                 columns = [columns]
-            summary_columns = []
-            for column in columns:
-                if column in ps_summary.columns:
-                    summary_columns.append(column)
-                else:
-                    print(f"Ignoring invalid summary column: {column}")
-            print(ps_summary[summary_columns])
+            col_df = ps_summary[columns]
+            print(col_df)
+            if len(columns) == 1:
+                return self._get_unique_values(col_df)
+
 
     def data_groups(self):
         ''' Get data groups from all ProcessingSet ms_xds. Returns set. '''
@@ -80,7 +83,7 @@ class MsPlot:
         return set(data_groups)
 
     def antennas(self, plot_positions=False):
-        ''' Print antenna names in ProcessingSet antenna_xds, optionally plot antenna positions '''
+        ''' Get antenna names in ProcessingSet antenna_xds, optionally plot antenna positions '''
         if plot_positions:
             self._ps.plot_antenna_positions()
         return self._ps.get_combined_antenna_xds().antenna_name.values.tolist()
@@ -95,19 +98,16 @@ class MsPlot:
     def clear_plots(self):
         self._plots.clear()
 
-    def show(self, hist=False, title='MsPlot', layout=None):
+    def show(self, title='MsPlot', port=0, layout=None):
         ''' 
         Show interactive Bokeh plots in a browser.  Plot tools include pan, zoom, hover, and save.
-        Multiple plots (through iteration) will display up to 4 plots in two columns.
-            hist (bool): Whether to compute and adjoin histogram to plot.
-            title (str): Browser tab title.
+        Multiple plots can be displayed in a panel layout. Default will show first plot only.
+            title (str): browser tab title.
+            port (int): allows specifying port number.
             layout (tuple): (start, rows, columns) settings for multiple plots.
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
-
-        # Single plot or combine plots into layout
-        plot, num_plots, columns = self._layout_plots(hist, layout)
 
         try:
             import hvplot
@@ -116,6 +116,10 @@ class MsPlot:
             warn_import("hvplot")
             raise RuntimeError("Cannot show plot")
 
+        # Single plot or combine plots into layout
+        layout = (0, 1, 1) if layout is None else layout 
+        plot, num_plots, columns = self._layout_plots(layout)
+
         if num_plots > 1:
             # Show plots in columns
             hvplot.show(plot.cols(columns), title=title, threaded=True)
@@ -123,67 +127,57 @@ class MsPlot:
             # Show single plot
             hvplot.show(plot.opts(width=900, height=600), title=title, threaded=True)
 
-    def save(self, filename='ms_plot.png', fmt='auto', hist=False, backend='bokeh', resources='online', toolbar=None, title=None, layout=None):
+    def save(self, filename='ms_plot.png', fmt='auto', layout=None):
         '''
         Save plot to file.
             filename (str): Name of file to save.
             fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif') or 'auto': inferred from filename.
-            hist (bool): Whether to compute and adjoin histogram to plot.
-            backend (str): rendering backend, 'bokeh' or 'matplotlib'.
-            resources (str): whether to save with 'online' or 'offline' resources.  'offline' creates a larger file.
-            toolbar (bool): Whether to include the toolbar in the exported plot.
-            title (str): Custom title for exported HTML file.
-            layout (tuple): layout (start, rows, columns) settings for multiple plots.
+            layout (tuple): panel layout settings (start, rows, columns) for multiple plots.
         '''
         if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
 
-        # Single plot or combine plots into layout
-        plot, num_plots, columns = self._layout_plots(hist, layout)
-
-        try:
-            import hvplot
-        except:
-            from casagui.utils import warn_import
-            warn_import("hvplot")
-            raise RuntimeError("Cannot save plot")
+        # Get single plot, or combine plots into panel layout
+        layout = (0, 1, 1) if layout is None else layout 
+        plot, is_combined = self._layout_plots(layout)
 
         start = time.time()
-        # embed BokehJS resources inline for offline use, else use content delivery network
-        resources = 'inline' if resources == 'offline' else 'cdn'
-
-        if num_plots > 1:
-            # Save plots combined into layout
-            hvplot.save(plot.cols(columns), filename=filename, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+        if is_combined:
+            # Save plots combined into one layout
+            hvplot.save(plot.cols(layout[2]), filename=filename, fmt=fmt)
             self._logger.info(f"Saved plot to {filename}.")
         else:
             # Save plots individually with index appended
             num_plots = len(self._plots)
             name, ext = os.path.splitext(filename)
-            for i in range(num_plots):
-                plot = self._plots[i].opts(height=900, width=600)
+            add_index = num_plots - start > 1
 
-                if num_plots > 1:
+            for i in range(layout[0], num_plots):
+                plot = self._plots[i].opts(height=600, width=900)
+                if add_index:
                     exportname = f"{name}_{i}{ext}"
                 else:
                     exportname = filename
-
-                if hist:
-                    hvplot.save(plot.hist(), filename=exportname, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
-                else:
-                    hvplot.save(plot, filename=exportname, fmt=fmt, backend=backend, resources=resources, toolbar=toolbar, title=title)
+                hvplot.save(plot, filename=exportname, fmt=fmt)
                 self._logger.info(f"Saved plot to {exportname}.")
 
         self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
 
-    def _layout_plots(self, hist, layout):
-        if layout:
-            if len(layout) != 3:
-                raise RuntimeError("Layout should contain (start, rows, columns)")
-            start, rows, columns = layout
-        else:
-            start, rows, columns = (0, 1, 1)
+    def _get_unique_values(self, df):
+        values = df.to_numpy()
+        try:
+            # numeric arrays
+            return np.unique(np.concatenate(values))
+        except ValueError:
+            # string arrays
+            all_values = [row[0] for row in values]
+            return np.unique(np.concatenate(all_values))
 
+    def _layout_plots(self, layout):
+        if len(layout) != 3:
+            raise RuntimeError("Layout should contain (start, rows, columns)")
+
+        start, rows, columns = layout
         num_plots = len(self._plots)
         if start >= num_plots:
             raise IndexError(f"layout start {start} out of range {num_plots}.")
@@ -199,9 +193,6 @@ class MsPlot:
             if i >= num_plots:
                 break
             plot = self._plots[i]
-            if hist:
-                combined_plot = plot.hist() if combined_plot is None else combined_plot + plot.hist()
-            else:
-                combined_plot = plot if combined_plot is None else combined_plot + plot
+            combined_plot = plot if combined_plot is None else combined_plot + plot
             num_combined_plots += 1
-        return combined_plot, num_combined_plots, columns
+        return combined_plot, num_combined_plots > 1

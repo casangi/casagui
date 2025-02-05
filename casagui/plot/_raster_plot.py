@@ -52,7 +52,7 @@ def _get_plot_title(xds, selection, ms_name):
             ps_selection.append(f"field: {selection[key]}")
         elif key == 'source_name':
             ps_selection.append(f"source: {selection[key]}")
-        elif key == 'intent':
+        elif key == 'intents':
             ps_selection.append(f"intent: {selection[key]}")
         else:
             # Add selected dimensions to title: name (index)
@@ -89,22 +89,19 @@ def raster_plot(xds, plot_params):
     # Set plot axes to numeric coordinates if needed
     set_index_coordinates(xds, (x_axis, y_axis))
 
-    # Unflagged and flagged data
+    # Unflagged and flagged data.  Use same name, for histogram dimension.
     if aggregator: 
         xda_name = "_".join([aggregator, c_axis])
     else:
         xda_name = c_axis
-    flagged_xda_name = "flagged_" + xda_name
-
     unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(xda_name)
-    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(flagged_xda_name)
+    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(xda_name)
 
     # Plot data
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
     try:
         unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, "viridis")
-        show_info = unflagged_plot is None
-        flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, "reds", show_info)
+        flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, "reds")
     except Exception as e:
         print("Plot exception:", e)
 
@@ -116,7 +113,7 @@ def raster_plot(xds, plot_params):
     else:
         return flagged_plot
 
-def _plot_xda(xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap, show_info=True):
+def _plot_xda(xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap):
     # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
     if xda.count() == 0:
         return None
@@ -131,7 +128,7 @@ def _plot_xda(xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_labe
             title=title, xlabel=x_label, ylabel=y_label,
             xformatter=x_formatter, yformatter=y_formatter,
             rot=90, xticks=x_ticks, yticks=y_ticks,
-            hover=show_info, colorbar=show_info,
+            hover=True, colorbar=True,
         )
     else:
         # Cannot raster 1D data, use scatter from pandas dataframe
