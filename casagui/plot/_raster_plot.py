@@ -53,7 +53,7 @@ def _get_plot_title(xds, selection, ms_name):
         elif key == 'source_name':
             ps_selection.append(f"source: {selection[key]}")
         elif key == 'intents':
-            ps_selection.append(f"intent: {selection[key]}")
+            ps_selection.append(f"intents: {selection[key]}")
         else:
             # Add selected dimensions to title: name (index)
             label = get_coordinate_labels(xds, key)

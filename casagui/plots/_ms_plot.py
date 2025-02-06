@@ -109,52 +109,49 @@ class MsPlot:
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
-        try:
-            import hvplot
-        except:
-            from casagui.utils import warn_import
-            warn_import("hvplot")
-            raise RuntimeError("Cannot show plot")
-
         # Single plot or combine plots into layout
         layout = (0, 1, 1) if layout is None else layout 
-        plot, num_plots, columns = self._layout_plots(layout)
+        plot, is_layout = self._layout_plots(layout)
 
-        if num_plots > 1:
+        if is_layout:
             # Show plots in columns
-            hvplot.show(plot.cols(columns), title=title, threaded=True)
+            hvplot.show(plot.cols(layout[2]), title=title, threaded=True)
         else:
             # Show single plot
             hvplot.show(plot.opts(width=900, height=600), title=title, threaded=True)
 
-    def save(self, filename='ms_plot.png', fmt='auto', layout=None):
+    def save(self, filename='ms_plot.png', fmt='auto', layout=None, export_range='one'):
         '''
         Save plot to file.
             filename (str): Name of file to save.
             fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif') or 'auto': inferred from filename.
             layout (tuple): panel layout settings (start, rows, columns) for multiple plots.
+            exprange (str): whether to save starting plot only ('one') or all plots starting at starting plot ('all') with index in filename. Ignored if layout is a grid.
+
+        When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
         '''
         if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
 
         # Get single plot, or combine plots into panel layout
         layout = (0, 1, 1) if layout is None else layout 
-        plot, is_combined = self._layout_plots(layout)
+        plot, is_layout = self._layout_plots(layout)
 
         start = time.time()
-        if is_combined:
+        if is_layout:
             # Save plots combined into one layout
             hvplot.save(plot.cols(layout[2]), filename=filename, fmt=fmt)
             self._logger.info(f"Saved plot to {filename}.")
         else:
-            # Save plots individually with index appended
+            # Save plots individually, with index appended if exprange='all' and multiple plots.
             num_plots = len(self._plots)
+            start = layout[0]
+            end = num_plots if export_range == 'all' else start + 1
             name, ext = os.path.splitext(filename)
-            add_index = num_plots - start > 1
 
-            for i in range(layout[0], num_plots):
+            for i in range(start, end):
                 plot = self._plots[i].opts(height=600, width=900)
-                if add_index:
+                if export_range == 'all' and num_plots > 1:
                     exportname = f"{name}_{i}{ext}"
                 else:
                     exportname = filename
@@ -195,4 +192,4 @@ class MsPlot:
             plot = self._plots[i]
             combined_plot = plot if combined_plot is None else combined_plot + plot
             num_combined_plots += 1
-        return combined_plot, num_combined_plots > 1
+        return combined_plot, num_layout_plots > 1

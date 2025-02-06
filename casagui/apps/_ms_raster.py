@@ -129,26 +129,30 @@ class MsRaster(MsPlot):
         Multiple plots can be shown in a panel layout.  Default is to show the first plot only.
             title (str): browser tab title.  Default is "MsRaster {ms_name}".
             port (int): optional port number to use.  Default 0 will select a port number.
+
+            Options for showing multiple plots (iteration or clearplots=False):
             layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
         '''
         if not title:
             title="MsRaster " + self._ms_basename
         super().show(title, port, layout)
 
-    def save(self, filename='', fmt='auto', layout=None):
+    def save(self, filename='', fmt='auto', layout=None, export_range='one'):
         '''
         Save plot to file.
             filename (str): Name of file to save. Default '': see below.
             fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
-            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
+
+            Options for saving multiple plots (iteration or clearplots=False):
+            layout (tuple): (start, rows, columns) for saving multiple plots in grid or selecting start plot. Default None is single plot (0,1,1).
+            export_range(str): when layout is single plot, whether to save start plot only ('one') or all plots starting at start plot ('all'). Ignored if layout is a grid.
 
         If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
-        Multiple plots will be saved in one plot according to the layout, else if no layout saved individually with plot index appended {filename}_{index}.{ext}.
-
+        When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
         '''
         if not filename:
             filename = f"{self._ms_basename}_raster.png"
-        super().save(filename, fmt, layout)
+        super().save(filename, fmt, layout, export_range)
 
     def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice):
         ''' Check plot parameters against processing set xds variables '''

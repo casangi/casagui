@@ -6,7 +6,7 @@ from xradio.measurement_set.processing_set import ProcessingSet
 
 from ._ms_data import get_axis_data
 from ._ms_select import select_ps
-from ._ms_utils import concat_ps_xds
+from ._ms_concat import concat_ps_xds
 
 def scatter_data(ps, x_axis, y_axis, selection, data_group, logger):
     '''
