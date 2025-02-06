@@ -37,7 +37,7 @@ class MsRaster(MsPlot):
             self._interactive = False
         self._spw_color_limits = {}
 
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, aggregator=None, agg_axis=None, iter_axis= None, iter_slice=None, title=None, clear_plots=True):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', data_group='base', selection=None, aggregator=None, agg_axis=None, iter_axis= None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -66,7 +66,6 @@ class MsRaster(MsPlot):
                 Options include one or more dimensions. Non-agg dimension will be selected.
                 If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
             iter_axis (str): dimension over which to iterate values (starting at layout start).
-            iter_slice (tuple or None): (start, end, step) or (end,) for selecting iteration values. Default None iterates all values.
             title (str): Plot title, default None (generate title from ms and selection).
             clear_plots (bool): whether to clear list of plots.
 
@@ -77,7 +76,7 @@ class MsRaster(MsPlot):
             super().clear_plots()
 
         # Validate input arguments
-        x_axis, y_axis, agg_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice)
+        x_axis, y_axis, agg_axis = self._check_plot_inputs(x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis)
 
         # Apply selection to processing set (select spw before calculating colorbar limits)
         if selection:
@@ -108,11 +107,6 @@ class MsRaster(MsPlot):
 
         if iter_axis:
             iter_values = get_dimension_values(selected_ps, iter_axis)
-            if iter_slice:
-                if len(iter_slice) == 1:
-                    iter_values = iter_values[:iter_slice[0]]
-                else:
-                    iter_values = iter_values[iter_slice[0]:iter_slice[1]:iter_slice[2]]
             for value in iter_values:
                 # Select iteration value and make plot
                 self._logger.info(f"Plot {iter_axis} iteration value {value}")
@@ -154,7 +148,7 @@ class MsRaster(MsPlot):
             filename = f"{self._ms_basename}_raster.png"
         super().save(filename, fmt, layout, export_range)
 
-    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis, iter_slice):
+    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, iter_axis):
         ''' Check plot parameters against processing set xds variables '''
         if data_group not in self.data_groups():
             raise ValueError(f"Invalid data_group {data_group}. Use get_data_groups() to see options.")
@@ -196,8 +190,6 @@ class MsRaster(MsPlot):
             raise RuntimeError(f"Invalid aggregator axis {axis}. Must be dimension which is not a plot axis.")
         if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
             raise RuntimeError(f"Invalid iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
-        if iter_slice and len(iter_slice) not in [1, 3]:
-            raise RuntimeError(f"Invalid iteration slice {iter_slice}. Must be one (end) or three (start, end, step) values.")
 
         return x_axis, y_axis, agg_axis
 
