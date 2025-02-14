@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2024
+# Copyright (C) 2024,2025
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -35,8 +35,9 @@ from contextlib import asynccontextmanager
 from bokeh.layouts import row, column, grid
 from bokeh.plotting import show
 from bokeh.models import Button, CustomJS, TabPanel, Tabs, Spacer, Div, Dropdown
-from casagui.toolbox import CubeMask, AppContext
+from casagui.toolbox import CubeMask, AppContext, RegionList
 from casagui.bokeh.utils import svg_icon
+from bokeh.io import curdoc
 from bokeh.io import reset_output as reset_bokeh_output
 from bokeh.models.dom import HTML
 from bokeh.models.ui.tooltips import Tooltip
@@ -52,9 +53,10 @@ class CreateRegion:
     and then returned as astropy regions.
     '''
 
-    def __stop( self ):
+    def __stop( self, result ):
+        self._drawn_regions = result
         if not self.__result_future.done( ):
-            self.__result_future.set_result(self.__retrieve_result( ))
+            self.__result_future.set_result(self._drawn_regions)
 
     def _abort_handler( self, err ):
         self._error_result = err
@@ -188,8 +190,9 @@ class CreateRegion:
 
             ###
             ### Use CubeMask init_script to set up a 'beforeunload' handler which will signal to
-            ### CubeMask that the app is shuting down. It should then send the final results to
-            ### Python and then call the provided callback (the Promise resolve function).
+            ### CubeMask that the app is shuting down (with 'document._cube_done( )'). It should then
+            ### send the final results to Python and then call the provided callback (the Promise
+            ### resolve function).
             ###
             ### Waiting for this to complete before the browser tab is unloaded requires waiting
             ### for the promise to be resolved within an async function. Creating one to do the
@@ -199,21 +202,7 @@ class CreateRegion:
             ### If debugging this, make only a small change before confirming that exit from the
             ### Python asyncio loop continues to work... seems to be fiddly
             ###
-            imdetails['gui']['cube'] = CubeMask( path,
-                                                 init_script = None if initialization_registered else \
-                                                               CustomJS( args=dict( ), code='''
-                                                                         window.addEventListener( 'beforeunload',
-                                                                                                  (event) => {
-                                                                                                      function donePromise( ) {
-
-                                                                                                          return new Promise( (resolve,reject) => {
-                                                                                                                                 // call by name does not work here:
-                                                                                                                                 //       document._done(cb=resolve)  ???
-                                                                                                                                 document._done(null,resolve)
-                                                                                                                              } )
-                                                                                                      }
-                                                                                                      ( async () => { await donePromise( ) } )( )
-                                                                                                  } )''' ) )
+            imdetails['gui']['cube'] = CubeMask( path )
 
             initialization_registered = True
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
@@ -241,6 +230,67 @@ class CreateRegion:
                 imdetails['gui']['spectrum'] = None
                 imdetails['gui']['slider'] = None
                 imdetails['gui']['goto'] = None
+
+        init_args = { 'sources': { } }
+        last_cube = None
+        for k,v in self._region_state.items( ):
+            init_args['sources'][k] = v['gui']['image']['src']
+            last_cube = v['gui']['cube']
+
+        def create_close_code( callback='' ):
+            CUBE_CALLBACK = f''', {callback}''' if callback else ''
+            return f'''let source = null
+                       const result = {{ }}
+                       const srcmap = casalib.reduce( ( acc, img, src ) => {{
+                           result[img] = {{ }}
+                           acc[src.id] = img
+                           if ( source == null ) source = src
+                           return acc }}, sources, {{ }} )
+                       if ( source && document._cube_done )
+                       document._cube_done(
+                           casalib.reduce(
+                               (acc, poly) => {{
+                                   acc[srcmap[poly.source.id]][poly.label] = {{
+                                       channels: poly.getchans( ),
+                                   geometry: poly.geometry,
+                                   styling: poly.styling }}
+                                   return acc }},
+                               source._polys.list( ),
+                               result )
+                           {CUBE_CALLBACK} )'''
+
+        ##
+        ## Previously this beforeunload setup was accomplished by adding this to one of the
+        ## CubeMask.init_script. This worked until a reference was needed to all of the
+        ## ImageDataSources (which is an element of CubeMask). This resulted in a circular
+        ## reference when the plot was being rendered.
+        ##
+        ## The document._cube_done callback ( `(msg) => { resolve(true); return false }` ) can
+        ## return `false` (indicating that the window should not be closed by _cube_done)
+        ## because the window is already being closed when this beforeunload callback
+        ## is called.
+        ##
+        curdoc( ).js_on_event( 'document_ready', CustomJS( args=init_args,
+                                                           code=f'''window.addEventListener( 'beforeunload',
+                                                                                             (event) => {{
+                                                                                                 function donePromise( ) {{
+                                                                                                     return new Promise(
+                                                                                                         (resolve,reject) => {{
+                                                                                                             {create_close_code('(msg) => { resolve(true); return false }')}
+                                                                                                         }} )
+                                                                                                 }}
+                                                                                                 ( async () => {{ await donePromise( ) }} )( )
+                                                                                             }} )''' ) )
+
+        self._ctrl_state['stop'] = TipButton( button_type="danger", max_width=64, max_height=40, name='stop',
+                                              icon=svg_icon(icon_name="iclean-stop", size=18),
+                                              tooltip=Tooltip( content=HTML( '''Clicking this button will cause this tab to close and control will return to Python.''' ),
+                                                                             position='left' ) )
+
+        self._ctrl_state['stop'].js_on_click( CustomJS( args=init_args,
+                                                        code=f'''if ( confirm( "Are you sure you want to end this mask creation session and close the GUI?" ) ) {{
+                                                                     {create_close_code( )}
+                                                                 }}''' ) )
 
         ###
         ### This is used to tell whether the websockets have been initialized, but also to
@@ -321,7 +371,7 @@ class CreateRegion:
         result = Tabs( tabs= [ TabPanel( child=self._create_location_panel(imdetails),
                                            title='Placement' ),
                                  TabPanel( child=self._create_style_adjust(imdetails),
-                                           title='Config' ) ] + 
+                                           title='Config' ) ] +
                              ( [ TabPanel( child=imdetails['gui']['spectrum'],
                                            title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
                              [ TabPanel( child=self._create_colormap_adjust(imdetails),
@@ -363,24 +413,10 @@ class CreateRegion:
 
         width = 35
         height = 35
-        cwidth = 64
-        cheight = 40
-
-        self._ctrl_state['stop'] = TipButton( button_type="danger", max_width=cwidth, max_height=cheight, name='stop',
-                                              icon=svg_icon(icon_name="iclean-stop", size=18),
-                                              tooltip=Tooltip( content=HTML( '''Clicking this button will cause this tab to close and control will return to Python.''' ), position='left' ) )
-
-        self._ctrl_state['stop'].js_on_click( CustomJS( args=dict( ),
-                                                        code='''if ( confirm( "Are you sure you want to end this mask creation session and close the GUI?" ) ) {
-                                                                    document._done( )
-                                                                }''' ) )
-
-
 
         tab_panels = list( map( self._create_image_panel, self._region_state.items( ) ) )
 
         for imid, imdetails in self._region_state.items( ):
-            print( '>>>>>---region_state------>>>>', imid, imdetails )
             imdetails['gui']['cube'].connect( )
 
         image_tabs = Tabs( tabs=tab_panels, tabs_location='below', height_policy='max', width_policy='max' )
@@ -461,18 +497,17 @@ class CreateRegion:
         ###    self.__result_future = asyncio.Future( )
         ###    yield ( self.__result_future, { 'cube': cube } )
 
-    def __retrieve_result( self ):
-        '''If InteractiveClean had a return value, it would be filled in as part of the
-        GUI dialog between Python and JavaScript and this function would return it'''
-        if isinstance(self._error_result,Exception):
-            raise self._error_result
-        elif self._error_result is not None:
-            return self._error_result
-        return self._drawn_regions
-
     def result( self ):
         '''If InteractiveClean had a return value, it would be filled in as part of the
         GUI dialog between Python and JavaScript and this function would return it'''
         if self.__result_future is None:
             raise RuntimeError( 'no interactive clean result is available' )
-        return self.__result_future.result( )
+        if not self.__result_future.done( ):
+            raise RuntimeError( 'regions not yet available to be returned' )
+
+        result = { }
+        for img, regions in self.__result_future.result( ).items( ):
+            _, fits_header = self._region_state[img]['gui']['cube'].fits_header( )
+            result[img] = RegionList( regions, fits_header )
+
+        return result

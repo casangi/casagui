@@ -96,7 +96,7 @@ class CubeMask:
         init_script: CustomJS script
             Script to run upon initialization of Cube
         '''
-        self._user_init_script = init_script
+        self.init_script = init_script
         self.COUNT = 1
         self.CCOUNT = 1
 
@@ -239,7 +239,7 @@ class CubeMask:
         '''stop interactive masking
         '''
         if self._stop_serving_function:
-            self._stop_serving_function( )
+            self._stop_serving_function( self._result )
 
     def _init_pipes( self ):
         '''set up websockets
@@ -273,6 +273,9 @@ class CubeMask:
         self._init_pipes( )
         return self._pipe['image'].shape
 
+    def fits_header( self ):
+        return self._pipe['image'].fits_header( )
+
     def channel( self, pixel_type=np.float64 ):
         '''return array for the current channel
         '''
@@ -280,15 +283,7 @@ class CubeMask:
         return self._pipe['image'].channel( self._image_source.cur_chan, pixel_type )
 
     def jsmask_to_raw( self, all_jsmasks ):
-        '''The CubeMask raw format uses tuples for dictionary keys but tuples are not a type that can be
-        created in javascript...
-
-        Expected Format: { <IMAGE-NAME>: { 'mask': [...], 'polys': [...] }, ... }
-        '''
-        def convert_elem( vec, f=lambda x: x ):
-            return { f(chan_or_poly[0]): chan_or_poly[1] for chan_or_poly in vec }
-        return { img: { 'masks': convert_elem(jsmask['masks'],tuple), 'polys': convert_elem(jsmask['polys']) }
-                 for img,jsmask in all_jsmasks.items( ) }
+        return all_jsmasks['regions'] if 'regions' in all_jsmasks else all_jsmasks
 
     def mask( self ):
         return self._mask_path
@@ -1406,6 +1401,107 @@ class CubeMask:
         '''Connect the callbacks which are used by the masking GUIs that
         have been created.
         '''
+        def set_source_init_function( ):
+            ########################################################################################################################
+            ###  Image source initialization: setup of the init function is here to allow the user to assign it after the        ###
+            ###                               CubeMask is created to allow the initialization function to have a reference to    ###
+            ###                               to all image sources (from multiple CubeMasks) that may be a part of the GUI       ###
+            ########################################################################################################################
+            if self._mask_path is None:
+                ###
+                ### Region creation WITHOUT an on-disk bitmap
+                ###
+                init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                                id=self._image_source.id,
+                                stats_source=self._statistics_source, chan_slider=self._slider,
+                                mask_region_button=self._mask_add_sub['mask'],
+                                mask_region_icons=self._mask_icons_,
+                                mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                contour_ds=self._bitmask_contour_ds,
+                                status=self._status_div, statprec=7,
+                                user_init_script = self.init_script,
+                                stokes_labels=[ k for k,_ in self._region_controls['coord']['chan'].items( ) ],
+                                status_line=self._region_controls['coord']['status'],
+                                #default_region_color=self._region_controls['tracking']['color-picker'],
+                                #chan_select = [ v for k,v in self._region_controls['coord']['chan'].items( ) ],
+                                freeze_cb = self._image_freeze_cb,
+                                styling={ 'fill': { 'color': self._region_controls['style']['default']['fill']['color'].child,
+                                                    'alpha': self._region_controls['style']['default']['fill']['alpha'].child,
+                                                    'hatch': self._region_controls['style']['default']['fill']['hatch'].child },
+                                          'line': { 'color': self._region_controls['style']['default']['line']['color'].child,
+                                                    'width': self._region_controls['style']['default']['line']['width'].child,
+                                                    'alpha': self._region_controls['style']['default']['line']['alpha'].child,
+                                                    'dash': self._region_controls['style']['default']['line']['dash'].child } } )
+            else:
+                ###
+                ### On-disk bitmask creation
+                ###
+                init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
+                                stats_source=self._statistics_source, chan_slider=self._slider,
+                                mask_region_button=self._mask_add_sub['mask'],
+                                mask_region_icons=self._mask_icons_,
+                                mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                contour_ds=self._bitmask_contour_ds,
+                                status=self._status_div, statprec=7,
+                                selector=self._bitmask_color_selector,
+                                user_init_script = self.init_script,
+                                freeze_cb = self._image_freeze_cb )
+
+            self._image_source.init_script = CustomJS( args=init_args,
+                                                       code='''let source = cb_obj
+                                                                      document._cube_already_shutdown = false
+                                                                   ''' + self._js['mask-state-init'] +
+                                                                   ( self._js['func-curmasks']( ) +
+                                                                     self._js['key-state-funcs']
+                                                                     if self._mask_path is None else '' )  + self._js['setup-key-mgmt'] +
+                                                                   """// This function is called to collect the masks and/or stop
+                                                                      // -->> collect_masks( ) is only defined if bitmask cube is NOT used
+                                                                      document._cube_done = ( final_polys=null, cb=null ) => {
+                                                                          if ( document._cube_already_shutdown ) return
+                                                                          function done_close_window( msg ) {
+                                                                              if ( msg.result === 'stopped' ) {""" +
+                                                                            # Don't close tab if running in a jupyter notebook
+                                                                            ("""console.log("Running in jupyter notebook. Not closing window.")""" if self._is_notebook else
+                                                                                 """console.log("Running from script/terminal. Closing window.")
+                                                                                    window.close()"""
+                                                                            ) +
+                                                                    """
+                                                                              }
+                                                                          }
+                                                                          document._cube_already_shutdown = true
+                                                                          ctrl.send( ids['done'],
+                                                                                     { action: 'done',
+                                                                                       value: { regions: final_polys ? final_polys : source.masks( ) },
+                                                                                       wtf: 'debugging' },
+                                                                                     (msg) => { if ( ! cb || cb && cb(msg) ) done_close_window(msg) } )
+                                                                      }
+                                                                      // exported functions -- enable/disable masking, retrieve masks etc.
+                                                                      source._masking_enabled = true
+                                                                      source._pixel_update_enabled = true
+                                                                      if ( ! ('_masking_state' in document) ) {
+                                                                          document._masking_state = { }
+                                                                      }
+                                                                      document._masking_state[source.id] = false
+                                                                      source.masking_on = ( ) => { return document._masking_state[source.id] }
+                                                                      source.disable_masking = ( ) => { source._masking_enabled = false; document._masking_state[source.id] = false }
+                                                                      source.enable_masking = ( ) => { source._masking_enabled = true; document._masking_state[source.id] = true }
+                                                                      source.disable_pixel_update = ( ) => source._pixel_update_enabled = false
+                                                                      source.enable_pixel_update = ( ) => source._pixel_update_enabled = true
+                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
+                                                                      source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
+                                                                      source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
+                                                                      source._update_statistics = ( data ) => {
+                                                                          data.values.forEach( (item, index) => {
+                                                                              /** round floats **/
+                                                                              if ( typeof item == 'number' && ! Number.isInteger(item) ) {
+                                                                                  data.values[index] = Math.round((item + Number.EPSILON) * 10**statprec) / 10**statprec
+                                                                              } } )
+                                                                          stats_source.data = data
+                                                                      }
+                                                                      if ( stats_source ) source._update_statistics( stats_source.data ) /*** round floats ***/
+                                                                      if ( user_init_script ) { user_init_script.execute(this) }
+                                                                   """ )
+
         def region_position_connections( ):
 
             if not self._region_controls['coord']['initialized'] or self._mask_path is not None:
@@ -1710,6 +1806,7 @@ class CubeMask:
 
         self.CCOUNT = self.CCOUNT + 1
 
+        set_source_init_function( )
         region_position_connections( )
         region_style_changes( )
 
@@ -1987,99 +2084,6 @@ class CubeMask:
                                                                         cb=self._image_unfreeze_cb ),
                                                              code='''isource._freeze_cursor_update = false
                                                                      cb.map( (e) => e.execute( this, e ) )''' ) )
-
-        ########################################################################################################################
-        ###  Image source initialization                                                                                     ###
-        ########################################################################################################################
-        if self._mask_path is None:
-            ###
-            ### Region creation WITHOUT an on-disk bitmap
-            ###
-            init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                            id=self._image_source.id,
-                            stats_source=self._statistics_source, chan_slider=self._slider,
-                            mask_region_button=self._mask_add_sub['mask'],
-                            mask_region_icons=self._mask_icons_,
-                            mask_region_ds=self._bitmask_contour_maskmod_ds,
-                            contour_ds=self._bitmask_contour_ds,
-                            status=self._status_div, statprec=7,
-                            user_init_script = self._user_init_script,
-                            stokes_labels=[ k for k,_ in self._region_controls['coord']['chan'].items( ) ],
-                            status_line=self._region_controls['coord']['status'],
-                            #default_region_color=self._region_controls['tracking']['color-picker'],
-                            #chan_select = [ v for k,v in self._region_controls['coord']['chan'].items( ) ],
-                            freeze_cb = self._image_freeze_cb,
-                            styling={ 'fill': { 'color': self._region_controls['style']['default']['fill']['color'].child,
-                                                'alpha': self._region_controls['style']['default']['fill']['alpha'].child,
-                                                'hatch': self._region_controls['style']['default']['fill']['hatch'].child },
-                                      'line': { 'color': self._region_controls['style']['default']['line']['color'].child,
-                                                'width': self._region_controls['style']['default']['line']['width'].child,
-                                                'alpha': self._region_controls['style']['default']['line']['alpha'].child,
-                                                'dash': self._region_controls['style']['default']['line']['dash'].child } } )
-        else:
-            ###
-            ### On-disk bitmask creation
-            ###
-            init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
-                            stats_source=self._statistics_source, chan_slider=self._slider,
-                            mask_region_button=self._mask_add_sub['mask'],
-                            mask_region_icons=self._mask_icons_,
-                            mask_region_ds=self._bitmask_contour_maskmod_ds,
-                            contour_ds=self._bitmask_contour_ds,
-                            status=self._status_div, statprec=7,
-                            selector=self._bitmask_color_selector,
-                            user_init_script = self._user_init_script,
-                            freeze_cb = self._image_freeze_cb )
-
-        self._image_source.init_script = CustomJS( args=init_args,
-                                                              code='''let source = cb_obj;''' + self._js['mask-state-init'] + 
-                                                                   ( self._js['func-curmasks']( ) +
-                                                                     self._js['key-state-funcs']
-                                                                     if self._mask_path is None else '' )  + self._js['setup-key-mgmt'] +
-                                                                   """// This function is called to collect the masks and/or stop
-                                                                      // -->> collect_masks( ) is only defined if bitmask cube is NOT used
-                                                                      document._done = ( final_polys=null, cb=null ) => {
-                                                                          function done_close_window( msg ) {
-                                                                              if ( msg.result === 'stopped' ) {""" +
-                                                                            # Don't close tab if running in a jupyter notebook
-                                                                            ("""console.log("Running in jupyter notebook. Not closing window.")""" if self._is_notebook else
-                                                                                 """console.log("Running from script/terminal. Closing window.")
-                                                                                    window.close()"""
-                                                                            ) +
-                                                                    """
-                                                                              }
-                                                                          }
-                                                                          ctrl.send( ids['done'],
-                                                                                     { action: 'done',
-                                                                                       value: final_polys ? final_polys : { } },
-                                                                                     cb ? cb : done_close_window )
-                                                                      }
-                                                                      // exported functions -- enable/disable masking, retrieve masks etc.
-                                                                      source._masking_enabled = true
-                                                                      source._pixel_update_enabled = true
-                                                                      if ( ! ('_masking_state' in document) ) {
-                                                                          document._masking_state = { }
-                                                                      }
-                                                                      document._masking_state[source.id] = false
-                                                                      source.masking_on = ( ) => { return document._masking_state[source.id] }
-                                                                      source.disable_masking = ( ) => { source._masking_enabled = false; document._masking_state[source.id] = false }
-                                                                      source.enable_masking = ( ) => { source._masking_enabled = true; document._masking_state[source.id] = true }
-                                                                      source.disable_pixel_update = ( ) => source._pixel_update_enabled = false
-                                                                      source.enable_pixel_update = ( ) => source._pixel_update_enabled = true
-                                                                      source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
-                                                                      source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
-                                                                      source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
-                                                                      source._update_statistics = ( data ) => {
-                                                                          data.values.forEach( (item, index) => {
-                                                                              /** round floats **/
-                                                                              if ( typeof item == 'number' && ! Number.isInteger(item) ) {
-                                                                                  data.values[index] = Math.round((item + Number.EPSILON) * 10**statprec) / 10**statprec
-                                                                              } } )
-                                                                          stats_source.data = data
-                                                                      }
-                                                                      if ( stats_source ) source._update_statistics( stats_source.data ) /*** round floats ***/
-                                                                      if ( user_init_script ) { user_init_script.execute(this) }
-                                                                   """ )
 
         ###
         ### This setup is delayed until connect( ) to allow for the use of
@@ -2625,8 +2629,8 @@ class CubeMask:
                                                            } else throw new Error( 'putchans requires a Set parameter' )
                                                            return channel_set
                                                        }
-                                                       let poly = { id, label: `rg${id}`,
-                                                                    putchans, getchans: ( ) => { return channel_set },
+                                                       let poly = { id, label: `rg${id}`, source,
+                                                                    putchans, getchans: ( ) => { return [...channel_set] },
                                                                     styling: { line: { color: styling.line.color.color,
                                                                                        width: styling.line.width.value,
                                                                                        alpha: styling.line.alpha.value,
@@ -3021,26 +3025,12 @@ class CubeMask:
                                                                           }, [ ] ) }
                                            }
                                            function collect_masks( ) {
-                                               var polys = new EqSet( )
-                                               var details = [ ]
-                                               for ( let stokes=0; stokes < source._chanmasks.length; ++stokes ) {
-                                                   for ( let chan=0; chan < source._chanmasks[stokes].length; ++chan ) {
-                                                       if ( source._chanmasks[stokes][chan][0].length == 0 ) continue
-                                                       let cur_chan_details = [ ]
-                                                       for ( var poly=0; poly < source._chanmasks[stokes][chan][1].length; ++poly ) {
-                                                           cur_chan_details.push( { p: source._chanmasks[stokes][chan][1][poly],
-                                                                                    d: [ ].slice.call(source._chanmasks[stokes][chan][2][poly]) } )
-                                                           polys.add( source._chanmasks[stokes][chan][1][poly] )
-                                                       }
-                                                       details.push( [[stokes,chan],cur_chan_details] )
-                                                   }
-                                               }
-                                               var poly_result = [ ]
-                                               polys.forEach( p => {
-                                                   poly_result.push( [ p, (({ type, geometry }) => ({ type, geometry }))(source._oldpolys[p]) ] )
-                                                   //                     ^^^^^^^^^^^filter^type^and^geometry^^^^^^^^^^^
-                                               } )
-                                               return { masks: details, polys: poly_result }
+                                               return casalib.reduce( (acc, poly) => {
+                                                                  acc[poly.label] = {
+                                                                      //channels: poly.getchans( ),
+                                                                      //geometry: poly.geometry,
+                                                                      styling: poly.styling }
+                                                                  return acc }, source._polys.list( ), { } )
                                            }'''.replace('source',source),
                      ### create a new polygon -- create state and establish a correspondence between the polygon and the
                      ###                         annotation that will be used to represent it for this particular channel

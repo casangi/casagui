@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2022,2024
+# Copyright (C) 2022,2024,2025
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -29,3 +29,4 @@
 
 from ._cube import CubeMask
 from ._app_context import AppContext
+from ._region_list import RegionList

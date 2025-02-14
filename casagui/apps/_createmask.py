@@ -252,8 +252,8 @@ class CreateMask:
 
                                                                                                           return new Promise( (resolve,reject) => {
                                                                                                                                  // call by name does not work here:
-                                                                                                                                 //       document._done(cb=resolve)  ???
-                                                                                                                                 document._done(null,resolve)
+                                                                                                                                 //       document._cube_done(cb=resolve)  ???
+                                                                                                                                 if ( document._cube_done ) document._cube_done(null,resolve)
                                                                                                                               } )
                                                                                                       }
                                                                                                       ( async () => { await donePromise( ) } )( )
@@ -356,7 +356,7 @@ class CreateMask:
 
         self._ctrl_state['stop'].js_on_click( CustomJS( args={ },
                                                         code='''if ( confirm( "Are you sure you want to end this mask creation session and close the GUI?" ) ) {
-                                                                    document._done( )
+                                                                    if ( document._cube_done ) document._cube_done( )
                                                                 }''' ) )
 
 
