@@ -1826,7 +1826,7 @@ class InteractiveClean:
 
 
     '''
-    def __stop( self ):
+    def __stop( self, _ ):
         self.__result_future.set_result(self.__retrieve_result( ))
 
     def _abort_handler( self, err ):
@@ -2533,7 +2533,7 @@ class InteractiveClean:
                                                                  /*** this will close the tab >>>>---------+   ***/
                                                                  /***                                      |   ***/
                                                                  /***     vvvvv----------------------------+   ***/
-                                                                 document._done( Object.entries(images_state).reduce((acc,[k,v]) => ({ ...acc, [k]: v.src.masks( ) }),{ } ) )
+                                                                 document._cube_done( Object.entries(images_state).reduce((acc,[k,v]) => ({ ...acc, [k]: v.src.masks( ) }),{ } ) )
                                                              }
                                                          } else if ( state.mode === 'continuous' &&
                                                                      cb_obj.origin.name === 'stop' &&
