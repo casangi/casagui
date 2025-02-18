@@ -188,23 +188,24 @@ class CubeMask:
         self._image_freeze_cb = [ ]                            # CustomJS to be invoked when the use freezes cursor tracking (by typing 'f')
         self._image_unfreeze_cb  = [ ]                         # CustomJS to be invoked when cursor tracking is unfrozen
 
-        ###########################################################################################################################
-        ### JavaScript init script to be run early in the startup. Piggybacked off of the ImagePipe initialization              ###
-        ### CustomAction callbacks are set in connect( ) function.                                                              ###
-        ###########################################################################################################################
-        _add_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-chan.png' ) ),
-                      cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
-        _sub_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
-                      cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
-        self._mask_icons_ = dict( on=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
-                                  off=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
-        self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
-                                                    description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
-                               'sub': CustomAction( icon=_sub_['chan'],
-                                                    description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
-                               'mask': CustomAction( icon=self._mask_icons_['off'],
-                                                     description="select the mask for the current channel" ),
-                               'img': dict( add=_add_, sub=_sub_ ) }
+        if self._mask_path:
+            ###########################################################################################################################
+            ### JavaScript init script to be run early in the startup. Piggybacked off of the ImagePipe initialization              ###
+            ### CustomAction callbacks are set in connect( ) function.                                                              ###
+            ###########################################################################################################################
+            _add_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-chan.png' ) ),
+                          cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'add-cube.png' ) ) )
+            _sub_ = dict( chan=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-chan.png' ) ),
+                          cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
+            self._mask_icons_ = dict( on=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
+                                      off=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
+            self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
+                                                        description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
+                                   'sub': CustomAction( icon=_sub_['chan'],
+                                                        description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
+                                   'mask': CustomAction( icon=self._mask_icons_['off'],
+                                                         description="select the mask for the current channel" ),
+                                   'img': dict( add=_add_, sub=_sub_ ) }
 
         self._fig = { }
         self._hover = { 'spectrum': None, 'image': None }   # HoverTools which are used to synchronize image/spectrum
@@ -253,7 +254,7 @@ class CubeMask:
             self._pipe['image'] = ImagePipe( image=self._image_path, mask=self._mask_path,
                                              stats=True, abort=self.__abort, address=find_ws_address( ),
                                              init_script=CustomJS( args=self._mask_add_sub,
-                                                                   code=self._js['cube-init'] ) )
+                                                                   code=self._js['cube-init'] ) if self._mask_path else None  )
         if self._pipe['control'] is None:
             ### self._pipe['control']._freeze_cursor_update is used to keep track of whether pixel
             ### update has been "frozen" (by typing 'f')... for "specmode='mfs'" _freeze_cursor_update
@@ -482,10 +483,10 @@ class CubeMask:
                                                   match_aspect=True,
                                                   tools=[ 'lasso_select', 'box_select',
                                                           'pan', 'wheel_zoom', 'save',
-                                                          'reset', 'poly_select',
-                                                          self._mask_add_sub['add'],
-                                                          self._mask_add_sub['sub'],
-                                                          self._mask_add_sub['mask'] ],
+                                                          'reset', 'poly_select' ] +
+                                                        ( [ self._mask_add_sub['add'],
+                                                            self._mask_add_sub['sub'],
+                                                            self._mask_add_sub['mask'] ]  if self._mask_path else [ ] ),
                                                   tooltips=None ), **kw )
 
             ###
@@ -1414,8 +1415,8 @@ class CubeMask:
                 init_args=dict( annotations=self._annotations, ctrl=self._pipe['control'], ids=self._ids,
                                 id=self._image_source.id,
                                 stats_source=self._statistics_source, chan_slider=self._slider,
-                                mask_region_button=self._mask_add_sub['mask'],
-                                mask_region_icons=self._mask_icons_,
+                                mask_region_button=None,
+                                mask_region_icons=None,
                                 mask_region_ds=self._bitmask_contour_maskmod_ds,
                                 contour_ds=self._bitmask_contour_ds,
                                 status=self._status_div, statprec=7,
@@ -1810,45 +1811,46 @@ class CubeMask:
         region_position_connections( )
         region_style_changes( )
 
-        self._mask_add_sub['add'].callback = CustomJS( args=dict( annotations=self._annotations,
-                                                                  source=self._image_source,
-                                                                  ctrl=self._pipe['control'],
-                                                                  ids=self._ids,
-                                                                  stats_source=self._statistics_source,
-                                                                  mask_region_icons=self._mask_icons_,
-                                                                  mask_region_button=self._mask_add_sub['mask'],
-                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
-                                                                  contour_ds=self._bitmask_contour_ds,
-                                                                  status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
-                                                            '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
-                                                               else mask_add_chan( )''' )
-        self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
-                                                                  source=self._image_source,
-                                                                  ctrl=self._pipe['control'],
-                                                                  ids=self._ids,
-                                                                  stats_source=self._statistics_source,
-                                                                  mask_region_icons=self._mask_icons_,
-                                                                  mask_region_button=self._mask_add_sub['mask'],
-                                                                  mask_region_ds=self._bitmask_contour_maskmod_ds,
-                                                                  contour_ds=self._bitmask_contour_ds,
-                                                                  status=self._status_div ),
-                                                       code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
-                                                            '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
-                                                               else mask_sub_chan( )''' )
+        if self._mask_path:
+            self._mask_add_sub['add'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                      source=self._image_source,
+                                                                      ctrl=self._pipe['control'],
+                                                                      ids=self._ids,
+                                                                      stats_source=self._statistics_source,
+                                                                      mask_region_icons=self._mask_icons_,
+                                                                      mask_region_button=self._mask_add_sub['mask'],
+                                                                      mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                      contour_ds=self._bitmask_contour_ds,
+                                                                      status=self._status_div ),
+                                                           code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                                '''if ( cb_obj._mode == 'cube' ) mask_add_cube( )
+                                                                   else mask_add_chan( )''' )
+            self._mask_add_sub['sub'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                      source=self._image_source,
+                                                                      ctrl=self._pipe['control'],
+                                                                      ids=self._ids,
+                                                                      stats_source=self._statistics_source,
+                                                                      mask_region_icons=self._mask_icons_,
+                                                                      mask_region_button=self._mask_add_sub['mask'],
+                                                                      mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                      contour_ds=self._bitmask_contour_ds,
+                                                                      status=self._status_div ),
+                                                           code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                                '''if ( cb_obj._mode == 'cube' ) mask_sub_cube( )
+                                                                   else mask_sub_chan( )''' )
 
-        self._mask_add_sub['mask'].callback = CustomJS( args=dict( annotations=self._annotations,
-                                                                   contour_ds=self._bitmask_contour_ds,
-                                                                   mask_region_ds=self._bitmask_contour_maskmod_ds,
-                                                                   region=self._bitmask_contour_maskmod,
-                                                                   selector=self._bitmask_color_selector,
-                                                                   mask_region_button=self._mask_add_sub['mask'],
-                                                                   mask_region_icons=self._mask_icons_,
-                                                                   source=self._image_source,
-                                                                   status=self._status_div ),
-                                                        code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
-                                                             '''if ( mask_region_button.icon == mask_region_icons['on'] ) source._mask.clear( )
-                                                                else source.mask.set( region )''' )
+            self._mask_add_sub['mask'].callback = CustomJS( args=dict( annotations=self._annotations,
+                                                                       contour_ds=self._bitmask_contour_ds,
+                                                                       mask_region_ds=self._bitmask_contour_maskmod_ds,
+                                                                       region=self._bitmask_contour_maskmod,
+                                                                       selector=self._bitmask_color_selector,
+                                                                       mask_region_button=self._mask_add_sub['mask'],
+                                                                       mask_region_icons=self._mask_icons_,
+                                                                       source=self._image_source,
+                                                                       status=self._status_div ),
+                                                            code=self._js_mode_code['bitmask-hotkey-setup-add-sub'] +
+                                                                 '''if ( mask_region_button.icon == mask_region_icons['on'] ) source._mask.clear( )
+                                                                    else source.mask.set( region )''' )
 
 
         if self._slider:
@@ -2115,8 +2117,8 @@ class CubeMask:
                                  CustomJS( args=dict( source=self._image_source,
                                                       annotations=self._annotations,
                                                       selector=self._bitmask_color_selector,
-                                                      mask_region_button=self._mask_add_sub['mask'],
-                                                      mask_region_icons=self._mask_icons_,
+                                                      mask_region_button=self._mask_add_sub['mask'] if self._mask_path else None,
+                                                      mask_region_icons=self._mask_icons_ if self._mask_path else None,
                                                       contour_ds=self._bitmask_contour_ds,
                                                       mask_region_ds=self._bitmask_contour_maskmod_ds,
                                                       region_newpoly = self._region_controls_newpoly,
