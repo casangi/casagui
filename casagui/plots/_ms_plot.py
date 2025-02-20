@@ -9,7 +9,14 @@ import pandas as pd
 import hvplot
 
 from xradio.measurement_set.processing_set import ProcessingSet
-from toolviper.utils.logger import setup_logger
+
+try:
+    from toolviper.utils.logger import setup_logger
+    _have_toolviper = True
+except ImportError:
+    _have_toolviper = False
+    from casagui.utils._logging import get_logger
+    
 
 from casagui.io._ms_io import get_processing_set
 from casagui.data.measurement_set._ms_coords import set_coordinates
@@ -17,8 +24,12 @@ from casagui.data.measurement_set._ms_data import is_vis_axis
 
 class MsPlot:
     def __init__(self, ms, log_level="info", logger_name="MsPlot", interactive=False):
-        # Logger
-        self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
+        # Use toolviper logger else casalog else python logger
+        if _have_toolviper:
+            self._logger = setup_logger(logger_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
+        else:
+            self._logger = get_logger()
+            self._logger.setLevel(log_level.upper())
 
         # Convert ms to zarr, get ProcessingSet
         self._ps, self._ms_path = get_processing_set(ms, self._logger)

@@ -2,6 +2,7 @@
 Functions to create a raster plot of visibility/spectrum data from xarray Dataset
 '''
 
+from bokeh.models import HoverTool
 import numpy as np
 import hvplot.xarray
 import hvplot.pandas
@@ -87,57 +88,89 @@ def raster_plot(xds, plot_params):
     aggregator = plot_params['aggregator']
 
     # Set plot axes to numeric coordinates if needed
-    set_index_coordinates(xds, (x_axis, y_axis))
+    xds = set_index_coordinates(xds, (x_axis, y_axis))
 
     # Unflagged and flagged data.  Use same name, for histogram dimension.
     if aggregator: 
         xda_name = "_".join([aggregator, c_axis])
     else:
         xda_name = c_axis
-    unflagged_xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(xda_name)
-    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(xda_name)
+    flagged_name = "flagged_" + xda_name
+    xda = xds[correlated_data].where(xds.FLAG == 0.0).rename(xda_name)
+    flagged_xda = xds[correlated_data].where(xds.FLAG == 1.0).rename(flagged_name)
 
     # Plot data
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
+    unflagged_plot = None
+    flagged_plot = None
     try:
-        unflagged_plot = _plot_xda(unflagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, "viridis")
-        flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, "reds")
+        if xda.count() > 0:
+            unflagged_plot = _plot_xda(xda, x_axis, y_axis, xda_name, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, "viridis")
+        if flagged_xda.count() > 0:
+            flagged_plot = _plot_xda(flagged_xda, x_axis, y_axis, flagged_name, color_limits, title, x_label, y_label, "Flagged " + c_label, x_ticks, y_ticks, "reds")
     except Exception as e:
         print("Plot exception:", e)
 
     # Return combined plots or single plot
     if flagged_plot is not None and unflagged_plot is not None:
-        return flagged_plot * unflagged_plot.opts(colorbar_position='left')
+        plot = flagged_plot * unflagged_plot.opts(colorbar_position='left')
+        tooltips, formatters = _get_hover_settings(x_axis, y_axis, (xda_name, flagged_name))
     elif unflagged_plot is not None:
-        return unflagged_plot
+        plot = unflagged_plot
+        tooltips, formatters = _get_hover_settings(x_axis, y_axis, xda_name)
     else:
-        return flagged_plot
+        plot = flagged_plot
+        tooltips, formatters = _get_hover_settings(x_axis, y_axis, flagged_name)
+    hover = HoverTool(tooltips=tooltips, formatters=formatters)
+    return plot.opts(tools=[hover])
 
-def _plot_xda(xda, x_axis, y_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap):
+def _plot_xda(xda, x_axis, y_axis, c_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap):
     # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
-    if xda.count() == 0:
-        return None
-
-    # formatter is None unless time
     x_formatter, y_formatter = get_axis_formatters(x_axis, y_axis)
 
-    if xda.coords[x_axis].size > 1 and xda.coords[y_axis].size > 1:
+    if xda[x_axis].size > 1 and xda[y_axis].size > 1:
         # Raster 2D data
-        return xda.hvplot.quadmesh(x=x_axis, y=y_axis,
+        return xda.hvplot.quadmesh(x_axis, y_axis,
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
             xformatter=x_formatter, yformatter=y_formatter,
-            rot=90, xticks=x_ticks, yticks=y_ticks,
-            hover=True, colorbar=True,
+            rot=90, xticks=x_ticks, yticks=y_ticks, colorbar=True,
         )
     else:
         # Cannot raster 1D data, use scatter from pandas dataframe
         df = xda.to_dataframe().reset_index() # convert x and y axis from index to column
         return df.hvplot.scatter(
-            x=x_axis, y=y_axis, c=xda.name,
+            x=x_axis, y=y_axis, c=c_axis,
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
             xformatter=x_formatter, yformatter=y_formatter,
             rot=90, xticks=x_ticks, yticks=y_ticks,
-            marker='s',
+            marker='s', hover=True,
         )
+
+def _get_hover_settings(x_axis, y_axis, c_axis):
+    formatters = {}
+    x_tooltip = "$x"
+    y_tooltip = "$y"
+
+    formats = {"time": "{%F %T}", "baseline": "{0}", "polarization": "{0}"}
+    if x_axis in formats:
+        x_tooltip += formats[x_axis]
+    if y_axis in formats:
+        y_tooltip += formats[y_axis]
+
+    tooltips=[
+        (x_axis, x_tooltip),
+        (y_axis, y_tooltip),
+    ]
+    if isinstance(c_axis, tuple):
+        tooltips.extend([(axis, "@" + axis) for axis in c_axis])
+    else:
+        tooltips.append((c_axis, "@" + c_axis))
+
+    if x_axis == 'time':
+        formatters["$x"] = "datetime"
+    elif y_axis == 'time':
+        formatters["$y"] = "datetime"
+
+    return tooltips, formatters

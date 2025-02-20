@@ -16,4 +16,3 @@ from ._ms_coords import (
 from ._ms_select import select_ps
 from ._ms_stats import calculate_ms_stats
 from ._raster_data import raster_data
-from ._scatter_data import scatter_data

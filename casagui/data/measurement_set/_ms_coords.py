@@ -7,6 +7,7 @@ from pandas import to_datetime
 
 def set_coordinates(xds):
     _set_coordinate_unit(xds)
+    _set_frequency_unit(xds)
     return _set_baseline_coordinate(xds)
 
 def set_datetime_coordinate(xds):
@@ -19,16 +20,20 @@ def set_datetime_coordinate(xds):
     xds.time.attrs = time_attrs
 
 def set_index_coordinates(xds, coordinates):
-    ''' Replace string coordinate values with numerical index for x and y axis '''
+    ''' Add coordinate for string values (creates new xds) then replace with numerical index. '''
     for coordinate in coordinates:
         if coordinate == "polarization":
+            xds = xds.assign_coords({"polarization_name": (xds.polarization.dims, xds.polarization.values)})
             xds["polarization"] = np.array(range(xds.polarization.size))
         elif coordinate == "baseline":
+            xds = xds.assign_coords({"baseline_name": (xds.baseline.dims, xds.baseline.values)})
             xds["baseline"] = np.array(range(xds.baseline.size))
         elif coordinate == "antenna_name":
+            xds = xds.assign_coords({"antenna": (xds.antenna_name.dims, xds.antenna_name.values)})
             all_ant_names = xds.antenna_xds.antenna_name.values.tolist()
             xds_ant_ids = [all_ant_names.index(ant_name) for ant_name in xds.antenna_name.values]
             xds["antenna_name"] = np.array(xds_ant_ids)
+    return xds
 
 def _set_coordinate_unit(xds):
     ''' Set coordinate units attribute as string not list for plotting. '''
@@ -38,6 +43,15 @@ def _set_coordinate_unit(xds):
             units = xds[coord].units
             if isinstance(units, list) and len(units) == 1:
                 xds[coord].attrs['units'] = units[0]
+
+def _set_frequency_unit(xds):
+    ''' Convert frequency to GHz '''
+    if xds.frequency.attrs['units'] == "Hz":
+        frequency_xda = xds.frequency / 1e9
+        frequency_attrs = xds.frequency.attrs
+        frequency_attrs['units'] = "GHz"
+        frequency_xda = frequency_xda.assign_attrs(frequency_attrs)
+        xds['frequency'] = frequency_xda
 
 def _set_baseline_coordinate(xds):
     '''

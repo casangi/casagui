@@ -6,7 +6,12 @@ from graphviper.graph_tools import generate_dask_workflow
 from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
 from graphviper.graph_tools.map import map
 from graphviper.graph_tools.reduce import reduce
-from toolviper.dask.client import get_client
+
+try:
+    from toolviper.dask.client import get_client
+    _have_toolviper = True
+except ImportError:
+    _have_toolviper = False
 
 from ._ms_data import get_correlated_data, get_axis_data
 
@@ -24,7 +29,10 @@ def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
     input_params['correlated_data'] = get_correlated_data(ps.get(0), data_group)
     input_params['vis_axis'] = vis_axis
 
-    active_client = get_client()
+    if _have_toolviper:
+        active_client = get_client() # could be None if not set up outside casagui
+    else:
+        active_client = None
     n_threads = active_client.thread_info()['n_threads'] if active_client is not None else 4
     logger.debug(f"Setting {n_threads} n_chunks for parallel coords.")
 

@@ -17,6 +17,7 @@ ms_path = 'sis14_twhya_selfcal.ms'
 ##
 ms_url = "https://casa.nrao.edu/download/devel/casavis/data/sis14_twhya_selfcal.ms.tar.gz"
 ##
+plot_dir = "demo_plots"
 
 # The raster plots can be shown in the webbrowser and/or saved to file.
 # If show=True, ^C to exit script.
@@ -42,8 +43,10 @@ def show_plot(msr, layout=None):
         msr.show(layout=layout)
 
 def save_plot(msr, filename='demo.png', layout=None, export_range='start'):
+    if not os.path.exists(plot_dir):
+        os.mkdir(plot_dir)
     if save:
-        msr.save(filename=filename, layout=layout, export_range=export_range)
+        msr.save(filename=os.path.join(plot_dir, filename), layout=layout, export_range=export_range)
     
 def plot_ms_raster():
     ''' Show MsRaster features '''
@@ -55,7 +58,7 @@ def plot_ms_raster():
 
     # Converts ms to zarr, and gets xradio ProcessingSet.
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
-    msr = MsRaster(ms_path, log_level='debug', interactive=False)
+    msr = MsRaster(ms_path, log_level='info', interactive=False)
 
     # ProcessingSet selection using summary column name and value.
     # For selection options: msr.summary()
@@ -123,15 +126,19 @@ def plot_ms_raster():
     show_plot(msr, layout=(0, 2, 2))
     save_plot(msr, "amp_phase_pol_iter.png", layout=(0, 2, 2))
 
-    # Demo aggregator: max, mean, min, std, sum, var
-    # time vs baseline, averaged over frequency. Selects first polarization but could do iteration + layout.
+    # Demo aggregator: options include max, mean, min, std, sum, var
+    # time vs baseline, averaged over frequency. Selects first polarization automatically.
     msr.plot(selection=intent_selection, aggregator='mean', agg_axis='frequency')
     show_plot(msr)
     save_plot(msr, "agg_mean_frequency.png")
-    # time vs frequency, max across baselines. Selects first polarization but could do iteration + layout.
+    # time vs frequency, max across baselines. Selects first polarization automatically.
     msr.plot(selection=intent_selection, x_axis='frequency', aggregator='max', agg_axis='baseline')
     show_plot(msr)
     save_plot(msr, "agg_max_baseline.png")
+    # time vs frequency, max across baselines with polarization iteration + layout.
+    msr.plot(selection=intent_selection, x_axis='frequency', aggregator='max', agg_axis='baseline', iter_axis='polarization')
+    show_plot(msr, layout=(0, 1, 2))
+    save_plot(msr, "agg_max_baseline_pol_iter.png", layout=(0, 1, 2))
     # time vs frequency, max across two dimensions rather than select one dimension.
     msr.plot(selection=intent_selection, x_axis='frequency', aggregator='max', agg_axis=['baseline', 'polarization'])
     show_plot(msr)

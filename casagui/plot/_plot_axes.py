@@ -87,7 +87,7 @@ def _get_polarization_labels(polarization_xda):
 def _get_frequency_labels(frequency_xda):
     ''' Return frequency as formatted string, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
-        return f"{frequency_xda.item():.4e} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer'].upper()}"
+        return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer'].upper()}"
     else:
         return None # auto ticks from frequency values
 

@@ -50,6 +50,7 @@ def show_ms_plot_features():
 
     # ProcessingSet plots
     # Get list of antenna names, useful for baseline selection. Optionally plot their positions (default False).
+    print("Press 'q' to continue to next plot")
     print("antenna_list for 'base' data group:", msr.antennas(plot_positions=True))
 
     # Plot phase centers and show field names for data group.
