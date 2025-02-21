@@ -5,7 +5,7 @@ Implementation of the ``MsRaster`` application for measurement set raster plotti
 import os
 import time
 
-from casagui.plots._ms_plot import MsPlot
+from casagui.plot._ms_plot import MsPlot
 from casagui.data.measurement_set._ms_data import is_vis_axis, get_correlated_data, get_dimension_values
 from casagui.data.measurement_set._ms_select import select_ps 
 from casagui.data.measurement_set._ms_stats import calculate_ms_stats 
