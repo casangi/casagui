@@ -115,8 +115,29 @@ def initialize_bokeh( bokehjs_subst=None ):
                     result.append(url)
             return result
 
+        def include_all_bokehjs( urls ):
+            result = urls.copy( )
+            bokeh_path=None
+            has_bokeh_widgets=False
+            has_bokeh_tables=False
+            for url in urls:
+                if re.match( r'.*/bokeh-\d+\.\d+\.\d+(?:\.min)?\.js$', url ):
+                    bokeh_path = url
+                if re.match( r'.*/bokeh-widgets-\d+\.\d+\.\d+(?:\.min)?\.js$', url ):
+                    has_bokeh_widgets = True
+                if re.match( r'.*/bokeh-tables-\d+\.\d+\.\d+(?:\.min)?\.js$', url ):
+                    has_bokeh_tables = True
+
+            if bokeh_path:
+                if not has_bokeh_widgets:
+                    result.append( bokeh_path.replace('/bokeh-','/bokeh-widgets-') )
+                if not has_bokeh_tables:
+                    result.append( bokeh_path.replace('/bokeh-','/bokeh-tables-') )
+
+            return result
+
         user_bokehjs_replacement = expand_paths(bokehjs_subst)
-        sys_urls = resources.Resources._old_js_files.fget(self)
+        sys_urls = include_all_bokehjs( resources.Resources._old_js_files.fget(self) )
         if initialize_bokeh.do_local_subst:
             local_urls = [ ]
             for url in sys_urls:

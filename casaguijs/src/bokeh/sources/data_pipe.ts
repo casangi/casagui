@@ -73,9 +73,9 @@ export class DataPipe extends DataSource {
             this.websocket = new WebSocket(ws_address)
             this.websocket.binaryType = "arraybuffer"
 
-            this.websocket.onerror = ( e: any ) => {
+            this.websocket.addEventListener("error", (e: Event) => {
                 console.log( 'error encountered:', e )
-            }
+            })
 
             this.websocket.onmessage = (event: any) => {
                 if (typeof event.data === 'string' || event.data instanceof String) {

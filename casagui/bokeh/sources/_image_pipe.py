@@ -462,6 +462,8 @@ class ImagePipe(DataPipe):
 
         self.__img = None
         self.__msk = None
+        self.__fits_header = None
+        self.__fits_header_str = ''
         resource_manager( ).reg_at_exit( self, '__del__' )
         self._stats = stats
         self.__open_image( image )
@@ -469,9 +471,10 @@ class ImagePipe(DataPipe):
         self.__mask0_cache = None
         self.shape = list(self.__img.shape( ))
         if not self.fits_header_json:
-            __hdr_dict = self.__img.fitsheader(exclude="HISTORY")
-            if __hdr_dict:
-                self.fits_header_json = json.dumps(strip_arrays(__hdr_dict))
+            self.__fits_header = self.__img.fitsheader(exclude="HISTORY")
+            self.__fits_header_str = self.__img.fitsheader(retstr=True,exclude="HISTORY")
+            if self.__fits_header:
+                self.fits_header_json = json.dumps(strip_arrays(self.__fits_header))
         self.__session = None
         self.__stokes_labels = None
         self.__mask_statistics = False
@@ -504,6 +507,9 @@ class ImagePipe(DataPipe):
             self.__img.done()
             self.__img = None
             self.__stokes_labels = None
+
+    def fits_header( self ):
+        return ( self.__fits_header, self.__fits_header_str )
 
     def coorddesc( self ):
         ia = imagetool( )

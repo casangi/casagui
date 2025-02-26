@@ -205,7 +205,7 @@ class DataPipe(DataSource):
                         outgo = self.__dequeue_send(msg['id'])
                         if outgo is not None:
                             await websocket.send(serialize(outgo['msg']))
-                            self.__put_pending(msg['id'],outgo['cb'])
+                            await self.__put_pending(msg['id'],outgo['cb'])
                         if cb is not None:
                             if inspect.isawaitable(cb):
                                 await cb(msg['message'])
