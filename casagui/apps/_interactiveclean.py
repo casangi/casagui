@@ -2013,52 +2013,9 @@ class InteractiveClean:
             ###
             if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
-
                 self._clean['gclean'] = _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
-
-                if imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
-                    ###
-                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
-                    ### but currently gclean can be initialized with bad arguments and it is not known until
-                    ### the initial calls to tclean/deconvolve
-                    ###
-                    raise RuntimeError('gclean failure "%s" not returned' % ('major' if imdetails['converge']['major'] is None else 'chan'))
-
-                clean_cmds = self._clean['gclean'].cmds( )
-
-                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
-                    raise RuntimeError(stopdesc)
-
-                convergence_state['convergence'][imid] = imdetails['converge']['chan']
-                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
-
-                self._clean['masks'][imid] = self._clean['gclean'].mask( )
-
-                if deconvolver == 'mtmfs':
-                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
-                else:
-                    imdetails['path']['residual'] = ("%s.residual" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
-
-
             else:
                 next_gclean =  _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
-                clean_cmds = self._clean['gclean'].cmds( )
-
-                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
-                    raise RuntimeError(stopdesc)
-
-                convergence_state['convergence'][imid] = imdetails['converge']['chan']
-                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
-
-                self._clean['masks'][imid] = next_gclean.mask( )
-
-                if deconvolver == 'mtmfs':
-                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
-                else:
-                    imdetails['path']['residual'] = ("%s.residual" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
-
                 self._clean['gclean_rest'].append(next_gclean)
 
         self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
@@ -2750,7 +2707,60 @@ class InteractiveClean:
         self.__reset( )
         self._init_pipes()
 
-    @asynccontextmanager
+        ##############################################################################################################################
+        ### Things to do with FIRST gclean                                                                                         ###
+        ##############################################################################################################################
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
+
+                if imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
+                    ###
+                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
+                    ### but currently gclean can be initialized with bad arguments and it is not known until
+                    ### the initial calls to tclean/deconvolve
+                    ###
+                    raise RuntimeError('gclean failure "%s" not returned' % ('major' if imdetails['converge']['major'] is None else 'chan'))
+
+                clean_cmds = self._clean['gclean'].cmds( )
+
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
+                    raise RuntimeError(stopdesc)
+
+                convergence_state['convergence'][imid] = imdetails['converge']['chan']
+                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
+
+                self._clean['masks'][imid] = self._clean['gclean'].mask( )
+
+                if deconvolver == 'mtmfs':
+                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
+                else:
+                    imdetails['path']['residual'] = ("%s.residual" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
+        ##############################################################################################################################
+        ##############################################################################################################################
+
+
+        ##############################################################################################################################
+        ### Things to do with SUBSEQUENT gcleans                                                                                   ###
+        ##############################################################################################################################
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
+                clean_cmds = self._clean['gclean'].cmds( )
+
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
+                    raise RuntimeError(stopdesc)
+
+                convergence_state['convergence'][imid] = imdetails['converge']['chan']
+                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
+
+                self._clean['masks'][imid] = next_gclean.mask( )
+
+                if deconvolver == 'mtmfs':
+                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
+                else:
+                    imdetails['path']['residual'] = ("%s.residual" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
+
+        ##############################################################################################################################
+        ##############################################################################################################################
+
+   @asynccontextmanager
     async def serve( self ):
         '''This function is intended for developers who would like to embed interactive
         clean as a part of a larger GUI. This embedded use of interactive clean is not
