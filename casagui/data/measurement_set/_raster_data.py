@@ -10,72 +10,80 @@ import xarray as xr
 from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
-from ._ms_concat import concat_ps_xds
-from ._ms_coords import set_datetime_coordinate
-from ._ms_data import get_correlated_data, get_axis_data
-from ._ms_select import select_ps
+from ._ps_concat import concat_ps_xds
+from ._ps_coords import set_datetime_coordinate
+from ._ps_select import select_ps
+from ._xds_data import get_axis_data
 
-def raster_data(ps, x_axis, y_axis, vis_axis, data_group, selection, aggregator, agg_axis, logger):
+AGGREGATOR_OPTIONS = ['max', 'mean', 'median', 'min', 'std', 'sum', 'var']
+
+def raster_data(ps, plot_inputs, logger):
     '''
     Create raster xds: y_axis vs x_axis for vis axis.
-        ps (xradio ProcessingSet): input MSv4 datasets
-        x_axis (str): x-axis to plot
-        y_axis (str): y-axis to plot
-        vis_axis (str): visibility component to plot (amp, phase, real, imag)
-        data_group (str): xds data group name for correlated data, flags, weights, and uvw.
-        agg_axis (list): one or more axes to aggregate
-        selection (dict): selected data dimensions (time, baseline, channel, polarization)
+        ps (xradio ProcessingSet): input MSv4 datasets.
+        plot_inputs (dict): user-selected values for plot
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
-    correlated_data = get_correlated_data(ps.get(0), data_group)
-    raster_ps, selection = _select_raster_ps(ps, x_axis, y_axis, agg_axis, selection, data_group, correlated_data, logger)
+    raster_ps, updated_selection = _select_raster_ps(ps, plot_inputs, logger)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
+    correlated_data = plot_inputs['correlated_data']
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")
 
     # Set complex component of vis data
-    raster_xds[correlated_data] = get_axis_data(raster_xds, vis_axis, data_group)
+    raster_xds[correlated_data] = get_axis_data(raster_xds,
+        plot_inputs['vis_axis'],
+        plot_inputs['selection']['data_group']
+    )
 
+    # Convert float time to datetime
     set_datetime_coordinate(raster_xds)
 
-    if aggregator and agg_axis:
-        raster_xds = aggregate_data(raster_xds, aggregator, agg_axis, logger)
+    if plot_inputs['aggregator'] and plot_inputs['agg_axis']:
+        raster_xds = aggregate_data(raster_xds, plot_inputs, logger)
 
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
-    return raster_xds, selection
+    return raster_xds, updated_selection
 
-def _select_raster_ps(ps, x_axis, y_axis, agg_axis, selection, data_group, correlated_data, logger):
-    ''' Apply user selection and select default dimensions if needed for raster data '''
-    # Apply user selection first
-    selected_ps = select_ps(ps, selection, data_group, logger)
-
+def _select_raster_ps(ps, plot_inputs, logger):
+    ''' Select default dimensions if needed for raster data '''
     # Determine which dims must be selected, add to selection, and do selection
-    data_dims = ps.get(0)[correlated_data].dims
-    dims_to_select = _get_raster_selection_dims(data_dims, x_axis, y_axis, agg_axis)
+    input_selection = plot_inputs['selection']
+    iter_axis = plot_inputs['iter_axis']
+
+    dims_to_select = _get_raster_selection_dims(ps, plot_inputs)
+
     if dims_to_select:
         dim_selection = {}
         for dim in dims_to_select:
-            if dim not in selection:
-                selection[dim] = _get_first_dim_value(selected_ps, dim)
-                dim_selection[dim] = selection[dim]
+            # Select first value (by index) and add to input selection, or apply iter_axis value
+            # (user selection would have been applied previously)
+            if dim not in input_selection:
+                input_selection[dim] = _get_first_dim_value(ps, dim)
+                dim_selection[dim] = input_selection[dim]
+            else:
+                dim_selection[dim] = input_selection[dim]
         if dim_selection:
-            logger.info(f"Applying default raster plane selection (using first index): {dim_selection}")
-            return select_ps(selected_ps, dim_selection, data_group, logger), selection
-    return selected_ps, selection
+            logger.info(f"Applying default raster plane selection (using first index or iter value): {dim_selection}")
+            return select_ps(ps, dim_selection, logger), input_selection
+    return ps, input_selection
 
-def _get_raster_selection_dims(data_dims, x_axis, y_axis, agg_axis):
-    dims = list(data_dims)
-    if x_axis in dims:
-        dims.remove(x_axis)
-    if y_axis in dims:
-        dims.remove(y_axis)
-    if agg_axis:
-        for axis in agg_axis:
-            dims.remove(axis)
-    return dims
+def _get_raster_selection_dims(ps, plot_inputs):
+    data_dims = list(ps.get(0)[plot_inputs['correlated_data']].dims)
+    print("data dims:", data_dims)
+    if plot_inputs['x_axis'] in data_dims:
+        data_dims.remove(plot_inputs['x_axis'])
+    if plot_inputs['y_axis'] in data_dims:
+        data_dims.remove(plot_inputs['y_axis'])
+    if plot_inputs['agg_axis']:
+        print("input agg axis:", plot_inputs['agg_axis'])
+        for axis in plot_inputs['agg_axis']:
+            print("remove agg axis:", axis)
+            data_dims.remove(axis)
+    return data_dims
 
 def _get_first_dim_value(ps, dim):
     if dim == "polarization":
@@ -111,7 +119,9 @@ def _add_index_dimensions(xds):
 
     return xds
 
-def aggregate_data(xds, aggregator, agg_axis, logger):
+def aggregate_data(xds, plot_inputs, logger):
+    aggregator = plot_inputs['aggregator']
+    agg_axis = plot_inputs['agg_axis']
     logger.debug(f"Applying {aggregator} to {agg_axis}.")
     if aggregator == 'max':
         return xds.max(dim=agg_axis, keep_attrs=True)

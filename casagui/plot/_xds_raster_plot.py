@@ -3,45 +3,48 @@ Functions to create a raster plot of visibility/spectrum data from xarray Datase
 '''
 
 from bokeh.models import HoverTool
+import holoviews as hv
 import numpy as np
 import hvplot.xarray
 import hvplot.pandas
 
-from ._plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels, get_axis_formatters
-from casagui.data.measurement_set._ms_coords import set_index_coordinates
-from casagui.data.measurement_set._ms_data import get_correlated_data
+from ._xds_plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels
+from casagui.bokeh.format import get_time_formatter
+from casagui.data.measurement_set._ps_coords import set_index_coordinates
 
-def raster_plot_params(xds, x_axis, y_axis, vis_axis, data_group, selection, title, ms_name, color_limits, aggregator):
+def raster_plot_params(xds, plot_inputs):
     '''
     Get parameters needed for raster plot.
         xds (xarray Dataset): selected dataset of MSv4 data to plot
-        x_axis (str): x-axis to plot
-        y_axis (str): y-axis to plot
-        vis_axis (str): visibility component to plot (amp, phase, real, imag)
-        data_group (str): xds data group name of correlated data, flags, weights, and uvw
-        selection (dict): selection used for plot title
-        title (str): title for plot, or None
-        ms_name (str): base name of ms/zarr filename used for plot title
-        color_limits (tuple): color limits (min, max) for plotting amplitude else (None, None)
-        aggregator (str): 
+        plot_inputs (dict): user inputs to plot.
     Returns: dict
     '''
     plot_params = {}
-    plot_params['correlated_data'] = get_correlated_data(xds, data_group)
-    plot_params['title'] = title if title is not None else _get_plot_title(xds, selection, ms_name)
-    plot_params['x_axis_labels'] = get_axis_labels(xds, x_axis)
-    plot_params['y_axis_labels'] = get_axis_labels(xds, y_axis)
-    plot_params['c_axis_labels'] = _get_vis_axis_labels(xds, data_group, vis_axis, aggregator)
-    plot_params['color_limits'] = color_limits
-    plot_params['aggregator'] = aggregator
+    plot_params['correlated_data'] = plot_inputs['correlated_data']
+    plot_params['color_limits'] = plot_inputs['color_limits']
+    plot_params['aggregator'] = plot_inputs['aggregator']
+
+    if plot_inputs['title']: 
+        plot_params['title'] = plot_inputs['title']
+    else:
+        plot_params['title'] = _get_plot_title(xds, plot_inputs)
+
+    plot_params['x_axis_labels'] = get_axis_labels(xds, plot_inputs['x_axis'])
+    plot_params['y_axis_labels'] = get_axis_labels(xds, plot_inputs['y_axis'])
+    plot_params['c_axis_labels'] = _get_vis_axis_labels(xds, plot_inputs)
     return plot_params
 
-def _get_plot_title(xds, selection, ms_name):
+def _get_plot_title(xds, plot_inputs):
     ''' Form string containing ms name and selected values '''
+    selection = plot_inputs['selection']
+    data_dims = plot_inputs['data_dims']
+    ms_name = plot_inputs['ms_basename']
+
     title = f"{ms_name}\n"
 
     ps_selection = []
     dim_selections = []
+
     for key in selection:
         # Add processing set selection: spw, field, and intent
         if key == 'spw_name':
@@ -55,7 +58,9 @@ def _get_plot_title(xds, selection, ms_name):
             ps_selection.append(f"source: {selection[key]}")
         elif key == 'intents':
             ps_selection.append(f"intents: {selection[key]}")
-        else:
+        elif key == 'data_group':
+            continue # do not include?
+        elif key in data_dims:
             # Add selected dimensions to title: name (index)
             label = get_coordinate_labels(xds, key)
             index = selection[key] if isinstance(selection[key], int) else None
@@ -68,10 +73,14 @@ def _get_plot_title(xds, selection, ms_name):
     title += '  '.join(dim_selections)
     return title
 
-def _get_vis_axis_labels(xds, data_group, vis_axis, aggregator):
-    axis, label = get_vis_axis_labels(xds, data_group, vis_axis)
+def _get_vis_axis_labels(xds, plot_inputs):
+    data_group = plot_inputs['selection']['data_group']
+    correlated_data = plot_inputs['correlated_data']
+    vis_axis = plot_inputs['vis_axis']
+    aggregator = plot_inputs['aggregator']
+    axis, label = get_vis_axis_labels(xds, data_group, correlated_data, vis_axis)
     if aggregator:
-        label = aggregator.capitalize() + " " + label
+        label = " ".join([aggregator.capitalize(), label])
     return (axis, label)
 
 def raster_plot(xds, plot_params):
@@ -111,22 +120,21 @@ def raster_plot(xds, plot_params):
     except Exception as e:
         print("Plot exception:", e)
 
-    # Return combined plots or single plot
-    if flagged_plot is not None and unflagged_plot is not None:
+    # Return Overlay plot or single QuadMesh plot
+    if flagged_plot and unflagged_plot:
         plot = flagged_plot * unflagged_plot.opts(colorbar_position='left')
-        tooltips, formatters = _get_hover_settings(x_axis, y_axis, (xda_name, flagged_name))
-    elif unflagged_plot is not None:
-        plot = unflagged_plot
-        tooltips, formatters = _get_hover_settings(x_axis, y_axis, xda_name)
+    elif unflagged_plot:
+        plot = unflagged_plot.opts(colorbar_position='left')
     else:
         plot = flagged_plot
-        tooltips, formatters = _get_hover_settings(x_axis, y_axis, flagged_name)
-    hover = HoverTool(tooltips=tooltips, formatters=formatters)
-    return plot.opts(tools=[hover])
+
+    return plot.opts(
+       hv.opts.QuadMesh(tools=['hover']))
 
 def _plot_xda(xda, x_axis, y_axis, c_axis, color_limits, title, x_label, y_label, c_label, x_ticks, y_ticks, colormap):
     # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
-    x_formatter, y_formatter = get_axis_formatters(x_axis, y_axis)
+    x_formatter = get_time_formatter() if x_axis == 'time' else None
+    y_formatter = get_time_formatter() if y_axis == 'time' else None
 
     if xda[x_axis].size > 1 and xda[y_axis].size > 1:
         # Raster 2D data
@@ -134,7 +142,8 @@ def _plot_xda(xda, x_axis, y_axis, c_axis, color_limits, title, x_label, y_label
             clim=color_limits, cmap=colormap, clabel=c_label,
             title=title, xlabel=x_label, ylabel=y_label,
             xformatter=x_formatter, yformatter=y_formatter,
-            rot=90, xticks=x_ticks, yticks=y_ticks, colorbar=True,
+            rot=90, xticks=x_ticks, yticks=y_ticks,
+            colorbar=True,
         )
     else:
         # Cannot raster 1D data, use scatter from pandas dataframe
@@ -147,30 +156,3 @@ def _plot_xda(xda, x_axis, y_axis, c_axis, color_limits, title, x_label, y_label
             rot=90, xticks=x_ticks, yticks=y_ticks,
             marker='s', hover=True,
         )
-
-def _get_hover_settings(x_axis, y_axis, c_axis):
-    formatters = {}
-    x_tooltip = "$x"
-    y_tooltip = "$y"
-
-    formats = {"time": "{%F %T}", "baseline": "{0}", "polarization": "{0}"}
-    if x_axis in formats:
-        x_tooltip += formats[x_axis]
-    if y_axis in formats:
-        y_tooltip += formats[y_axis]
-
-    tooltips=[
-        (x_axis, x_tooltip),
-        (y_axis, y_tooltip),
-    ]
-    if isinstance(c_axis, tuple):
-        tooltips.extend([(axis, "@" + axis) for axis in c_axis])
-    else:
-        tooltips.append((c_axis, "@" + c_axis))
-
-    if x_axis == 'time':
-        formatters["$x"] = "datetime"
-    elif y_axis == 'time':
-        formatters["$y"] = "datetime"
-
-    return tooltips, formatters

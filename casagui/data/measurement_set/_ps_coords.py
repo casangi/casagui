@@ -19,22 +19,6 @@ def set_datetime_coordinate(xds):
         xds['time'] = to_datetime(xds.time, unit=time_attrs['units'][0], origin=time_attrs['format'])
     xds.time.attrs = time_attrs
 
-def set_index_coordinates(xds, coordinates):
-    ''' Add coordinate for string values (creates new xds) then replace with numerical index. '''
-    for coordinate in coordinates:
-        if coordinate == "polarization":
-            xds = xds.assign_coords({"polarization_name": (xds.polarization.dims, xds.polarization.values)})
-            xds["polarization"] = np.array(range(xds.polarization.size))
-        elif coordinate == "baseline":
-            xds = xds.assign_coords({"baseline_name": (xds.baseline.dims, xds.baseline.values)})
-            xds["baseline"] = np.array(range(xds.baseline.size))
-        elif coordinate == "antenna_name":
-            xds = xds.assign_coords({"antenna": (xds.antenna_name.dims, xds.antenna_name.values)})
-            all_ant_names = xds.antenna_xds.antenna_name.values.tolist()
-            xds_ant_ids = [all_ant_names.index(ant_name) for ant_name in xds.antenna_name.values]
-            xds["antenna_name"] = np.array(xds_ant_ids)
-    return xds
-
 def _set_coordinate_unit(xds):
     ''' Set coordinate units attribute as string not list for plotting. '''
     for coord in xds.coords:
@@ -66,4 +50,20 @@ def _set_baseline_coordinate(xds):
         xds = xds.assign_coords({"baseline": (xds.baseline_id.dims, np.array(baseline_names))})
         xds = xds.swap_dims({"baseline_id": "baseline"})
         xds = xds.drop("baseline_id")
+    return xds
+
+def set_index_coordinates(xds, coordinates):
+    ''' Add coordinate for string values (creates new xds) then replace with numerical index. '''
+    for coordinate in coordinates:
+        if coordinate == "polarization":
+            xds = xds.assign_coords({"polarization_name": (xds.polarization.dims, xds.polarization.values)})
+            xds["polarization"] = np.array(range(xds.polarization.size))
+        elif coordinate == "baseline":
+            xds = xds.assign_coords({"baseline_name": (xds.baseline.dims, xds.baseline.values)})
+            xds["baseline"] = np.array(range(xds.baseline.size))
+        elif coordinate == "antenna_name":
+            xds = xds.assign_coords({"antenna": (xds.antenna_name.dims, xds.antenna_name.values)})
+            all_ant_names = xds.antenna_xds.antenna_name.values.tolist()
+            xds_ant_ids = [all_ant_names.index(ant_name) for ant_name in xds.antenna_name.values]
+            xds["antenna_name"] = np.array(xds_ant_ids)
     return xds

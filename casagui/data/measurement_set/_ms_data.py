@@ -1,156 +1,169 @@
-''' Get MeasurementSet data from xarray Dataset '''
+'''
+Class for accessing and selecting MeasurementSet data using data backend.
+'''
+import os
 
-import numpy as np
-from astropy.constants import c
-from pandas import to_datetime
-import xarray as xr
+from ._ps_data import PsData
 
-from xradio.measurement_set.processing_set import ProcessingSet
+class MsData:
 
-def is_vis_axis(axis):
-    return axis in ['amp', 'phase', 'real', 'imag']
+    def __init__(self, ms_path, logger):
+        self._ms_path = ms_path
+        self._logger = logger
+        self._data = None
+        self._data_initialized = False
+        self._init_data(ms_path)
 
-def get_correlated_data(xds, data_group):
-    return xds.attrs['data_groups'][data_group]['correlated_data']
+    def is_valid(self):
+        ''' Returns whether MS path has been set so data can be accessed. '''
+        return self._data_initialized
 
-def get_axis_data(xds, axis, data_group=None):
-    ''' Get requested axis data from xarray dataset.
-    xds (dict): msv4 xarray.Dataset
-    axis (str): axis data to retrieve.
-    returns:    xarray.DataArray
-    '''
+    def get_path(self):
+        ''' Returns path of MS/zarr file or None if not set. '''
+        if self._data_initialized:
+            return self._data.get_path() # path to zarr file
+        elif self._ms_path:
+            return self._ms_path # path to ms v2
+        else:
+            return None
 
-    group_info = xds.data_groups[data_group]
+    def get_basename(self):
+        ''' Returns basename of MS path or None if not set. '''
+        if self._ms_path:
+            return os.path.splitext(os.path.basename(self._ms_path))[0]
+        self._log_no_ms()
+        return None
 
-    if _is_coordinate_axis(axis):
-        return xds[axis]
-    elif axis == 'channel':
-        return xr.DataArray(np.array(range(xds.frequency.size)), dtype=np.int32)
-    elif axis == 'field':
-        return xr.DataArray([xds[group_info['correlated_data']].field_and_source_xds.field_name])
-    elif axis == 'flag':
-        return xds[group_info['flag']]
-    elif axis == 'intents':
-        return xr.DataArray(["".join(xds.partition_info['intents'])])
-    elif 'spw' in axis:
-        return _get_spw_axis(xds, axis)
-    elif _is_antenna_axis(axis):
-        return _get_antenna_axis(xds, axis)
-    elif is_vis_axis(axis):
-        return _calc_vis_axis(xds, axis, group_info['correlated_data'])
-    elif _is_uvw_axis(axis):
-        if 'uvw' in group_info:
-            return _calc_uvw_axis(xds, axis, group_info['uvw'])
-        raise RuntimeError("Axis {} is not valid in this dataset, no uvw data", axis) 
-    elif 'wave' in axis:
-        return _calc_wave_axis(xds, axis, group_info['uvw'])
-    elif _is_weight_axis(axis):
-        return _calc_weight_axis(xds, axis)
-    else:
-        raise ValueError(f"Invalid/unsupported axis {axis}")
+    def summary(self, columns=None):
+        ''' Print summary of Processing Set data.
+                columns (None, str, list): type of metadata to list.
+                    None:      Print all summary columns in ProcessingSet.
+                    'by_msv4': Print formatted summary metadata by MSv4.
+                    str, list: Print a subset of summary columns in ProcessingSet.
+                        Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+            Returns: list of unique values when single column is requested, else None
+        '''
+        # ProcessingSet function
+        if self._data_initialized:
+            return self._data.summary(columns)
+        else:
+            self._log_no_ms()
+            return None
 
-def get_dimension_values(ps, dimension):
-    values = []
-    for xds in ps.values():
-        try:
-            values.extend(xds[dimension].values.tolist())
-        except TypeError:
-            values.append(xds[dimension].values.item())
-    return sorted(set(values))
+    def get_data_groups(self):
+        ''' Returns set of data group names in Processing Set data. '''
+        # ProcessingSet function
+        if self._data_initialized:
+            return self._data.get_data_groups()
+        self._log_no_ms()
+        return None
 
-def _is_coordinate_axis(axis):
-    return axis in ['scan_number', 'time', 'frequency', 'polarization',
-        #'velocity': 'frequency', # calculate
-        # TODO?
-        #'observation':  no id, xds.observation_info (observer, project, release date)
-        #'feed1':  no id, xds.antenna_xds
-        #'feed2':  no id, xds.antenna_xds
-    ]
+    def get_antennas(self, plot_positions=False):
+        ''' Returns list of antenna names in data.
+                plot_positions (bool): Optionally show plot of antenna positions.
+        '''
+        if self._data_initialized:
+            return self._data.get_antennas(plot_positions)
+        self._log_no_ms()
+        return None
 
-def _is_uvw_axis(axis):
-    return axis in ['u', 'v', 'w', 'uvdist']
+    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
+        ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
+                label_all_fields (bool); label all fields on the plot
+                data_group (str); data group to use for processing.
+        '''
+        # ProcessingSet function
+        if self._data_initialized:
+            self._data.plot_phase_centers(label_all_fields, data_group)
+        else:
+            self._logger.info("No MS set, cannot plot phase centers")
 
-def _is_antenna_axis(axis):
-    return 'baseline' in axis or 'antenna' in axis
+    def get_num_ms(self):
+        ''' Returns number of MeasurementSets in data. '''
+        if self._data_initialized:
+            return self._data.get_ps_len()
+        self._log_no_ms()
+        return None
 
-def _is_weight_axis(axis):
-    return axis in ['weight', 'sigma']
+    def get_max_data_dims(self):
+        ''' Returns maximum length of dimensions in data. '''
+        if self._data_initialized:
+            return self._data.get_ps_max_dims()
+        self._log_no_ms()
+        return None
 
-def _get_spw_axis(xds, axis):
-    if axis == 'spw_id':
-        return xr.DataArray([xds.frequency.spectral_window_id])
-    elif axis == 'spw_name':
-        return xr.DataArray([xds.frequency.spectral_window_name])
-    raise ValueError(f"Invalid spw axis {axis}")
+    def get_data_dimensions(self):
+        ''' Returns names of data dimensions. '''
+        if self._data_initialized:
+            return self._data.get_data_dimensions()
+        self._log_no_ms()
+        return None
 
-def _calc_vis_axis(xds, axis, correlated_data):
-    ''' Calculate axis from correlated data '''
-    xda = xds[correlated_data]
+    def get_dimension_values(self, dim):
+        ''' Return values for dimension in current data.
+                dim (str): dimension name
+        '''
+        if self._data_initialized:
+            return self._data.get_dimension_values(dim)
+        self._log_no_ms()
+        return None
 
-    # Single dish spectrum
-    if correlated_data == "SPECTRUM":
-        if axis in ['amp', 'real']:
-            return xda.assign_attrs(units='Jy')
-        raise RuntimeError(f"{axis} invalid for SPECTRUM dataset")
+    def get_first_spw(self):
+        ''' Returns name of first spw by id. '''
+        if self._data_initialized:
+            return self._data.get_first_spw()
+        self._log_no_ms()
+        return None
 
-    # Interferometry visibilities
-    if axis == 'amp':
-        return np.absolute(xda).assign_attrs(units='Jy')
-    elif axis == 'phase':
-        # np.angle(xda) returns ndarray not xr.DataArray
-        return (np.arctan2(xda.imag, xda.real) * 180.0/np.pi).assign_attrs(units="deg")
-    elif axis == 'real':
-        return np.real(xda.assign_attrs(units='Jy'))
-    elif axis == 'imag':
-        return np.imag(xda.assign_attrs(units='Jy'))
-    return None
+    def select_data(self, selection):
+        ''' Apply selection in data.
+                selection (dict): fields and values to select
+        '''
+        if self._data_initialized:
+            self._data.select_data(selection)
+        else:
+            self._log_no_ms()
 
-def _calc_uvw_axis(xds, axis, uvw_data):
-    ''' Calculate axis from UVW xarray DataArray '''
-    uvw_xda = xds[uvw_data]
-    if axis == 'u':
-        return uvw_xda.isel(uvw_label=0)
-    elif axis == 'v':
-        return uvw_xda.isel(uvw_label=1)
-    elif axis == 'w':
-        return uvw_xda.isel(uvw_label=2)
-    else: # uvdist
-        u_xda = uvw_xda.isel(uvw_label=0)
-        v_xda = uvw_xda.isel(uvw_label=1)
-        return np.sqrt(np.square(u_xda) + np.square(v_xda))
+    def get_selection(self):
+        ''' Returns selection dict. '''
+        if self._data_initialized:
+            return self._data.get_selection()
+        self._log_no_ms()
+        return None
 
-def _calc_wave_axis(xds, axis, uvw_data):
-    wave_axes = {'uwave': 'u', 'vwave': 'v', 'wwave': 'w', 'uvwave': 'uvdist'}
-    if axis not in wave_axes:
-        raise ValueError(f"Invalid wave axis {axis}")
+    def clear_selection(self):
+        ''' Clears selection dict and selected data. '''
+        if self._data_initialized:
+            self._data.clear_selection()
 
-    uvwdist_array = _calc_uvw_axis(xds, wave_axes[axis], uvw_data).values / c
-    freq_array = xds.frequency.values
-    wave = np.zeros(shape=(len(freq_array), len(uvwdist_array)), dtype=np.double)
+    def get_vis_stats(self, selection, vis_axis):
+        ''' Returns statistics (min, max, mean, std) for data selected by selection.
+                selection (dict): fields and values to select
+        '''
+        if self._data_initialized:
+            return self._data.get_vis_stats(selection, vis_axis)
+        self._log_no_ms()
+        return None
 
-    for i in range(len(uvwdist_array)):
-        wave[:, i] = uvwdist_array[i] * freq_array
+    def get_correlated_data(self, data_group):
+        ''' Returns name of correlated data variable in Processing Set data group '''
+        if self._data_initialized:
+            return self._data.get_correlated_data(data_group)
+        self._log_no_ms()
+        return None
 
-    wave_xda = xr.DataArray(wave, dims=['frequency', 'uvw_label'])
-    return wave_xda
+    def get_raster_data(self, plot_inputs):
+        ''' Returns xarray Dataset after applying plot inputs '''
+        if self._data_initialized:
+            return self._data.get_raster_data(plot_inputs)
+        self._log_no_ms()
+        return (None, None)
 
-def _calc_weight_axis(xds, axis):
-    weight = xds[group_info['weight']]
-    if axis == 'weight':
-        return weight
-    return np.sqrt(1.0 / weight)
+    def _log_no_ms(self):
+        self._logger.info("No MS path set, cannot access data")
 
-def _get_antenna_axis(xds, axis):
-    if 'antenna_name' in xds.coords:
-        return xds.antenna_name
-
-    if axis == 'antenna1':
-        return xds.baseline_antenna1_name
-    if axis == 'antenna2':
-        return xds.baseline_antenna2_name
-    if axis == 'baseline_id':
-        return xds.baseline_id
-    if axis == 'baseline':
-        return xds.baseline
-    raise ValueError(f"Invalid antenna/baseline axis {axis}")
-
+    def _init_data(self, ms_path):
+        ''' Data backend for MeasurementSet; currently xradio ProcessingSet '''
+        if ms_path:
+             self._data = PsData(ms_path, self._logger)
+             self._data_initialized = True

@@ -13,9 +13,9 @@ try:
 except ImportError:
     _have_toolviper = False
 
-from ._ms_data import get_correlated_data, get_axis_data
+from ._xds_data import get_correlated_data, get_axis_data
 
-def calculate_ms_stats(ps, ps_store, vis_axis, data_group, logger):
+def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
     '''
         Calculate stats for unflagged visibilities: min, max, mean, std
         ps (msv4 processing set): visibility data with flags

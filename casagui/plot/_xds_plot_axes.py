@@ -1,11 +1,8 @@
 '''
 Functions for plot axes labels
 '''
-from bokeh.models.formatters import DatetimeTickFormatter
 import numpy as np
 import xarray as xr
-
-from casagui.data.measurement_set._ms_data import get_correlated_data
 
 def get_coordinate_labels(xds, coordinate):
     ''' Return coordinate values as string or list of strings, or None if numeric '''
@@ -39,7 +36,7 @@ def get_axis_labels(xds, axis):
         label =  "Polarization"
     return (axis, label, ticks)
 
-def get_vis_axis_labels(xds, data_group, vis_axis, include_unit=True):
+def get_vis_axis_labels(xds, data_group, correlated_data, vis_axis, include_unit=True):
     ''' Get vis axis label for colorbar. Returns (axis, label, ticks) '''
     label = vis_axis.capitalize()
     if data_group != 'base':
@@ -50,18 +47,12 @@ def get_vis_axis_labels(xds, data_group, vis_axis, include_unit=True):
         if vis_axis in xds.data_vars and 'units' in xds[vis_axis].attrs:
             units = xds[vis_axis].units
         else:
-            correlated_data = get_correlated_data(xds, data_group)
             if 'units' in xds[correlated_data].attrs:
                 units = xds[correlated_data].units
         if units:
             label += f" ({units})"
 
     return (vis_axis, label)
-
-def get_axis_formatters(x_axis, y_axis):
-    x_formatter = _get_time_formatter() if x_axis == 'time' else None
-    y_formatter = _get_time_formatter() if y_axis == 'time' else None
-    return x_formatter, y_formatter
 
 def _get_time_labels(time_xda):
     ''' Return time as formatted string, or None to autogenerate ticks '''
