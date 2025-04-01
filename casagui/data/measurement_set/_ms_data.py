@@ -1,11 +1,16 @@
 '''
-Class for accessing and selecting MeasurementSet data using data backend.
+    Class for accessing and selecting MeasurementSet data using a data backend.
 '''
+
 import os
 
-from ._ps_data import PsData
+from casagui.data.measurement_set.processing_set._ps_data import PsData
 
 class MsData:
+    '''
+    Access and select MeasurementSet data.
+    Current backend implementation is PsData using xradio Processing Set.
+    '''
 
     def __init__(self, ms_path, logger):
         self._ms_path = ms_path
@@ -22,10 +27,9 @@ class MsData:
         ''' Returns path of MS/zarr file or None if not set. '''
         if self._data_initialized:
             return self._data.get_path() # path to zarr file
-        elif self._ms_path:
+        if self._ms_path:
             return self._ms_path # path to ms v2
-        else:
-            return None
+        return None
 
     def get_basename(self):
         ''' Returns basename of MS path or None if not set. '''
@@ -40,15 +44,20 @@ class MsData:
                     None:      Print all summary columns in ProcessingSet.
                     'by_msv4': Print formatted summary metadata by MSv4.
                     str, list: Print a subset of summary columns in ProcessingSet.
-                        Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
-            Returns: list of unique values when single column is requested, else None
+                        Options: 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name',
+                                 'field_name, 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
         '''
         # ProcessingSet function
         if self._data_initialized:
-            return self._data.summary(columns)
-        else:
-            self._log_no_ms()
-            return None
+            self._data.summary(columns)
+        self._log_no_ms()
+
+    def get_summary_values(self, column):
+        ''' Return list of unique values for summary column '''
+        # ProcessingSet function
+        if self._data_initialized:
+            self._data.get_summary_values(column)
+        self._log_no_ms()
 
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
@@ -165,5 +174,5 @@ class MsData:
     def _init_data(self, ms_path):
         ''' Data backend for MeasurementSet; currently xradio ProcessingSet '''
         if ms_path:
-             self._data = PsData(ms_path, self._logger)
-             self._data_initialized = True
+            self._data = PsData(ms_path, self._logger)
+            self._data_initialized = True

@@ -1,24 +1,30 @@
 '''
-Base class for ms plots (raster and scatter)
+Base class for ms plots
 '''
+
 import os
 import time
 
-from bokeh.io import reset_output as reset_bokeh_output
 import hvplot
 
 try:
     from toolviper.utils.logger import setup_logger
-    _have_toolviper = True
+    _HAVE_TOOLVIPER = True
 except ImportError:
-    _have_toolviper = False
-    from casagui.utils._logging import get_logger
-    
+    _HAVE_TOOLVIPER = False
 
 from casagui.data.measurement_set._ms_data import MsData
+from casagui.toolbox._app_context import AppContext
 from casagui.utils import is_notebook
+#from casagui.utils import resource_manager, reset_resource_manager
+from casagui.utils._logging import get_logger
+
+PLOT_WIDTH = 900
+PLOT_HEIGHT = 600
 
 class MsPlot:
+
+    ''' Base class for MS plots with common functionality '''
 
     def __init__(self, ms=None, log_level="info", interactive=False, app_name="MsPlot"):
         if not ms and not interactive:
@@ -33,7 +39,7 @@ class MsPlot:
         self._plots = []
 
         # Set logger: use toolviper logger else casalog else python logger
-        if _have_toolviper:
+        if _HAVE_TOOLVIPER:
             self._logger = setup_logger(app_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
         else:
             self._logger = get_logger()
@@ -44,7 +50,6 @@ class MsPlot:
         self._app_title = ' '.join([self._app_name, self._basename])
 
         if interactive:
-            from casagui.utils import resource_manager, reset_resource_manager
             self._app_context = AppContext(self._app_title)
 
     def summary(self, columns=None):
@@ -54,7 +59,8 @@ class MsPlot:
                     None:      Print all summary columns in ProcessingSet.
                     'by_msv4': Print formatted summary metadata by MSv4.
                     str, list: Print a subset of summary columns in ProcessingSet.
-                        Options include 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name', 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
+                        Options: 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name',
+                                 'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
             Returns: list of unique values when single column is requested, else None
         '''
         self._data.summary(columns)
@@ -76,18 +82,20 @@ class MsPlot:
         self._data.plot_phase_centers(label_all_fields, data_group)
 
     def clear_selection(self):
+        ''' Clear selection in data and restore to original '''
         self._data.clear_selection()
 
     def clear_plots(self):
+        ''' Clear plot list '''
         self._plots.clear()
 
     def show(self, title=None, port=0, layout=None):
         ''' 
-        Show interactive Bokeh plots in a browser.  Plot tools include pan, zoom, hover, and save.
-        Multiple plots can be displayed in a panel layout. Default will show first plot only.
-            title (str): browser tab title.
-            port (int): allows specifying port number.
-            layout (tuple): (start, rows, columns) settings for multiple plots.
+        Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
+        Multiple plots can be shown in a panel layout.  Default is to show the first plot only.
+            title (str): browser tab title.  Default is "{app} {ms_name}".
+            port (int): optional port number to use.  Default 0 will select a port number.
+            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
@@ -104,7 +112,7 @@ class MsPlot:
             hvplot.show(plot.cols(layout[2]), title=title, port=port, threaded=True)
         else:
             # Show single plot
-            hvplot.show(plot, title=title, port=port, threaded=True)
+            hvplot.show(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), title=title, port=port, threaded=True)
 
     def save(self, filename='ms_plot.png', fmt='auto', layout=None, export_range='one'):
         '''
@@ -120,14 +128,14 @@ class MsPlot:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
 
         # Get single plot, or combine plots into panel layout
-        layout = (0, 1, 1) if layout is None else layout 
+        layout = (0, 1, 1) if layout is None else layout
         plot, is_layout = self._layout_plots(layout)
 
         start = time.time()
         if is_layout:
             # Save plots combined into one layout
             hvplot.save(plot.cols(layout[2]), filename=filename, fmt=fmt)
-            self._logger.info(f"Saved plot to {filename}.")
+            self._logger.info("Saved plot to %s.", filename)
         else:
             # Save plots individually, with index appended if exprange='all' and multiple plots.
             num_plots = len(self._plots)
@@ -141,10 +149,10 @@ class MsPlot:
                     exportname = f"{name}_{i}{ext}"
                 else:
                     exportname = filename
-                hvplot.save(plot, filename=exportname, fmt=fmt)
-                self._logger.info(f"Saved plot to {exportname}.")
+                hvplot.save(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=exportname, fmt=fmt)
+                self._logger.info("Saved plot to %s.", exportname)
 
-        self._logger.debug(f"Save elapsed time: {time.time() - start:.3f} s.")
+        self._logger.debug("Save elapsed time: %.3fs.", time.time() - start)
 
     def _layout_plots(self, layout):
         if len(layout) != 3:
@@ -155,9 +163,7 @@ class MsPlot:
         if start >= num_plots:
             raise IndexError(f"layout start {start} out of range {num_plots}.")
 
-        num_layout_plots = rows * columns
-        if num_plots < num_layout_plots:
-            num_layout_plots = num_plots
+        num_layout_plots = min(num_plots, rows * columns)
 
         # Set plots in layout
         layout_plot_count = 0

@@ -24,10 +24,14 @@
 #                        520 Edgemont Road
 #                        Charlottesville, VA 22903-2475 USA
 #
-########################################################################'''
+########################################################################
+
+''' Format time ticks for consistency at various zoom levels '''
+
 from bokeh.models.formatters import DatetimeTickFormatter
 
 def get_time_formatter():
+    ''' Tick formatter which includes H:M:S in most ticks '''
     return DatetimeTickFormatter(
         context_which = 'all',
         microseconds='%fus',

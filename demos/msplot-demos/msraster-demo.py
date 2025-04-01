@@ -57,7 +57,8 @@ def plot_ms_raster():
     # For PS selection options: msr.summary()
     intent_selection = {'intents': ['OBSERVE_TARGET#ON_SOURCE']}
 
-    # Default plot is x_axis="baseline", y_axis="time", vis_axis="amp" selecting data_group "base" in first spw.
+    # ------------------------------------------------------------------
+    # Demo default plot: x_axis="baseline", y_axis="time", vis_axis="amp" selecting data_group "base" in first spw.
     # The unplotted dimensions "frequency" and "polarization" are also automatically selected by first index.
     # This dataset only has group 'base', but could have 'corrected', 'model', etc.
     # This dataset only has one spectral window, but first spw id would be automatically selected.
@@ -66,6 +67,7 @@ def plot_ms_raster():
     msr.show()
     msr.save(filename=os.path.join(plot_dir, "default_plot.png"))
 
+    # ------------------------------------------------------------------
     # Demo vis axis options
     for vis_axis in ['amp', 'phase', 'real', 'imag']:
         msr.plot(selection=intent_selection, vis_axis=vis_axis)
@@ -73,6 +75,7 @@ def plot_ms_raster():
         filename=os.path.join(plot_dir, f"{vis_axis}.png")
         msr.save(filename)
 
+    # ------------------------------------------------------------------
     # Demo multiple plots in a layout (start, rows, columns).
     # Default layout is single plot (0, 1, 1) where start = plot index 0.
     # Set clear_plots=False after first plot
@@ -84,6 +87,7 @@ def plot_ms_raster():
     filename=os.path.join(plot_dir, "vis_axis_layout.png")
     msr.save(filename, layout=(0, 2, 2))
 
+    # ------------------------------------------------------------------
     # Demo dimension combinations for x and y axis
     axes = [
         ('baseline', 'time'),
@@ -100,7 +104,7 @@ def plot_ms_raster():
         filename=os.path.join(plot_dir, f"{plot_axes}.png")
         msr.save(filename)
 
-
+    # ------------------------------------------------------------------
     # Demo ms selection of dimensions *by value*, instead of automatic first index
     dim_selection = {
         'intents': ['OBSERVE_TARGET#ON_SOURCE'],
@@ -112,9 +116,8 @@ def plot_ms_raster():
     filename=os.path.join(plot_dir, "select_dims.png")
     msr.save(filename)
 
-
     # ------------------------------------------------------------------
-    # iter_axis: axis over which to iterate values for multiple plots
+    # Demo iter_axis: axis over which to iterate values for multiple plots
     # export_range ("one" or "all") - default "one" saves single plot starting at layout starting index.
     msr.plot(selection=intent_selection, iter_axis='polarization') # MS has XX, YY polarizations
 
@@ -137,12 +140,12 @@ def plot_ms_raster():
     # Layout multiple plots; export_range is ignored and only the layout is shown/saved.
     # Like single plots, for many iterations you could use a loop with increment equal to number of plots in layout;
     # for a 2x2 plot layout (4 plots), loop over n=range(0, n_iter, 4): msr.show(layout=n, 2, 2))
-    # Single row
+    # Single row layout
     msr.show(layout=(0, 1, 2), title="pol iter row layout")
     filename=os.path.join(plot_dir, "iter_row_layout.png")
     msr.save(filename, layout=(0, 1, 2))
 
-    # Single column
+    # Single column layout
     msr.show(layout=(0, 2, 1), title="pol iter column layout")
     filename=os.path.join(plot_dir, "iter_col_layout.png")
     msr.save(filename, layout=(0, 2, 1))
@@ -156,15 +159,16 @@ def plot_ms_raster():
     msr.save(filename, layout=(0, 2, 2))
 
     # ------------------------------------------------------------------
-    # aggregator: options include max, mean, median, min, std, sum, var.
-    # agg_axis: dimension over which to aggregate.
-    # time vs baseline, averaged over frequency. Selects first polarization automatically.
+    # Demo data aggregation:
+    #   aggregator: options include max, mean, median, min, std, sum, var.
+    #   agg_axis: dimension over which to aggregate.
+    # Plot time vs baseline, averaged over frequency. Selects first polarization automatically.
     msr.plot(selection=intent_selection, aggregator='mean', agg_axis='frequency')
     msr.show(title="mean frequency")
     filename=os.path.join(plot_dir, "agg_mean_frequency.png")
     msr.save(filename)
 
-    # time vs frequency, max across baselines. Selects first polarization automatically.
+    # Plot time vs frequency, max across baselines. Selects first polarization automatically.
     msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline')
     msr.show(title="max baseline")
     filename=os.path.join(plot_dir, "agg_max_baseline.png")

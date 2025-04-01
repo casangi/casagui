@@ -2,12 +2,11 @@
 Implementation of the ``MsRaster`` application for measurement set raster plotting and editing
 '''
 
-import os
 import time
 
 from casagui.plot._ms_plot import MsPlot
-from casagui.data.measurement_set._xds_data import VIS_AXIS_OPTIONS
-from casagui.data.measurement_set._raster_data import AGGREGATOR_OPTIONS
+from casagui.data.measurement_set.processing_set._xds_data import VIS_AXIS_OPTIONS
+from casagui.data.measurement_set.processing_set._ps_raster_data import AGGREGATOR_OPTIONS
 from casagui.plot._xds_raster_plot import raster_plot_params, raster_plot
 
 class MsRaster(MsPlot):
@@ -36,6 +35,7 @@ class MsRaster(MsPlot):
             self._set_default_plot_inputs() # should include all plot() parameters as well as color_limits
             self._launch_gui()
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None, iter_axis= None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
@@ -85,7 +85,9 @@ class MsRaster(MsPlot):
             super().clear_plots()
 
         # Check input values and save ms basename
-        self._check_plot_inputs(x_axis, y_axis, vis_axis, selection, aggregator, agg_axis, iter_axis, title)
+        plot_inputs = {'x_axis': x_axis, 'y_axis': y_axis, 'vis_axis': vis_axis, 'selection': selection,
+            'aggregator': aggregator, 'agg_axis': agg_axis, 'iter_axis': iter_axis, 'title': title}
+        self._check_plot_inputs(plot_inputs)
         self._plot_inputs['ms_basename'] = self._basename
 
         # Select default data group if not in user selection
@@ -100,8 +102,8 @@ class MsRaster(MsPlot):
             self._plot_inputs['selection']['spw_name'] = first_spw
             self._data.select_data({'spw_name': first_spw})
 
-        self._logger.info(f"Plotting {self._data.get_num_ms()} msv4 datasets.")
-        self._logger.info(f"Maximum dimensions for selected spw: {self._data.get_max_data_dims()}")
+        self._logger.info("Plotting %s msv4 datasets.", self._data.get_num_ms())
+        self._logger.info("Maximum dimensions for selected spw: %s", self._data.get_max_data_dims())
 
         # Set colorbar limits for amp vis axis if not interactive (user can adjust interactively)
         self._set_color_limits()
@@ -111,19 +113,9 @@ class MsRaster(MsPlot):
         else:
             self._do_plot()
 
-        self._logger.debug(f"Plot elapsed time: {time.time() - start:.2f}s.")
+        self._logger.debug("Plot elapsed time: %.2fs.", time.time() - start)
+# pylint: enable=too-many-arguments, too-many-positional-arguments
 
-    def show(self, title=None, port=0, layout=None):
-        ''' 
-        Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
-        Multiple plots can be shown in a panel layout.  Default is to show the first plot only.
-            title (str): browser tab title.  Default is "MsRaster {ms_name}".
-            port (int): optional port number to use.  Default 0 will select a port number.
-
-            Options for showing multiple plots (iteration or clearplots=False):
-            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
-        '''
-        super().show(title, port, layout)
 
     def save(self, filename='', fmt='auto', layout=None, export_range='one'):
         '''
@@ -135,8 +127,10 @@ class MsRaster(MsPlot):
             layout (tuple): (start, rows, columns) for saving multiple plots in grid or selecting start plot. Default None is single plot (0,1,1).
             export_range(str): when layout is single plot, whether to save start plot only ('one') or all plots starting at start plot ('all'). Ignored if layout is a grid.
 
-        If filename is set, the plot will be exported to the specified filename in the format of its extension (see fmt options).  If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
-        When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
+        filename:
+            If set, the plot will be exported to the specified filename in the format of its extension (see fmt options).
+            If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
+            When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
         '''
         if not filename:
             filename = f"{self._plot_inputs['ms_basename']}_raster.png"
@@ -153,65 +147,69 @@ class MsRaster(MsPlot):
         self._plot_inputs['selection'] = selection
         self._plot_inputs['correlated_data'] = self._data.get_correlated_data(selection['data_group'])
 
-    def _check_plot_inputs(self, x_axis, y_axis, vis_axis, selection, aggregator, agg_axis, iter_axis, title):
+    def _check_plot_inputs(self, plot_inputs):
         ''' Check plot parameters against Processing Set.  Set data group selection if user did not. '''
-        plot_inputs = {}
+        self._check_axis_inputs(plot_inputs)
+        self._check_selection_input(plot_inputs)
+        self._check_agg_input(plot_inputs)
+        if plot_inputs['title'] and not isinstance(plot_inputs['title'], str):
+            raise RuntimeError("Invalid parameter type: title must be a string.")
+        self._plot_inputs = plot_inputs
 
-        # Rename "baseline" x_axis or y_axis for SPECTRUM data dimension
+    def _check_axis_inputs(self, plot_inputs):
+        ''' Check x_axis, y_axis, vis_axis, and iter_axis inputs '''
+        # Rename x_axis or y_axis "baseline" for SPECTRUM data dimension
+        x_axis = plot_inputs['x_axis']
+        y_axis = plot_inputs['y_axis']
         data_dims = self._data.get_data_dimensions()
         x_axis = 'antenna_name' if x_axis == 'baseline' and "antenna_name" in data_dims else x_axis
         y_axis = 'antenna_name' if y_axis == 'baseline' and "antenna_name" in data_dims else y_axis
-
         if x_axis not in data_dims or y_axis not in data_dims:
             raise ValueError(f"Invalid parameter value: select x and y axis from {data_dims}.")
         plot_inputs['data_dims'] = data_dims
         plot_inputs['x_axis'] = x_axis
         plot_inputs['y_axis'] = y_axis
 
-        if vis_axis not in VIS_AXIS_OPTIONS:
-            raise ValueError(f"Invalid parameter value: vis_axis {vis_axis}. Options include {VIS_AXIS_OPTIONS}")
-        plot_inputs['vis_axis'] = vis_axis
+        if plot_inputs['vis_axis'] not in VIS_AXIS_OPTIONS:
+            raise ValueError(f"Invalid parameter value: vis_axis {plot_inputs['vis_axis']}. Options include {VIS_AXIS_OPTIONS}")
 
+        iter_axis = plot_inputs['iter_axis']
+        if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
+            raise RuntimeError(f"Invalid parameter value: iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
+
+    def _check_selection_input(self, plot_inputs):
+        ''' Check selection type and data_group selection.  Make copy of user selection. '''
+        selection = plot_inputs['selection']
         if selection:
+            # Use a copy so that automatic selections do not change user's selection
             if not isinstance(selection, dict):
-                 raise RuntimeError("Invalid parameter type: selection must be dictionary.")
-
+                raise RuntimeError("Invalid parameter type: selection must be dictionary.")
             if 'data_group' in selection and selection['data_group'] not in self._data.get_data_groups():
-                raise ValueError(f"Invalid parameter value: data_group {data_group}. Use data_groups() to see options.")
-
-            # Save a copy so that automatic selections do not change user's selection
+                raise ValueError(f"Invalid parameter value: data_group {selection['data_group']}. Use data_groups() to see options.")
             plot_inputs['selection'] = selection.copy()
-        else:
-            plot_inputs['selection'] = selection
+
+    def _check_agg_input(self, plot_inputs):
+        ''' Check aggregator and agg_axis. Set agg_axis if not set. '''
+        aggregator = plot_inputs['aggregator']
+        agg_axis = plot_inputs['agg_axis']
 
         if aggregator and aggregator not in AGGREGATOR_OPTIONS:
             raise RuntimeError(f"Invalid parameter value: aggregator {aggregator}. Options include {AGGREGATOR_OPTIONS}.")
-        plot_inputs['aggregator'] = aggregator
-
-        # Set agg_axis to non-plotted dim axes if not set
-        if aggregator and not agg_axis:
-            agg_axis = data_dims
-            agg_axis.remove(x_axis)
-            agg_axis.remove(y_axis)
 
         if agg_axis:
-            if not isinstance(agg_axis, list) and not isinstance(agg_axis, str):
-                raise RuntimeError(f"Invalid parameter value: agg axis {agg_axis}. Options include one or more dimensions {data_dims}.")
+            if not isinstance(agg_axis, str) and not isinstance(agg_axis, list):
+                raise RuntimeError(f"Invalid parameter value: agg axis {agg_axis}. Options include one or more dimensions {plot_inputs['data_dims']}.")
             if isinstance(agg_axis, str):
                 agg_axis = [agg_axis]
             for axis in agg_axis:
-                if axis not in data_dims or axis in (x_axis, y_axis):
+                if axis not in plot_inputs['data_dims'] or axis in (plot_inputs['x_axis'], plot_inputs['y_axis']):
                     raise RuntimeError(f"Invalid parameter value: aggregator axis {axis}. Must be dimension which is not a plot axis.")
+        elif aggregator:
+            # Set agg_axis to non-plotted dim axes
+            agg_axis = plot_inputs['data_dims'].copy()
+            agg_axis.remove(plot_inputs['x_axis'])
+            agg_axis.remove(plot_inputs['y_axis'])
         plot_inputs['agg_axis'] = agg_axis
-
-        if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
-            raise RuntimeError(f"Invalid parameter value: iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
-        plot_inputs['iter_axis'] = iter_axis
-
-        if title and not isinstance(title, str):
-            raise RuntimeError(f"Invalid parameter type: title must be a string.")
-        plot_inputs['title'] = title
-        self._plot_inputs = plot_inputs
 
     def _set_color_limits(self):
         ''' Calculate stats for color limits for non-interactive amplitude plots. '''
@@ -228,7 +226,7 @@ class MsRaster(MsPlot):
                 self._spw_color_limits[spw_name] = color_limits
 
         if color_limits:
-            self._logger.info(f"Setting colorbar limits: ({color_limits[0]:.4f}, {color_limits[1]:.4f}).")
+            self._logger.info("Setting colorbar limits: (%.4f, %.4f).", color_limits[0], color_limits[1])
         else:
             self._logger.info("Autoscale colorbar limits")
 
@@ -254,7 +252,7 @@ class MsRaster(MsPlot):
             color_limits = None # flagged data only
         else:
             color_limits = (clip_min, clip_max)
-        self._logger.debug(f"Stats elapsed time: {time.time() - start:.2f} s.")
+        self._logger.debug("Stats elapsed time: %.2fs.", time.time() - start)
         return color_limits
 
     def _do_plot(self):
@@ -271,10 +269,8 @@ class MsRaster(MsPlot):
             if plot is None:
                 raise RuntimeError("Plot failed.")
 
-            if self._interactive:
-                pass # TODO: update gui
-            else:
-                self._plots.append(plot)
+            self._plots.append(plot)
+
 
     def _do_iter_plot(self):
         ''' Create one plot per iteration value '''
@@ -283,7 +279,7 @@ class MsRaster(MsPlot):
         if iter_values:
             for value in iter_values:
                 # Select iteration value and make plot
-                self._logger.info(f"Plot {iter_axis} iteration value {value}")
+                self._logger.info("Plot %s iteration value %s", iter_axis, value)
                 self._plot_inputs['selection'][iter_axis] = value
                 self._do_plot()
 
@@ -299,6 +295,3 @@ class MsRaster(MsPlot):
         self._plot_inputs['iter_axis'] = None
         self._plot_inputs['title'] = None
         self._plot_inputs['color_limits'] = None
-
-    def _launch_gui(self):
-        pass # TODO

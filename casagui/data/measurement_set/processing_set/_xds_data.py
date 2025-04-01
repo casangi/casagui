@@ -1,56 +1,52 @@
 ''' Get MeasurementSet data from xarray Dataset '''
 
+from astropy import constants
 import numpy as np
-from astropy.constants import c
-from pandas import to_datetime
 import xarray as xr
-
-from xradio.measurement_set.processing_set import ProcessingSet
 
 VIS_AXIS_OPTIONS = ['amp', 'phase', 'real', 'imag']
 UVW_AXIS_OPTIONS = ['u', 'v', 'w', 'uvdist']
 WEIGHT_AXIS_OPTIONS = ['weight', 'sigma']
 
 def get_correlated_data(xds, data_group):
+    ''' Return correlated_data value in data_group dict '''
     return xds.attrs['data_groups'][data_group]['correlated_data']
 
 def get_axis_data(xds, axis, data_group=None):
     ''' Get requested axis data from xarray dataset.
-    xds (dict): msv4 xarray.Dataset
-    axis (str): axis data to retrieve.
-    returns:    xarray.DataArray
+            xds (dict): msv4 xarray.Dataset
+            axis (str): axis data to retrieve.
+            data_group (str): correlated data group name.
+        Returns:    xarray.DataArray
     '''
-
     group_info = xds.data_groups[data_group]
-
+    xda = None
     if _is_coordinate_axis(axis):
-        return xds[axis]
-    elif axis == 'channel':
-        return xr.DataArray(np.array(range(xds.frequency.size)), dtype=np.int32)
-    elif axis == 'field':
-        return xr.DataArray([xds[group_info['correlated_data']].field_and_source_xds.field_name])
-    elif axis == 'flag':
-        return xds[group_info['flag']]
-    elif axis == 'intents':
-        return xr.DataArray(["".join(xds.partition_info['intents'])])
-    elif 'spw' in axis:
-        return _get_spw_axis(xds, axis)
+        xda = xds[axis]
     elif _is_antenna_axis(axis):
-        return _get_antenna_axis(xds, axis)
+        xda = _get_antenna_axis(xds, axis)
     elif _is_vis_axis(axis):
-        return _calc_vis_axis(xds, axis, group_info['correlated_data'])
+        xda = _calc_vis_axis(xds, axis, group_info)
     elif _is_uvw_axis(axis):
-        if 'uvw' in group_info:
-            return _calc_uvw_axis(xds, axis, group_info['uvw'])
-        raise RuntimeError("Axis {} is not valid in this dataset, no uvw data", axis) 
-    elif 'wave' in axis:
-        return _calc_wave_axis(xds, axis, group_info['uvw'])
+        xda = _calc_uvw_axis(xds, axis, group_info)
     elif _is_weight_axis(axis):
-        return _calc_weight_axis(xds, axis)
-    else:
-        raise ValueError(f"Invalid/unsupported axis {axis}")
+        xda = _calc_weight_axis(xds, axis, group_info)
+    elif 'spw' in axis:
+        xda = _get_spw_axis(xds, axis)
+    elif 'wave' in axis:
+        xda = _calc_wave_axis(xds, axis, group_info)
+    elif axis == 'field':
+        xda = xr.DataArray([xds[group_info['correlated_data']].field_and_source_xds.field_name])
+    elif axis == 'flag':
+        xda = xds[group_info['flag']]
+    elif axis == 'intents':
+        xda = xr.DataArray(["".join(xds.partition_info['intents'])])
+    elif axis == 'channel':
+        xda = xr.DataArray(np.array(range(xds.frequency.size)))
+    return xda
 
 def get_dimension_values(ps, dimension):
+    ''' Return sorted list of unique values for dimension '''
     dim_values = []
     for xds in ps.values():
         try:
@@ -70,7 +66,7 @@ def _is_coordinate_axis(axis):
 
 def _is_vis_axis(axis):
     return axis in VIS_AXIS_OPTIONS
-    
+
 def _is_uvw_axis(axis):
     return axis in UVW_AXIS_OPTIONS
 
@@ -83,12 +79,13 @@ def _is_weight_axis(axis):
 def _get_spw_axis(xds, axis):
     if axis == 'spw_id':
         return xr.DataArray([xds.frequency.spectral_window_id])
-    elif axis == 'spw_name':
+    if axis == 'spw_name':
         return xr.DataArray([xds.frequency.spectral_window_name])
     raise ValueError(f"Invalid spw axis {axis}")
 
-def _calc_vis_axis(xds, axis, correlated_data):
+def _calc_vis_axis(xds, axis, group_info):
     ''' Calculate axis from correlated data '''
+    correlated_data = group_info['correlated_data']
     xda = xds[correlated_data]
 
     # Single dish spectrum
@@ -100,45 +97,50 @@ def _calc_vis_axis(xds, axis, correlated_data):
     # Interferometry visibilities
     if axis == 'amp':
         return np.absolute(xda).assign_attrs(units='Jy')
-    elif axis == 'phase':
+    if axis == 'phase':
         # np.angle(xda) returns ndarray not xr.DataArray
         return (np.arctan2(xda.imag, xda.real) * 180.0/np.pi).assign_attrs(units="deg")
-    elif axis == 'real':
+    if axis == 'real':
         return np.real(xda.assign_attrs(units='Jy'))
-    elif axis == 'imag':
+    if axis == 'imag':
         return np.imag(xda.assign_attrs(units='Jy'))
     return None
 
-def _calc_uvw_axis(xds, axis, uvw_data):
+def _calc_uvw_axis(xds, axis, group_info):
     ''' Calculate axis from UVW xarray DataArray '''
-    uvw_xda = xds[uvw_data]
+    if 'uvw' not in group_info:
+        raise RuntimeError(f"Axis {axis} is not valid in this dataset, no uvw data")
+
+    uvw_xda = xds[group_info['uvw']]
+
     if axis == 'u':
         return uvw_xda.isel(uvw_label=0)
-    elif axis == 'v':
+    if axis == 'v':
         return uvw_xda.isel(uvw_label=1)
-    elif axis == 'w':
+    if axis == 'w':
         return uvw_xda.isel(uvw_label=2)
-    else: # uvdist
-        u_xda = uvw_xda.isel(uvw_label=0)
-        v_xda = uvw_xda.isel(uvw_label=1)
-        return np.sqrt(np.square(u_xda) + np.square(v_xda))
 
-def _calc_wave_axis(xds, axis, uvw_data):
+    # uvdist
+    u_xda = uvw_xda.isel(uvw_label=0)
+    v_xda = uvw_xda.isel(uvw_label=1)
+    return np.sqrt(np.square(u_xda) + np.square(v_xda))
+
+def _calc_wave_axis(xds, axis, group_info):
     wave_axes = {'uwave': 'u', 'vwave': 'v', 'wwave': 'w', 'uvwave': 'uvdist'}
     if axis not in wave_axes:
         raise ValueError(f"Invalid wave axis {axis}")
-
-    uvwdist_array = _calc_uvw_axis(xds, wave_axes[axis], uvw_data).values / c
+    uvwdist_array = _calc_uvw_axis(xds, wave_axes[axis], group_info).values / constants.c
+    uvwdist_len = len(uvwdist_array)
     freq_array = xds.frequency.values
-    wave = np.zeros(shape=(len(freq_array), len(uvwdist_array)), dtype=np.double)
+    wave = np.zeros(shape=(len(freq_array), uvwdist_len), dtype=np.double)
 
-    for i in range(len(uvwdist_array)):
+    for i, in range(uvwdist_len):
         wave[:, i] = uvwdist_array[i] * freq_array
 
     wave_xda = xr.DataArray(wave, dims=['frequency', 'uvw_label'])
     return wave_xda
 
-def _calc_weight_axis(xds, axis):
+def _calc_weight_axis(xds, axis, group_info):
     weight = xds[group_info['weight']]
     if axis == 'weight':
         return weight
@@ -157,4 +159,3 @@ def _get_antenna_axis(xds, axis):
     if axis == 'baseline':
         return xds.baseline
     raise ValueError(f"Invalid antenna/baseline axis {axis}")
-

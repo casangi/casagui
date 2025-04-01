@@ -1,29 +1,35 @@
 '''
-Class using xradio Processing Set for accessing and selecting MeasurementSet data.
+MeasurementSet data backend using xradio Processing Set.
 '''
 
+import numpy as np
+import pandas as pd
+
 try:
-    import pandas as pd
-    from xradio.measurement_set.processing_set import ProcessingSet
-    _have_xradio = True
-    from casagui.data.measurement_set._ps_coords import set_coordinates
-    from casagui.data.measurement_set._ps_select import select_ps
-    from casagui.data.measurement_set._ps_stats import calculate_ps_stats
-    from casagui.data.measurement_set._raster_data import raster_data
-    from casagui.data.measurement_set._xds_data import get_correlated_data, get_dimension_values
-    from casagui.io._ms_io import get_processing_set
+    from casagui.data.measurement_set.processing_set._ps_io import get_processing_set
+    _HAVE_XRADIO = True
+    from casagui.data.measurement_set.processing_set._ps_coords import set_coordinates
+    from casagui.data.measurement_set.processing_set._ps_select import select_ps
+    from casagui.data.measurement_set.processing_set._ps_stats import calculate_ps_stats
+    from casagui.data.measurement_set.processing_set._ps_raster_data import raster_data
+    from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data, get_dimension_values
 except ImportError as e:
-    _have_xradio = False
+    _HAVE_XRADIO = False
 
 
 class PsData:
+    '''
+    Class implementing data backend using xradio Processing Set for accessing and selecting MeasurementSet data.
+    '''
 
     def __init__(self, ms, logger):
-        if not _have_xradio:
+        if not _HAVE_XRADIO:
             raise RuntimeError("xradio package not available for reading MeasurementSet")
+
         if not ms:
             raise RuntimeError("MS path not available for reading MeasurementSet")
 
+        # Convert msv2 to msv4 if ms path is not zarr
         self._ps, self._zarr_path = get_processing_set(ms, logger)
         self._logger = logger
 
@@ -36,9 +42,11 @@ class PsData:
         self._iter_selected_ps = None # not cumulative selection
 
     def get_path(self):
+        ''' Return path to zarr file (input or converted from msv2) '''
         return self._zarr_path
 
     def summary(self, columns=None):
+        ''' Print full or selected summary of Processing Set metadata, optionally by msv4 '''
         pd.set_option("display.max_rows", len(self._ps))
         pd.set_option("display.max_columns", 12)
         ps_summary = self._ps.summary()
@@ -47,51 +55,65 @@ class PsData:
             print(ps_summary)
         elif columns == "by_msv4":
             for row in ps_summary.itertuples(index=False):
-                name, intents, shape, polarization, scan_number, spw_name, field_name, source_name, line_name, field_coords, start_frequency, end_frequency = row
                 print("-----")
-                print(f"MSv4 name: {name}")
-                print(f"intent: {intents}")
+                print(f"MSv4 name: {row[0]}")
+                print(f"intent: {row[1]}")
+                shape = row[2]
                 print(f"shape: {shape[0]} times, {shape[1]} baselines, {shape[2]} channels, {shape[3]} polarizations")
-                print(f"polarization: {polarization}")
-                print(f"scan_number: {scan_number}")
-                print(f"spw_name: {spw_name}")
-                print(f"field_name: {field_name}")
-                print(f"source_name: {source_name}")
-                print(f"line_name: {line_name}")
+                print(f"polarization: {row[3]}")
+                print(f"scan_number: {row[4]}")
+                print(f"spw_name: {row[5]}")
+                print(f"field_name: {row[6]}")
+                print(f"source_name: {row[7]}")
+                print(f"line_name: {row[8]}")
+                field_coords = row[9]
                 print(f"field_coords: ({field_coords[0]}) {field_coords[1]} {field_coords[2]}")
-                print(f"frequency range: {start_frequency:e} - {end_frequency:e}")
+                print(f"frequency range: {row[10]:e} - {row[11]:e}")
             print("-----")
         else:
             if isinstance(columns, str):
                 columns = [columns]
             col_df = ps_summary[columns]
             print(col_df)
-            if len(columns) == 1:
-                return self._get_unique_values(col_df)
+
+    def get_summary_values(self, column):
+        ''' Return list of unique values for summary column '''
+        col_df = self._ps.summary()[[column]]
+        return self._get_unique_values(col_df)
 
     def get_data_groups(self):
+        ''' Returns set of data group names in Processing Set data. '''
         data_groups = []
         for xds_name in self._ps:
             data_groups.extend(list(self._ps[xds_name].data_groups))
         return set(data_groups)
 
     def get_antennas(self, plot_positions=False):
+        ''' Returns list of antenna names in ProcessingSet antenna_xds.
+                plot_positions (bool): Optionally show plot of antenna positions.
+        '''
         if plot_positions:
             self._ps.plot_antenna_positions()
         return self._ps.get_combined_antenna_xds().antenna_name.values.tolist()
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
+        ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
+                label_all_fields (bool); label all fields on the plot
+                data_group (str); data group to use for processing.
+        '''
         self._ps.plot_phase_centers(label_all_fields, data_group)
 
     def get_ps_len(self):
+        ''' Returns number of MeasurementSetXds in ProcessingSet. '''
         return len(self._get_ps())
 
     def get_ps_max_dims(self):
+        ''' Returns maximum length of data dimensions in all . '''
         ps = self._get_ps()
         return ps.get_ps_max_dims()
 
     def get_data_dimensions(self):
-        ''' Return list of data dimension names in Processing Set. '''
+        ''' Return the maximum dimensions across all Measurement Sets in the Processing Set. '''
         max_dims = self.get_ps_max_dims()
         dims = list(max_dims.keys())
         if 'uvw_label' in dims:
@@ -99,7 +121,7 @@ class PsData:
         return dims
 
     def get_dimension_values(self, dim):
-        ''' Return list of values for dimension in ProcessingSet data group. '''
+        ''' Return list of values for input dimension in ProcessingSet. '''
         ps = self._get_ps()
         return get_dimension_values(ps, dim)
 
@@ -115,7 +137,9 @@ class PsData:
         first_spw_name = spw_id_names[first_spw_id]
 
         spw_df = ps.summary()[ps.summary()['spw_name'] == first_spw_name]
-        self._logger.info(f"Selecting first spw {first_spw_name} (id {first_spw_id}) with frequency range {spw_df.at[spw_df.index[0], 'start_frequency']:e} - {spw_df.at[spw_df.index[0], 'end_frequency']:e}")
+        start_freq = spw_df.at[spw_df.index[0], 'start_frequency']
+        end_freq = spw_df.at[spw_df.index[0], 'end_frequency']
+        self._logger.info(f"Selecting first spw {first_spw_name} (id {first_spw_id}) with frequency range {start_freq:e} - {end_freq:e}")
         return first_spw_name
 
     def select_data(self, selection):
@@ -140,14 +164,19 @@ class PsData:
         self._selected_ps = None
 
     def get_vis_stats(self, selection, vis_axis):
+        ''' Returns statistics (min, max, mean, std) for data selected by selection.
+                selection (dict): fields and values to select
+        '''
         stats_ps = select_ps(self._ps, selection, self._logger)
         data_group = selection['data_group'] if 'data_group' in selection else 'base'
         return calculate_ps_stats(stats_ps, self._zarr_path, vis_axis, data_group, self._logger)
 
     def get_correlated_data(self, data_group):
+        ''' Returns name of 'correlated_data' in Processing Set data_group '''
         return get_correlated_data(self._get_ps().get(0), data_group)
 
     def get_raster_data(self, plot_inputs):
+        ''' Returns xarray Dataset after applying plot inputs '''
         return raster_data(self._get_ps(),
             plot_inputs,
             self._logger

@@ -1,19 +1,15 @@
 '''
-Functions to create a raster xarray Dataset of visibility/spectrum data from xradio ProcessingSet
+Functions to create a raster xarray Dataset from xradio ProcessingSet after applying plot inputs
 '''
 
-import time
-
 import numpy as np
-import xarray as xr
 
-from xradio.measurement_set.processing_set import ProcessingSet
 from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
-from ._ps_concat import concat_ps_xds
-from ._ps_coords import set_datetime_coordinate
-from ._ps_select import select_ps
-from ._xds_data import get_axis_data
+from casagui.data.measurement_set.processing_set._ps_concat import concat_ps_xds
+from casagui.data.measurement_set.processing_set._ps_coords import set_datetime_coordinate
+from casagui.data.measurement_set.processing_set._ps_select import select_ps
+from casagui.data.measurement_set.processing_set._xds_data import get_axis_data
 
 AGGREGATOR_OPTIONS = ['max', 'mean', 'median', 'min', 'std', 'sum', 'var']
 
@@ -51,10 +47,8 @@ def raster_data(ps, plot_inputs, logger):
 def _select_raster_ps(ps, plot_inputs, logger):
     ''' Select default dimensions if needed for raster data '''
     # Determine which dims must be selected, add to selection, and do selection
+    dims_to_select = _get_raster_selection_dims(plot_inputs)
     input_selection = plot_inputs['selection']
-    iter_axis = plot_inputs['iter_axis']
-
-    dims_to_select = _get_raster_selection_dims(ps, plot_inputs)
 
     if dims_to_select:
         dim_selection = {}
@@ -64,28 +58,28 @@ def _select_raster_ps(ps, plot_inputs, logger):
             if dim not in input_selection:
                 input_selection[dim] = _get_first_dim_value(ps, dim)
                 dim_selection[dim] = input_selection[dim]
-            else:
+            elif plot_inputs['iter_axis']:
                 dim_selection[dim] = input_selection[dim]
         if dim_selection:
             logger.info(f"Applying default raster plane selection (using first index or iter value): {dim_selection}")
             return select_ps(ps, dim_selection, logger), input_selection
     return ps, input_selection
 
-def _get_raster_selection_dims(ps, plot_inputs):
-    data_dims = list(ps.get(0)[plot_inputs['correlated_data']].dims)
-    print("data dims:", data_dims)
+def _get_raster_selection_dims(plot_inputs):
+    ''' Return which dimensions should be selected for raster plot.
+        List of dimensions which are not x, y, or agg axis. '''
+    data_dims = plot_inputs['data_dims'].copy()
     if plot_inputs['x_axis'] in data_dims:
         data_dims.remove(plot_inputs['x_axis'])
     if plot_inputs['y_axis'] in data_dims:
         data_dims.remove(plot_inputs['y_axis'])
     if plot_inputs['agg_axis']:
-        print("input agg axis:", plot_inputs['agg_axis'])
         for axis in plot_inputs['agg_axis']:
-            print("remove agg axis:", axis)
             data_dims.remove(axis)
     return data_dims
 
 def _get_first_dim_value(ps, dim):
+    ''' Return value of first dimension by index for polarization or by value for others. '''
     if dim == "polarization":
         # Get sorted list of polarization ids used
         pol_names = list(stokes_types.values())
@@ -96,13 +90,13 @@ def _get_first_dim_value(ps, dim):
         sorted_pol_id = sorted(list(set(id_list)))
         first_id = sorted_pol_id[0]
         return pol_names[first_id]
-    else:
-        # Get sorted values list
-        values = []
-        for xds in ps.values():
-            values.extend(xds[dim].values.tolist())
-        values = sorted(list(set(values)))
-        return values[0]
+
+    # Get sorted values list
+    values = []
+    for xds in ps.values():
+        values.extend(xds[dim].values.tolist())
+    values = sorted(list(set(values)))
+    return values[0]
 
 def _add_index_dimensions(xds):
     ''' Add index coordinates for plotting if coord has dimension '''
@@ -120,20 +114,24 @@ def _add_index_dimensions(xds):
     return xds
 
 def aggregate_data(xds, plot_inputs, logger):
+    ''' Apply aggregator to agg axis list. '''
     aggregator = plot_inputs['aggregator']
     agg_axis = plot_inputs['agg_axis']
     logger.debug(f"Applying {aggregator} to {agg_axis}.")
+    agg_xds = xds
+
     if aggregator == 'max':
-        return xds.max(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'mean':
-        return xds.mean(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'median':
-        return xds.median(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'min':
-        return xds.min(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'std':
-        return xds.std(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'sum':
-        return xds.sum(dim=agg_axis, keep_attrs=True)
-    if aggregator == 'var':
-        return xds.var(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.max(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'mean':
+        agg_xds = xds.mean(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'median':
+        agg_xds = xds.median(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'min':
+        agg_xds = xds.min(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'std':
+        agg_xds = xds.std(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'sum':
+        agg_xds = xds.sum(dim=agg_axis, keep_attrs=True)
+    elif aggregator == 'var':
+        agg_xds = xds.var(dim=agg_axis, keep_attrs=True)
+    return agg_xds

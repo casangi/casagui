@@ -9,9 +9,9 @@ from xradio.measurement_set.open_processing_set import open_processing_set
 try:
     # requires python-casacore
     from xradio.measurement_set.convert_msv2_to_processing_set import convert_msv2_to_processing_set
-    __have_xradio = True
-except:
-    __have_xradio = False
+    __HAVE_CASACORE = True
+except ImportError:
+    __HAVE_CASACORE = False
 
 def get_processing_set(ms_path, logger):
     '''
@@ -34,8 +34,8 @@ def get_processing_set(ms_path, logger):
     if ext == ".zarr":
         zarr_path = ms_path
     else:
-        if not __have_xradio:
-            raise RuntimeError("Cannot import xradio module to convert MeasurementSet v2")
+        if not __HAVE_CASACORE:
+            raise RuntimeError("Cannot convert MSv2 to xradio zarr file: python-casacore not installed.")
         zarr_path = basename + ".ms.zarr"
         if not os.path.exists(zarr_path):
             print(f"Converting input MS {ms_path} to zarr {zarr_path}")

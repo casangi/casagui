@@ -1,19 +1,23 @@
+'''
+   Calculate statistics on xradio ProcessingSet data.
+'''
+
 import dask
 import numpy as np
 
 from xradio.measurement_set.load_processing_set import ProcessingSetIterator
 from graphviper.graph_tools import generate_dask_workflow
 from graphviper.graph_tools.coordinate_utils import make_parallel_coord, interpolate_data_coords_onto_parallel_coords
-from graphviper.graph_tools.map import map
-from graphviper.graph_tools.reduce import reduce
+from graphviper.graph_tools.map import map as graph_map
+from graphviper.graph_tools.reduce import reduce as graph_reduce
 
 try:
     from toolviper.dask.client import get_client
-    _have_toolviper = True
+    _HAVE_TOOLVIPER = True
 except ImportError:
-    _have_toolviper = False
+    _HAVE_TOOLVIPER = False
 
-from ._xds_data import get_correlated_data, get_axis_data
+from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data, get_axis_data
 
 def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
     '''
@@ -21,7 +25,7 @@ def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
         ps (msv4 processing set): visibility data with flags
         ps_store (str): path to visibility file
         vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
-        Returns: stats tuple (data_min, data_max, data_mean, data_stddev)
+        Returns: stats tuple (min, max, mean, stddev) or None if all data flagged (count=0)
     '''
     input_params = {}
     input_params['input_data_store'] = ps_store
@@ -29,57 +33,68 @@ def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
     input_params['correlated_data'] = get_correlated_data(ps.get(0), data_group)
     input_params['vis_axis'] = vis_axis
 
-    if _have_toolviper:
+    if _HAVE_TOOLVIPER:
         active_client = get_client() # could be None if not set up outside casagui
     else:
         active_client = None
     n_threads = active_client.thread_info()['n_threads'] if active_client is not None else 4
     logger.debug(f"Setting {n_threads} n_chunks for parallel coords.")
+    mapping = _get_task_data_mapping(ps, n_threads)
 
-    # Calculate min, max, mean using frequency parallel coords
+    data_min, data_max, data_mean = _calc_basic_stats(ps, mapping, input_params, logger)
+    if np.isfinite(data_mean):
+        input_params['mean'] = data_mean
+        data_stddev = _calc_stddev(ps, mapping, input_params, logger)
+        return data_min, data_max, data_mean, data_stddev
+    return None
+
+def _get_task_data_mapping(ps, n_threads):
     frequencies = ps.get_ps_freq_axis()
     parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_threads)}
-    node_task_data_mapping = interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
+    return interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
 
-    graph = map(
+def _calc_basic_stats(ps, mapping, input_params, logger):
+    ''' Calculate min, max, mean using graph map/reduce '''
+    graph = graph_map(
         input_data=ps,
-        node_task_data_mapping=node_task_data_mapping,
+        node_task_data_mapping=mapping,
         node_task=_map_stats,
         input_params=input_params
     )
-    graph_reduce = reduce(
+    reduce_map = graph_reduce(
         graph, _reduce_stats, input_params, mode='tree'
     )
-    dask_graph = generate_dask_workflow(graph_reduce)
+    dask_graph = generate_dask_workflow(reduce_map)
     #dask_graph.visualize(filename='stats.png')
     results = dask.compute(dask_graph)
-    data_min, data_max, data_sum, data_count = results[0]
 
+    data_min, data_max, data_sum, data_count = results[0]
     if data_count == 0.0:
         logger.debug("stats: no unflagged data")
-        return (0.0, 0.0, 0.0, 0.0)
-
+        return (data_min, data_max, np.inf)
     data_mean = data_sum / data_count
-    input_params['mean'] = data_mean
-    logger.debug(f"stats: min={data_min:.4f}, max={data_max:.4f}, sum={data_sum:.4f}, count={data_count} mean={data_mean:.4f}")
+    logger.debug(f"basic stats: min={data_min:.4f}, max={data_max:.4f}, sum={data_sum:.4f}, count={data_count} mean={data_mean:.4f}")
+    return data_min, data_max, data_mean
 
-    # Calculate variance and standard deviation
-    graph = map(
+def _calc_stddev(ps, mapping, input_params, logger):
+    ''' Calculate stddev using graph map/reduce '''
+    graph = graph_map(
         input_data=ps,
-        node_task_data_mapping=node_task_data_mapping,
+        node_task_data_mapping=mapping,
         node_task=_map_variance,
         input_params=input_params
     )
-    graph_reduce = reduce(
+    reduce_map = graph_reduce(
         graph, _reduce_variance, input_params, mode='tree'
     )
-    dask_graph = generate_dask_workflow(graph_reduce)
+    dask_graph = generate_dask_workflow(reduce_map)
     results = dask.compute(dask_graph)
+
     var_sum, var_count = results[0]
     data_variance = var_sum / var_count
     data_stddev = data_variance ** 0.5
     logger.debug(f"stats: variance={data_variance:.4f}, stddev={data_stddev:.4f}")
-    return (data_min, data_max, data_mean, data_stddev)
+    return data_stddev
 
 def _get_stats_xda(xds, vis_axis, data_group):
     ''' Return xda with only unflagged cross-corr visibility data '''
@@ -116,19 +131,17 @@ def _map_stats(input_params):
         data_variables=[correlated_data, 'FLAG'],
         load_sub_datasets=False
     )
- 
+
     for xds in ps_iter:
         xda = _get_stats_xda(xds, vis_axis, data_group)
         if xda.count() > 0:
             xda_data = xda.values.ravel()
             try:
-                min_val = xda_data[np.nanargmin(xda_data)]
-                min_vals.append(min_val)
+                min_vals.append(xda_data[np.nanargmin(xda_data)])
             except ValueError:
                 pass
             try:
-                max_val = xda_data[np.nanargmax(xda_data)]
-                max_vals.append(max_val)
+                max_vals.append(xda_data[np.nanargmax(xda_data)])
             except ValueError:
                 pass
             sum_vals.append(np.nansum(xda))
@@ -141,24 +154,26 @@ def _map_stats(input_params):
         max_value = np.nanmax(max_vals)
     except ValueError:
         max_value = np.nan
-    result = (min_value, max_value, sum(sum_vals), sum(count_vals))
-    return result
+    return (min_value, max_value, sum(sum_vals), sum(count_vals))
 
+# pylint: disable=unused-argument
 def _reduce_stats(graph_inputs, input_params):
-    ''' Compute min, max, sum, and count of all data'''
+    ''' Compute min, max, sum, and count of all data.
+        input_parameters seems to be required although unused. '''
     data_min = 0.0
-    mins = [input[0] for input in graph_inputs]
+    mins = [values[0] for values in graph_inputs]
     if not np.isnan(mins).all():
         data_min = min(0.0, np.nanmin(mins))
 
     data_max = 0.0
-    maxs = [input[1] for input in graph_inputs]
+    maxs = [values[1] for values in graph_inputs]
     if not np.isnan(maxs).all():
         data_max = max(0.0, np.nanmax(maxs))
 
-    data_sum = sum([input[2] for input in graph_inputs])
-    data_count = sum([input[3] for input in graph_inputs])
+    data_sum = sum(values[2] for values in graph_inputs)
+    data_count = sum(values[3] for values in graph_inputs)
     return (data_min, data_max, data_sum, data_count)
+# pylint: enable=unused-argument
 
 def _map_variance(input_params):
     ''' Return sum, count, of (xda - mean) squared '''
@@ -185,9 +200,12 @@ def _map_variance(input_params):
             sq_diff_sum += np.nansum(sq_diff)
             sq_diff_count += sq_diff.count().values
     return (sq_diff_sum, sq_diff_count)
- 
+
+# pylint: disable=unused-argument
 def _reduce_variance(graph_inputs, input_params):
-    ''' Compute sum and count of all (xda-mean) squared data'''
-    sq_diff_sum = sum([input[0] for input in graph_inputs])
-    sq_diff_count = sum([input[1] for input in graph_inputs])
+    ''' Compute sum and count of all (xda-mean) squared data.
+        input_parameters seems to be required although unused. '''
+    sq_diff_sum = sum(values[0] for values in graph_inputs)
+    sq_diff_count = sum(values[1] for values in graph_inputs)
     return (sq_diff_sum, sq_diff_count)
+# pylint: enable=unused-argument

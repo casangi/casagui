@@ -6,6 +6,7 @@ import numpy as np
 from pandas import to_datetime
 
 def set_coordinates(xds):
+    ''' Convert coordinate units and add baseline coordinate for plotting. '''
     _set_coordinate_unit(xds)
     _set_frequency_unit(xds)
     return _set_baseline_coordinate(xds)

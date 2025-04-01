@@ -2,7 +2,6 @@
 Concat ProcessingSet xarray DataSets into single xds by time dimension (in order)
 '''
 
-import numpy as np
 import xarray as xr
 
 def concat_ps_xds(ps, logger):
@@ -71,7 +70,7 @@ def _split_xds_by_time_gap(xds, sorted_times):
         xds_list.append(xds)
     else:
         sorted_time_idx = sorted_times.index(times[0])
-        xds_start_idx = 0 # start for iselection
+        idx = xds_start_idx = 0 # start for iselection
 
         for idx, time in enumerate(times):
             if time == sorted_times[sorted_time_idx]:

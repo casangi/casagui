@@ -1,21 +1,21 @@
 '''
 Functions for plot axes labels
 '''
-import numpy as np
-import xarray as xr
 
+# pylint: disable=inconsistent-return-statements
 def get_coordinate_labels(xds, coordinate):
     ''' Return coordinate values as string or list of strings, or None if numeric '''
     if coordinate == 'time':
         return _get_time_labels(xds.time)
-    elif coordinate == 'baseline':
+    if coordinate == 'baseline':
         return _get_baseline_antenna_labels(xds.baseline)
-    elif coordinate == 'antenna_name':
+    if coordinate == 'antenna_name':
         return _get_baseline_antenna_labels(xds.antenna_name)
-    elif coordinate == 'frequency':
+    if coordinate == 'frequency':
         return _get_frequency_labels(xds.frequency)
-    elif coordinate == 'polarization':
+    if coordinate == 'polarization':
         return _get_polarization_labels(xds.polarization)
+# pylint: enable=inconsistent-return-statements
 
 def get_axis_labels(xds, axis):
     ''' Return axis name, label and ticks, reindex for regular axis '''
@@ -23,7 +23,7 @@ def get_axis_labels(xds, axis):
     ticks = list(enumerate(labels)) if labels is not None and isinstance(labels, list) else None
 
     if axis == "time":
-        start_date, end_date = _get_date_range(xds.time)
+        start_date, _ = _get_date_range(xds.time)
         label =  f"Time {xds.time.attrs['scale'].upper()} ({start_date})"
     elif axis == "baseline":
         label = "Baseline Antenna1"
@@ -34,6 +34,8 @@ def get_axis_labels(xds, axis):
         label = f"Frequency ({xds.frequency.attrs['units']}) {xds.frequency.attrs['observer'].upper()}"
     elif axis == "polarization":
         label =  "Polarization"
+    else:
+        label = None
     return (axis, label, ticks)
 
 def get_vis_axis_labels(xds, data_group, correlated_data, vis_axis, include_unit=True):
@@ -60,8 +62,7 @@ def _get_time_labels(time_xda):
         time = time_xda.values.astype('datetime64[s]').item().strftime("%d-%b-%Y %H:%M:%S")
         time += " " + time_xda.attrs['scale'].upper()
         return time
-    else:
-        return None
+    return None # auto ticks from time values
 
 def _get_baseline_antenna_labels(baseline_antenna_xda):
     ''' Return baseline pairs as string or list of strings '''
@@ -79,18 +80,16 @@ def _get_frequency_labels(frequency_xda):
     ''' Return frequency as formatted string, or None to autogenerate ticks '''
     if frequency_xda.size == 1:
         return f"{frequency_xda.item():.4f} {frequency_xda.attrs['units']} {frequency_xda.attrs['observer'].upper()}"
-    else:
-        return None # auto ticks from frequency values
+    return None # auto ticks from frequency values
 
 def _get_date_range(time_xda):
     ''' Return date as dd-Mon-yyyy e.g. 23-Aug-2010 '''
     if time_xda.size == 1:
         date = time_xda.values.astype('datetime64[s]').item().strftime("%d-%b-%Y")
         return (date, date)
-    else:
-        start_date = time_xda.values[0].astype('datetime64[s]').item().strftime("%d-%b-%Y")
-        end_date = time_xda.values[time_xda.size - 1].astype('datetime64[s]').item().strftime("%d-%b-%Y")
-        return (start_date, end_date)
+    start_date = time_xda.values[0].astype('datetime64[s]').item().strftime("%d-%b-%Y")
+    end_date = time_xda.values[time_xda.size - 1].astype('datetime64[s]').item().strftime("%d-%b-%Y")
+    return (start_date, end_date)
 
 def _get_baseline_ant1_ticks(baseline_ticks):
     ''' Return labels for each new ant1 name in baselines '''
@@ -109,12 +108,3 @@ def _get_baseline_ant1_ticks(baseline_ticks):
                 ant1_ticks.append((idx, ant1_name))
                 last_idx = idx
     return ant1_ticks
-
-def _get_time_formatter():
-    return DatetimeTickFormatter(
-        microseconds='%H:%M %3fus',
-        milliseconds='%S.%3Ns',
-        seconds='%H:%M:%S',
-        minsec='%H:%M:%S',
-        hours='%H:%M:%S',
-        days='%F')
