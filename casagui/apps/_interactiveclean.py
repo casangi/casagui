@@ -2015,7 +2015,12 @@ class InteractiveClean:
             if self._clean['gclean'] is None:
 
                 self._clean['gclean'] = _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
+                #stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
+                RESULT = next(self._clean['gclean'])
+                print(">>01>>****************************************************************************************************************")
+                print(RESULT)
+                print(">>01>>****************************************************************************************************************")
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = RESULT
 
                 if imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
                     ###
@@ -2043,7 +2048,12 @@ class InteractiveClean:
 
             else:
                 next_gclean =  _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
+                #stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
+                RESULT = next(next_gclean)
+                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = RESULT
+                print(">>02>>****************************************************************************************************************")
+                print(RESULT)
+                print(">>02>>****************************************************************************************************************")
                 clean_cmds = self._clean['gclean'].cmds( )
 
                 if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
@@ -2234,11 +2244,20 @@ class InteractiveClean:
                 ### In the final implementation, there will only be one gclean object...
                 ###
                 convergence_state={ 'convergence': {}, 'cyclethreshold': {} }
+                print(">>03>>****************************************************************************************************************")
+                print(">>\t",msg['value']['iteration'])
+                print(f">>\t",msg['value']['automask'])
+                print(">>03>>****************************************************************************************************************")
                 err,errmsg = self._clean['gclean'].update( dict( **msg['value']['iteration'],
                                                                  **msg['value']['automask'] ) )
 
                 iteration_limit = int(msg['value']['iteration']['niter'])
-                stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean['gclean'].__anext__( )
+                #stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = await self._clean['gclean'].__anext__( )
+                RESULT = await self._clean['gclean'].__anext__( )
+                print(">>04>>****************************************************************************************************************")
+                print(RESULT)
+                print(">>04>>****************************************************************************************************************")
+                stopdesc, stopcode, majordone, majorleft, iterleft, self._convergence_data = RESULT
 
                 clean_cmds = self._clean['gclean'].cmds( )
 
