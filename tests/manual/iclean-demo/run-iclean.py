@@ -4,20 +4,31 @@ import certifi
 import urllib
 import tarfile
 
-from casagui.apps import run_iclean
+from os.path import splitext
+from os.path import split as splitpath
+from casagui.apps import iclean
 
-##
-## demo measurement set to use
-##
-ms_path = 'refim_point_withline.ms'
-##
-## where to fetch the demo measurement set
-##
-ms_url = "https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz"
-##
-## output image file name
-##
-img = 'test'
+from argparse import ArgumentParser
+name = splitext(splitpath(__file__)[1])[0]
+
+argparse = ArgumentParser( prog=name, description='Basic tests of iclean' )
+argparse.add_argument( '--twopoint', action='store_true',
+                       help='use refim_twopoints_twochan.ms instead of refim_point_withline.ms' )
+args = argparse.parse_args( )
+
+if args.twopoint:
+    img = 'test2pt'
+    ms_path = 'refim_twopoints_twochan.ms'
+    ms_url = "https://casa.nrao.edu/download/devel/casavis/data/refim_twopoints_twochan-ms.tar.gz"
+    cleanargs = dict( cell='8.0arcsec', phasecenter="J2000 19:59:28.500 +40.44.01.50",
+                      deconvolver='hogbom', specmode='cube' )
+else:
+    img = 'test'
+    ms_path = 'refim_point_withline.ms'
+    ms_url = "https://casa.nrao.edu/download/devel/casavis/data/refim_point_withline-ms.tar.gz"
+    cleanargs = dict( cell='12.0arcsec', specmode='cube', interpolation='nearest',
+                      nchan=5, start='1.0GHz', width='0.2GHz', pblimit=-1e-05,
+                      deconvolver='hogbom', threshold='0.001Jy', cyclefactor=3, scales=[0,3,10] )
 
 if not os.path.isdir(ms_path):
     try:
@@ -32,18 +43,7 @@ if not os.path.isdir(ms_path):
 if not os.path.isdir(ms_path):
     raise  RuntimeError("Failed to fetch measurement set")
 
-print("Result = " + str( repr( run_iclean( vis=ms_path, imagename=img,
-                                           imsize=512,
-                                           cell='12.0arcsec',
-                                           specmode='cube',
-                                           interpolation='nearest',
-                                           nchan=5,
-                                           start='1.0GHz',
-                                           width='0.2GHz',
-                                           pblimit=-1e-05,
-                                           deconvolver='hogbom',
-                                           threshold='0.001Jy',
-                                           niter=50,
-                                           cycleniter=10,
-                                           cyclefactor=3,
-                                           scales=[0,3,10] ) ) ) )
+print("Result = " + str( repr( iclean( vis=ms_path, imagename=img,
+                                       imsize=512, niter=50,
+                                       cycleniter=10,
+                                       **cleanargs ) ) ) )
