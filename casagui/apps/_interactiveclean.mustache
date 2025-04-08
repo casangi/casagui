@@ -83,7 +83,7 @@ class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
     {{docstring}}
     '''
-    def __stop( self, _ ):
+    def __stop( self, _=None ):
         self.__result_future.set_result(self.__retrieve_result( ))
 
     def _abort_handler( self, err ):
@@ -318,7 +318,7 @@ class InteractiveClean:
 
                 self._clean['gclean_rest'].append(next_gclean)
 
-        self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
+        self._clean['last-success'] = dict( result='converged' if stopcode[0] else 'update', stopcode=stopcode, cmd=clean_cmds,
                                             convergence=convergence_state['convergence'],
                                             iterdone=0, iterleft=iterleft,
                                             majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
@@ -499,8 +499,8 @@ class InteractiveClean:
 
                 clean_cmds = self._clean['gclean'].cmds( )
 
-                if len(self._convergence_data['chan']) == 0 or stopcode == -1:
-                    ### stopcode == -1 indicates an error condition within gclean
+                if len(self._convergence_data['chan']) == 0 or stopcode[0] == -1:
+                    ### stopcode[0] == -1 indicates an error condition within gclean
                     return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
                                  convergence=None, majordone=majordone,
                                  majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
@@ -522,10 +522,10 @@ class InteractiveClean:
                         convergence_state['convergence'][g[0]] = cvg['chan']
                         convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
 
-                ### stopcode != 0 indicates that some stopping criteria has been reached
+                ### stopcode[0] != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
                 ###               (so 'converged' isn't quite right...)
-                self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
+                self._clean['last-success'] = dict( result='converged' if stopcode[0] else 'update', stopcode=stopcode, cmd=clean_cmds,
                                                    convergence=convergence_state['convergence'],
                                                    iterdone=iteration_limit - iterleft, iterleft=iterleft,
                                                    majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
@@ -1368,16 +1368,16 @@ class InteractiveClean:
                                                        update_log( msg.cmd )
                                                    }
                                                    refresh( msg )
-                                                   // stopcode == 1: iteration limit hit
-                                                   // stopcode == 9: major cycle limit hit
+                                                   // stopcode[0] == 1: iteration limit hit
+                                                   // stopcode[0] == 9: major cycle limit hit
                                                    // *******************************************************************************************
                                                    // ******** perhaps the user should not be locked into exiting after the limit is hit ********
                                                    // *******************************************************************************************
-                                                   //state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
+                                                   //state.stopped = state.stopped || (msg.stopcode[0] > 1 && msg.stopcode[0] < 9) || msg.stopcode[0] == 0
                                                    state.stopped = false
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        clean_ctrl.stop.button_type = "danger"
-                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                        if ( ! state.stopped ) {
                                                            enable( false )
                                                        } else {
@@ -1407,7 +1407,7 @@ class InteractiveClean:
                                                            clean_ctrl.stop.button_type = "danger"
                                                            enable(false)
                                                            state.stopped = false
-                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                        }
                                                    }
                                                } else if ( msg.result === 'error' ) {
@@ -1418,7 +1418,7 @@ class InteractiveClean:
                                                    state.mode = 'interactive'
                                                    clean_ctrl.stop.button_type = "danger"
                                                    state.stopped = false
-                                                   update_status( 'stopcode' in msg ? msg.stopcode : -1 )
+                                                   update_status( 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                    enable( false )
                                                }
                                            }''',
