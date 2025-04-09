@@ -261,7 +261,7 @@ class InteractiveClean:
         self._clean['gclean'] = None
         self._clean['masks'] = { }
         self._clean['imid'] = [ ]
-        self._clean['gclean_rest'] = [ ]
+        if USE_MULTIPLE_GCLEAN_HACK: self._clean['gclean_rest'] = [ ]
         for imid, imdetails in self._clean_targets.items( ):
             self._clean['imid'].append(imid)
 
@@ -298,7 +298,8 @@ class InteractiveClean:
                     imdetails['path']['residual'] = ("%s.residual" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
 
 
-            else:
+            elif USE_MULTIPLE_GCLEAN_HACK:
+
                 next_gclean =  _gclean( **imdetails['args'] )
                 stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
                 clean_cmds = self._clean['gclean'].cmds( )
@@ -508,19 +509,20 @@ class InteractiveClean:
                 convergence_state['convergence'][self._clean['imid'][0]] = self._convergence_data['chan']
                 convergence_state['cyclethreshold'][self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
 
-                for g in zip(self._clean['imid'][1:],self._clean['gclean_rest']):
-                    e,em = g[1].update( dict( **msg['value']['iteration'],
-                                              **msg['value']['automask'] ) )
-                    sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
+                if USE_MULTIPLE_GCLEAN_HACK:
+                    for g in zip(self._clean['imid'][1:],self._clean['gclean_rest']):
+                        e,em = g[1].update( dict( **msg['value']['iteration'],
+                                                  **msg['value']['automask'] ) )
+                        sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
 
-                    clean_cmds = clean_cmds + g[1].cmds( )
+                        clean_cmds = clean_cmds + g[1].cmds( )
 
-                    if len(cvg['chan']) == 0 or scode == -1:
-                        convergence_state['convergence'][g[0]] = { }
-                        convergence_state['cyclethreshold'][g[0]] = { }
-                    else:
-                        convergence_state['convergence'][g[0]] = cvg['chan']
-                        convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
+                        if len(cvg['chan']) == 0 or scode == -1:
+                            convergence_state['convergence'][g[0]] = { }
+                            convergence_state['cyclethreshold'][g[0]] = { }
+                        else:
+                            convergence_state['convergence'][g[0]] = cvg['chan']
+                            convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
 
                 ### stopcode[0] != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
@@ -839,8 +841,9 @@ class InteractiveClean:
         ### browser tab that is running interactive clean
         ###
         initial_log = self._clean['gclean'].cmds( )
-        for g in self._clean['gclean_rest']:
-            initial_log = initial_log + g.cmds( )
+        if USE_MULTIPLE_GCLEAN_HACK:
+            for g in self._clean['gclean_rest']:
+                initial_log = initial_log + g.cmds( )
 
         self._pipe['control'].init_script=CustomJS( args=dict( ctrl_pipe=self._pipe['control'],
                                                                ids=self._clean_ids,
@@ -1085,8 +1088,9 @@ class InteractiveClean:
             raise RuntimeError( 'no interactive clean result is available' )
 
         self._clean['gclean'].restore( )
-        for g in self._clean['gclean_rest']:
-            g.restore( )
+        if USE_MULTIPLE_GCLEAN_HACK:
+            for g in self._clean['gclean_rest']:
+                g.restore( )
 
         return self.__result_future.result( )
 
