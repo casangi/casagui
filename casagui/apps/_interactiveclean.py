@@ -78,6 +78,8 @@ from ..utils import DocEnum
 
 from ._interactiveclean_wrappers import SharedWidgets
 
+USE_MULTIPLE_GCLEAN_HACK=True
+
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
         tclean ---- Radio Interferometric Image Reconstruction
