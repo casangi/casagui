@@ -23,17 +23,21 @@ def raster_plot_params(xds, plot_inputs):
     '''
     plot_params = {}
     plot_params['correlated_data'] = plot_inputs['correlated_data']
-    plot_params['color_limits'] = plot_inputs['color_limits']
     plot_params['aggregator'] = plot_inputs['aggregator']
+    plot_params['colorbar'] = {}
 
     if plot_inputs['title']:
         plot_params['title'] = plot_inputs['title']
     else:
         plot_params['title'] = _get_plot_title(xds, plot_inputs)
 
-    plot_params['x_axis_labels'] = get_axis_labels(xds, plot_inputs['x_axis'])
-    plot_params['y_axis_labels'] = get_axis_labels(xds, plot_inputs['y_axis'])
-    plot_params['c_axis_labels'] = _get_vis_axis_labels(xds, plot_inputs)
+    x_axis_labels = get_axis_labels(xds, plot_inputs['x_axis'])
+    y_axis_labels = get_axis_labels(xds, plot_inputs['y_axis'])
+    c_axis_labels = _get_c_axis_labels(xds, plot_inputs)
+
+    _set_axis_label_params(plot_params, 'x', x_axis_labels)
+    _set_axis_label_params(plot_params, 'y', y_axis_labels)
+    _set_axis_label_params(plot_params, 'c', c_axis_labels)
     return plot_params
 
 def _get_plot_title(xds, plot_inputs):
@@ -75,27 +79,40 @@ def _get_plot_title(xds, plot_inputs):
     title += '  '.join(dim_selections)
     return title
 
-def _get_vis_axis_labels(xds, plot_inputs):
+def _get_c_axis_labels(xds, plot_inputs):
     data_group = plot_inputs['selection']['data_group']
     correlated_data = plot_inputs['correlated_data']
     vis_axis = plot_inputs['vis_axis']
     aggregator = plot_inputs['aggregator']
+
     axis, label = get_vis_axis_labels(xds, data_group, correlated_data, vis_axis)
     if aggregator:
         label = " ".join([aggregator.capitalize(), label])
-    return (axis, label)
+    return (axis, label, None)
+
+def _set_axis_label_params(plot_params, axis, axis_labels):
+    # Axis labels are (axis, label, ticks).
+    if 'axis_labels' not in plot_params:
+        plot_params['axis_labels'] = {}
+    plot_params['axis_labels'][axis] = {}
+    plot_params['axis_labels'][axis]['axis'] = axis_labels[0]
+    plot_params['axis_labels'][axis]['label'] = axis_labels[1]
+    plot_params['axis_labels'][axis]['ticks'] = axis_labels[2]
 
 def raster_plot(xds, plot_params):
     ''' Create raster plot for input xarray Dataset and plot params.
         Returns Overlay if combined unflagged/flagged plot or single Quadmesh/Scatter plot.
     '''
+    x_axis = plot_params['axis_labels']['x']['axis']
+    y_axis = plot_params['axis_labels']['y']['axis']
+    c_axis = plot_params['axis_labels']['c']['axis']
+
     # Set plot axes to numeric coordinates if needed
-    # Axis labels are (axis, label, ticks)
-    xds = set_index_coordinates(xds, (plot_params['x_axis_labels'][0], plot_params['y_axis_labels'][0]))
+    xds = set_index_coordinates(xds, (x_axis, y_axis))
 
     # Unflagged and flagged data.  Use same name, for histogram dimension.
     # c axis labels are (axis, label)
-    xda_name = plot_params['c_axis_labels'][0]
+    xda_name = c_axis
     if plot_params['aggregator']:
         xda_name = "_".join([plot_params['aggregator'], xda_name])
     xda = xds[plot_params['correlated_data']].where(xds.FLAG == 0.0).rename(xda_name)
@@ -103,38 +120,31 @@ def raster_plot(xds, plot_params):
 
     # Plot data
     # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
-    try:
-        unflagged_plot = _plot_xda(xda, plot_params, "viridis")
-        flagged_plot = _plot_xda(flagged_xda, plot_params, "reds", True)
-    except Exception as e:
-        print("Plot exception:", e)
+    unflagged_plot = _plot_xda(xda, plot_params, "viridis")
+    if plot_params['colorbar']['unflagged']:
+        unflagged_plot = unflagged_plot.opts(colorbar_position='left')
+    flagged_plot = _plot_xda(flagged_xda, plot_params, "reds", True)
 
-    # Return Overlay plot or single QuadMesh plot
-    if flagged_plot and unflagged_plot:
-        plot = flagged_plot * unflagged_plot.opts(colorbar_position='left')
-    elif unflagged_plot:
-        plot = unflagged_plot.opts(colorbar_position='left')
-    else:
-        plot = flagged_plot
-
-    return plot.opts(
-       hv.opts.QuadMesh(tools=['hover']))
+    # Return Overlay plot with hover tools
+    return (flagged_plot * unflagged_plot).opts(
+        hv.opts.QuadMesh(tools=['hover'])
+    )
 
 def _plot_xda(xda, plot_params, colormap, is_flagged=False):
     # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
-    if xda.count() == 0:
-        return None
+    x_axis = plot_params['axis_labels']['x']['axis']
+    y_axis = plot_params['axis_labels']['y']['axis']
+    c_label = plot_params['axis_labels']['c']['label']
 
-    # Axis labels are (axis, label, ticks)
-    x_axis = plot_params['x_axis_labels'][0]
-    y_axis = plot_params['y_axis_labels'][0]
     x_formatter = get_time_formatter() if x_axis == 'time' else None
     y_formatter = get_time_formatter() if y_axis == 'time' else None
+    enable_colorbar = xda.count() > 0
 
-    # c axis labels are (axis, label)
-    c_label = plot_params['c_axis_labels'][1]
     if is_flagged:
         c_label = "Flagged " + c_label
+        plot_params['colorbar']['flagged'] = enable_colorbar
+    else:
+        plot_params['colorbar']['unflagged'] = enable_colorbar
 
     if xda[x_axis].size > 1 and xda[y_axis].size > 1:
         # Raster 2D data
@@ -145,31 +155,32 @@ def _plot_xda(xda, plot_params, colormap, is_flagged=False):
             cmap=colormap,
             clabel=c_label,
             title=plot_params['title'],
-            xlabel=plot_params['x_axis_labels'][1],
-            ylabel=plot_params['y_axis_labels'][1],
+            xlabel=plot_params['axis_labels']['x']['label'],
+            ylabel=plot_params['axis_labels']['y']['label'],
             xformatter=x_formatter,
             yformatter=y_formatter,
-            xticks=plot_params['x_axis_labels'][2],
-            yticks=plot_params['y_axis_labels'][2],
-            rot=45, # x axis labels
-            colorbar=True,
+            xticks=plot_params['axis_labels']['x']['ticks'],
+            yticks=plot_params['axis_labels']['y']['ticks'],
+            rot=45, # angle for x axis labels
+            colorbar=enable_colorbar,
         )
 
     # Cannot raster 1D data, use scatter from pandas dataframe
     df = xda.to_dataframe().reset_index() # convert x and y axis from index to column
     return df.hvplot.scatter(
-        x=x_axis, y=y_axis,
-        c=plot_params['c_axis_labels'][0],
+        x=x_axis,
+        y=y_axis,
+        c=plot_params['axis_labels']['c']['axis'],
         clim=plot_params['color_limits'],
         cmap=colormap,
         clabel=c_label,
         title=plot_params['title'],
-        xlabel=plot_params['x_axis_labels'][1],
-        ylabel=plot_params['y_axis_labels'][1],
+        xlabel=plot_params['axis_labels']['x']['label'],
+        ylabel=plot_params['axis_labels']['y']['label'],
         xformatter=x_formatter,
         yformatter=y_formatter,
-        xticks=plot_params['x_axis_labels'][2],
-        yticks=plot_params['y_axis_labels'][2],
+        xticks=plot_params['axis_labels']['x']['ticks'],
+        yticks=plot_params['axis_labels']['y']['ticks'],
         rot=45,
         marker='s', # square
         hover=True,

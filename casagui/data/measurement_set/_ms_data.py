@@ -23,6 +23,10 @@ class MsData:
         ''' Returns whether MS path has been set so data can be accessed. '''
         return self._data_initialized
 
+    def is_ms_path(self, path):
+        ''' Check if input path matches input ms path or zarr path '''
+        return path == self.get_path() or path == self._ms_path
+
     def get_path(self):
         ''' Returns path of MS/zarr file or None if not set. '''
         if self._data_initialized:

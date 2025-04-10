@@ -14,9 +14,6 @@ except ImportError:
     _HAVE_TOOLVIPER = False
 
 from casagui.data.measurement_set._ms_data import MsData
-from casagui.toolbox._app_context import AppContext
-from casagui.utils import is_notebook
-#from casagui.utils import resource_manager, reset_resource_manager
 from casagui.utils._logging import get_logger
 
 PLOT_WIDTH = 900
@@ -30,14 +27,6 @@ class MsPlot:
         if not ms and not interactive:
             raise RuntimeError("Must provide ms/zarr path if not interactive.")
 
-        self._ms = ms
-        self._interactive = interactive
-        self._app_name = app_name
-
-        self._is_notebook = is_notebook()
-        self._plot_inputs = {}
-        self._plots = []
-
         # Set logger: use toolviper logger else casalog else python logger
         if _HAVE_TOOLVIPER:
             self._logger = setup_logger(app_name, log_to_term=True, log_to_file=False, log_level=log_level.upper())
@@ -45,12 +34,24 @@ class MsPlot:
             self._logger = get_logger()
             self._logger.setLevel(log_level.upper())
 
-        self._data = MsData(ms, self._logger)
-        self._basename = self._data.get_basename()
-        self._app_title = ' '.join([self._app_name, self._basename])
+        # Save parameters; ms set below
+        self._interactive = interactive
+        self._app_name = app_name
 
-        if interactive:
-            self._app_context = AppContext(self._app_title)
+        # Initialize plot inputs
+        self._plot_inputs = {}
+        self._plot_inputs['have_inputs'] = False
+
+        # Initialize plots
+        self._plots = []
+        self._plot_init = False
+
+        # Set data (if ms)
+        self._ms_info = {}
+        self._data = None
+        error, _ = self._set_ms(ms)
+        if error:
+            self._logger.error(error)
 
     def summary(self, columns=None):
         ''' Print ProcessingSet summary.
@@ -83,7 +84,8 @@ class MsPlot:
 
     def clear_selection(self):
         ''' Clear selection in data and restore to original '''
-        self._data.clear_selection()
+        if self._data:
+            self._data.clear_selection()
 
     def clear_plots(self):
         ''' Clear plot list '''
@@ -126,12 +128,12 @@ class MsPlot:
         '''
         if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
+        start_time = time.time()
 
         # Get single plot, or combine plots into panel layout
         layout = (0, 1, 1) if layout is None else layout
         plot, is_layout = self._layout_plots(layout)
 
-        start = time.time()
         if is_layout:
             # Save plots combined into one layout
             hvplot.save(plot.cols(layout[2]), filename=filename, fmt=fmt)
@@ -152,7 +154,7 @@ class MsPlot:
                 hvplot.save(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=exportname, fmt=fmt)
                 self._logger.info("Saved plot to %s.", exportname)
 
-        self._logger.debug("Save elapsed time: %.3fs.", time.time() - start)
+        self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
 
     def _layout_plots(self, layout):
         if len(layout) != 3:
@@ -177,3 +179,25 @@ class MsPlot:
 
         is_layout = layout_plot_count > 1
         return layout, is_layout
+
+    def _set_ms(self, ms):
+        ''' Update settings for input data filepath from ctor or GUI (MSv2 or zarr path) '''
+        self._ms_info['ms'] = ms
+        ms_error = ""
+        is_new_ms = ms and (not self._data or not self._data.is_ms_path(ms))
+
+        if is_new_ms:
+            try:
+                # Set new MS data
+                self._data = MsData(ms, self._logger)
+                self._ms_info['basename'] = self._data.get_basename()
+                if not self._interactive and self._ms_info['basename']:
+                    self._app_title = ' '.join([self._app_name, self._ms_info['basename']])
+                else:
+                    self._app_title = self._app_name
+                # For checking plot inputs and gui options
+                self._ms_info['data_dims'] = self._data.get_data_dimensions()
+            except RuntimeError as e:
+                ms_error = str(e)
+                self._data = None
+        return ms_error, is_new_ms
