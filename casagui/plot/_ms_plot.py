@@ -6,6 +6,7 @@ import os
 import time
 
 import hvplot
+import numpy as np
 
 try:
     from toolviper.utils.logger import setup_logger
@@ -91,13 +92,12 @@ class MsPlot:
         ''' Clear plot list '''
         self._plots.clear()
 
-    def show(self, title=None, port=0, layout=None):
+    def show(self, title=None, port=0):
         ''' 
         Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
-        Multiple plots can be shown in a panel layout.  Default is to show the first plot only.
+        Multiple plots can be shown in a grid using plot parameter `subplots`.  Default is to show a single plot.
             title (str): browser tab title.  Default is "{app} {ms_name}".
             port (int): optional port number to use.  Default 0 will select a port number.
-            layout (tuple): (start, rows, columns) options for saving multiple plots in grid. Default None (single plot).
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
@@ -105,79 +105,68 @@ class MsPlot:
         if not title:
             title = self._app_title
 
-        # Single plot or combine plots into layout
-        layout = (0, 1, 1) if layout is None else layout # default is first plot only
-        plot, is_layout = self._layout_plots(layout)
+        # Single plot or combine plots into layout using subplots (rows, columns)
+        # Not layout if subplots is single plot (default if None) or if only one plot saved
+        subplots = self._plot_inputs['subplots']
+        subplots = (1, 1) if subplots is None else subplots
+        layout_plot, is_layout = self._layout_plots(subplots)
 
         if is_layout:
             # Show plots in columns
-            hvplot.show(plot.cols(layout[2]), title=title, port=port, threaded=True)
+            hvplot.show(layout_plot.cols(subplots[1]), title=title, port=port, threaded=True)
         else:
             # Show single plot
-            hvplot.show(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), title=title, port=port, threaded=True)
+            hvplot.show(layout_plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), title=title, port=port, threaded=True)
 
-    def save(self, filename='ms_plot.png', fmt='auto', layout=None, export_range='one'):
+    def save(self, filename='ms_plot.png', fmt='auto', export_range='one'):
         '''
-        Save plot to file.
-            filename (str): Name of file to save.
-            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif') or 'auto': inferred from filename.
-            layout (tuple): panel layout settings (start, rows, columns) for multiple plots.
-            exprange (str): for single plot, whether to save first plot only ('one') or all plots ('all'). Ignored for grid layout.
-
-        When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
+        Save plot to file with filename and format. If iteration plots, export 'one' or 'all'.
         '''
         if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
+
         start_time = time.time()
 
-        # Get single plot, or combine plots into panel layout
-        layout = (0, 1, 1) if layout is None else layout
-        plot, is_layout = self._layout_plots(layout)
+        # Single plot or combine plots into layout using subplots (rows, columns).
+        # Not layout if subplots is single plot (default if None) or if only one plot saved.
+        subplots = self._plot_inputs['subplots']
+        subplots = (1, 1) if subplots is None else subplots
+        layout_plot, is_layout = self._layout_plots(subplots)
 
         if is_layout:
             # Save plots combined into one layout
-            hvplot.save(plot.cols(layout[2]), filename=filename, fmt=fmt)
+            hvplot.save(layout_plot.cols(subplots[1]), filename=filename, fmt=fmt)
             self._logger.info("Saved plot to %s.", filename)
         else:
             # Save plots individually, with index appended if exprange='all' and multiple plots.
-            num_plots = len(self._plots)
-            start = layout[0]
-            end = num_plots if export_range == 'all' else start + 1
-            name, ext = os.path.splitext(filename)
+            if self._plot_inputs['iter_axis'] is None or export_range=='one':
+                hvplot.save(layout_plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=filename, fmt=fmt)
+            else:
+                name, ext = os.path.splitext(filename)
+                plot_range = self._plot_inputs['iter_range'] # None or (start, end), default (0, 0)
+                plot_idx = 0 if plot_range is None else plot_range[0]
 
-            for i in range(start, end):
-                plot = self._plots[i]
-                if export_range == 'all' and num_plots > 1:
-                    exportname = f"{name}_{i}{ext}"
-                else:
-                    exportname = filename
-                hvplot.save(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=exportname, fmt=fmt)
-                self._logger.info("Saved plot to %s.", exportname)
+                for plot in self._plots:
+                    exportname = f"{name}_{plot_idx}.{ext}"
+                    hvplot.save(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=exportname, fmt=fmt)
+                    self._logger.info("Saved plot to %s.", exportname)
+                    plot_idx += 1
 
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
 
-    def _layout_plots(self, layout):
-        if len(layout) != 3:
-            raise RuntimeError("Layout should contain (start, rows, columns)")
-
-        start, rows, columns = layout
+    def _layout_plots(self, subplots):
         num_plots = len(self._plots)
-        if start >= num_plots:
-            raise IndexError(f"layout start {start} out of range {num_plots}.")
-
-        num_layout_plots = min(num_plots, rows * columns)
+        num_layout_plots = min(num_plots, np.prod(subplots))
 
         # Set plots in layout
-        layout_plot_count = 0
+        plot_count = 0
         layout = None
-        for i in range(start, start + num_layout_plots):
-            if i >= num_plots:
-                break
+        for i in range(num_layout_plots):
             plot = self._plots[i]
             layout = plot if layout is None else layout + plot
-            layout_plot_count += 1
+            plot_count += 1
 
-        is_layout = layout_plot_count > 1
+        is_layout = plot_count > 1
         return layout, is_layout
 
     def _set_ms(self, ms):

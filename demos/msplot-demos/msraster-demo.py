@@ -76,16 +76,16 @@ def plot_ms_raster():
         msr.save(filename)
 
     # ------------------------------------------------------------------
-    # Demo multiple plots in a layout (start, rows, columns).
-    # Default layout is single plot (0, 1, 1) where start = plot index 0.
+    # Demo multiple plots as subplots (rows, columns) in a 2x2 grid.
+    # Default subplots is single plot (1, 1).
     # Set clear_plots=False after first plot
     for vis_axis in ['amp', 'phase', 'real', 'imag']:
         clear_plots = True if vis_axis == 'amp' else False
         title = " ".join([ms_path, vis_axis])
-        msr.plot(selection=intent_selection, vis_axis=vis_axis, clear_plots=clear_plots)
-    msr.show(layout=(0, 2, 2), title="vis axes in layout")
+        msr.plot(selection=intent_selection, vis_axis=vis_axis, subplots=(2, 2), clear_plots=clear_plots)
+    msr.show(title="vis axes in layout")
     filename=os.path.join(plot_dir, "vis_axis_layout.png")
-    msr.save(filename, layout=(0, 2, 2))
+    msr.save(filename)
 
     # ------------------------------------------------------------------
     # Demo dimension combinations for x and y axis
@@ -117,46 +117,45 @@ def plot_ms_raster():
     msr.save(filename)
 
     # ------------------------------------------------------------------
-    # Demo iter_axis: axis over which to iterate values for multiple plots
-    # export_range ("one" or "all") - default "one" saves single plot starting at layout starting index.
-    msr.plot(selection=intent_selection, iter_axis='polarization') # MS has XX, YY polarizations
-
-    # Single plot starting at first iteration (XX, plot index 0).
+    # Demo iter_axis: axis over which to iterate values for multiple plots.
+    # Single plot starting at first iteration (XX) default iter_range (0, 0).
+    msr.plot(selection=intent_selection, iter_axis='polarization')
     msr.show(title="pol iter 0")
     filename=os.path.join(plot_dir, "iteration0.png")
     msr.save(filename)
 
-    # Single plot starting at second iteration (YY, plot index 1) using layout
-    # To show/save a specific range, you could loop over n=range(...): msr.show(layout=(n, 1, 1))
-    # or select iteration values and save 'all'
-    msr.show(layout=(1, 1, 1), title="pol iter 1")
+    # Single plot starting at first iteration (XX) iter_range (1, 1).
+    msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(1, 1))
+    msr.show(title="pol iter 1")
     filename=os.path.join(plot_dir, "iteration1.png")
-    msr.save(filename, layout=(1, 1, 1), export_range='one')
+    msr.save(filename)
 
     # All plots saved individually, starting at first plot, with filename suffix _0, _1, etc.
+    # show() would only show first iteration plot using default subplots=(1, 1).
+    msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1))
     filename=os.path.join(plot_dir, "iterations.png")
     msr.save(filename, export_range='all')
 
     # Layout multiple plots; export_range is ignored and only the layout is shown/saved.
-    # Like single plots, for many iterations you could use a loop with increment equal to number of plots in layout;
-    # for a 2x2 plot layout (4 plots), loop over n=range(0, n_iter, 4): msr.show(layout=n, 2, 2))
     # Single row layout
-    msr.show(layout=(0, 1, 2), title="pol iter row layout")
+    msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2))
+    msr.show(title="pol iter row layout")
     filename=os.path.join(plot_dir, "iter_row_layout.png")
-    msr.save(filename, layout=(0, 1, 2))
+    msr.save(filename)
 
     # Single column layout
-    msr.show(layout=(0, 2, 1), title="pol iter column layout")
+    msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), subplots=(2, 1))
+    msr.show(title="pol iter column layout")
     filename=os.path.join(plot_dir, "iter_col_layout.png")
-    msr.save(filename, layout=(0, 2, 1))
+    msr.save(filename)
 
     # Demo combining iteration and layout of separate plots.
     # Plot amp with polarization iteration, then phase, to form 2x2 layout. Do not clear plots on second plot.
-    msr.plot(selection=intent_selection, vis_axis='amp', iter_axis='polarization')
-    msr.plot(selection=intent_selection, vis_axis='phase', iter_axis='polarization', clear_plots=False)
-    msr.show(layout=(0, 2, 2), title="amp phase iter layout")
+    msr.plot(selection=intent_selection, vis_axis='amp', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2))
+    msr.plot(selection=intent_selection, vis_axis='phase', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), clear_plots=False)
+    msr.show(title="amp phase iter layout")
     filename=os.path.join(plot_dir, "amp_phase_iter.png")
-    msr.save(filename, layout=(0, 2, 2))
+    msr.save(filename)
 
     # ------------------------------------------------------------------
     # Demo data aggregation:
@@ -187,12 +186,12 @@ def plot_ms_raster():
     msr.save(filename)
 
     # ------------------------------------------------------------------
-    # Demo combining aggregator, iteration, and layout.
+    # Demo combining aggregator, iteration, and subplots.
     # time vs frequency, max across baselines, with polarization iteration; layout in one row.
-    msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', iter_axis='polarization')
-    msr.show(layout=(0, 1, 2), title="max baseline with pol iter")
+    msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2))
+    msr.show(title="max baseline with pol iter")
     filename=os.path.join(plot_dir, "agg_max_baseline_pol_iter.png")
-    msr.save(filename, layout=(0, 1, 2))
+    msr.save(filename)
 
 if __name__ == '__main__':
     plot_ms_raster()

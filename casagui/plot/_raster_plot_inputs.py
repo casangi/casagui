@@ -10,8 +10,8 @@ def check_inputs(inputs):
     _set_baseline_antenna_axis(inputs)
     _check_axis_inputs(inputs)
     _check_selection_input(inputs)
-    _check_agg_input(inputs)
-    _check_title_input(inputs)
+    _check_agg_inputs(inputs)
+    _check_other_inputs(inputs)
     inputs['have_inputs'] = True
 
 def _set_baseline_antenna_axis(inputs):
@@ -53,7 +53,7 @@ def _check_selection_input(inputs):
             if not isinstance(user_selection, dict):
                 raise RuntimeError("Invalid parameter type: selection must be dictionary.")
 
-def _check_agg_input(inputs):
+def _check_agg_inputs(inputs):
     ''' Check aggregator and agg_axis. Set agg_axis if not set. '''
     aggregator = inputs['aggregator']
     agg_axis = inputs['agg_axis']
@@ -77,6 +77,12 @@ def _check_agg_input(inputs):
         agg_axis.remove(inputs['y_axis'])
     inputs['agg_axis'] = agg_axis
 
-def _check_title_input(inputs):
+def _check_other_inputs(inputs):
+    if inputs['iter_range']:
+        if not (isinstance(inputs['iter_range'], tuple) and len(inputs['iter_range']) == 2):
+            raise RuntimeError("Invalid parameter type: iter_range must be None or a tuple of (start, end).")
+    if inputs['subplots']:
+        if not (isinstance(inputs['subplots'], tuple) and len(inputs['subplots']) == 2):
+            raise RuntimeError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
     if inputs['title'] and not isinstance(inputs['title'], str):
-        raise RuntimeError("Invalid parameter type: title must be a string.")
+        raise RuntimeError("Invalid parameter type: title must be None or a string.")

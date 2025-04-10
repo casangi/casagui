@@ -5,6 +5,7 @@ Implementation of the ``MsRaster`` application for measurement set raster plotti
 import time
 
 import holoviews as hv
+import numpy as np
 
 from casagui.plot import MsPlot
 from casagui.plot._raster_plot_inputs import check_inputs
@@ -32,12 +33,13 @@ class MsRaster(MsPlot):
         super().__init__(ms, log_level, interactive, "MsRaster")
         self._spw_color_limits = {}
 
-        if self._interactive:
+        if interactive:
             self._logger.warning("Interactive mode is not implemented yet")
             self._interactive = False
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None, iter_axis= None, title=None, clear_plots=True):
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None,
+             iter_axis= None, iter_range=None, subplots=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -69,6 +71,13 @@ class MsRaster(MsPlot):
                 If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
                 If one agg_axis is selected, the non-agg dimension will be selected.
             iter_axis (str): dimension over which to iterate values (starting at layout start).
+            iter_range (tuple): (start, end) inclusive index values for iteration plots.
+                Default (0, 0) (first iteration only). Use (0, -1) for all iterations.
+                If subplots is a grid, the range is limited by the grid size.
+                If subplots is a single plot, all iteration plots in the range can be saved using export_range in save().
+            subplots (None, tuple): set a grid of (rows, columns).  None = (1, 1) for single plot.
+                Use with iter_axis and iter_range, or clear_plots=False.
+                If used in multiple calls, the last subplots tuple will be used to determine grid to show or save.
             title (str): Plot title, default None (generate title from ms and selection).
             clear_plots (bool): whether to clear list of plots.
 
@@ -85,7 +94,8 @@ class MsRaster(MsPlot):
 
         # Validate input arguments
         inputs = {'x_axis': x_axis, 'y_axis': y_axis, 'vis_axis': vis_axis, 'selection': selection,
-            'aggregator': aggregator, 'agg_axis': agg_axis, 'iter_axis': iter_axis, 'title': title}
+                  'aggregator': aggregator, 'agg_axis': agg_axis, 'iter_axis': iter_axis, 'iter_range': iter_range,
+                  'subplots': subplots, 'title': title}
         inputs['data_dims'] = self._ms_info['data_dims'] # needed to check axis values and select dimensions
         check_inputs(inputs)
         self._plot_inputs = inputs
@@ -105,24 +115,22 @@ class MsRaster(MsPlot):
         self._logger.debug("Plot elapsed time: %.2fs.", time.time() - start)
 # pylint: enable=too-many-arguments, too-many-positional-arguments
 
-    def save(self, filename='', fmt='auto', layout=None, export_range='one'):
+    def save(self, filename='', fmt='auto', export_range='one'):
         '''
         Save plot to file.
+
+        Args:
             filename (str): Name of file to save. Default '': see below.
             fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
+            export_range(str): 'one' or 'all' for iteration plots when subplots is a single-plot grid. Ignored otherwise. 
 
-            Options for saving multiple plots (iteration or clearplots=False):
-            layout (tuple): (start, rows, columns) for saving multiple plots in grid or selecting start plot. Default None is single plot (0,1,1).
-            export_range(str): when layout is single plot, whether to save start plot only ('one') or all plots starting at start plot ('all'). Ignored if layout is a grid.
-
-        filename:
-            If set, the plot will be exported to the specified filename in the format of its extension (see fmt options).
-            If not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
-            When exporting multiple plots as single plots, the plot index will be appended to the filename {filename}_{index}.{ext}.
+        If filename is set and fmt='auto', the plot will be exported in the format of the filename extension.
+        If filename is not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
+        When exporting 'all' iteration plots, the plot index will be appended to the filename: {filename}_{index}.{ext}.
         '''
         if not filename:
             filename = f"{self._ms_info['basename']}_raster.png"
-        super().save(filename, fmt, layout, export_range)
+        super().save(filename, fmt, export_range)
 
     def _do_plot(self, plot_inputs):
         ''' Create plot using plot inputs '''
@@ -169,15 +177,36 @@ class MsRaster(MsPlot):
         return plot
 
     def _do_iter_plot(self, plot_inputs):
-        ''' Create one plot per iteration value '''
+        ''' Create one plot per iteration value in iter_range which fits into subplots '''
+        # Default (0, 0) (first iteration only). Use (0, -1) for all iterations.
+        # If subplots is a grid, end iteration index is limited by the grid size.
+        # If subplots is a single plot, all iteration plots in the range can be saved using export_range in save().
         iter_axis = plot_inputs['iter_axis']
+        iter_range = plot_inputs['iter_range']
+        subplots = plot_inputs['subplots']
+
+        iter_range = (0, 0) if iter_range is None else iter_range
+        start_idx, end_idx = iter_range
+
         iter_values = self._data.get_dimension_values(iter_axis)
+        n_iter = len(iter_values)
+
+        if start_idx >= n_iter:
+            raise IndexError(f"iter_range start {start_idx} is greater than number of iterations {n_iter}")
+        end_idx = n_iter if (end_idx == -1 or end_idx >= n_iter) else end_idx + 1
+        num_iter_plots = end_idx - start_idx
+
+        # Plot the minimum number of plots in iter range or subplots grid
+        num_subplots = np.prod(subplots) if subplots else 1
+        num_iter_plots = min(end_idx - start_idx, num_subplots) if num_subplots > 1 else num_iter_plots
+        end_idx = start_idx + num_iter_plots
 
         # Init plot before selecting iter values
         self._init_plot(plot_inputs)
 
-        for value in iter_values:
+        for i in range(start_idx, end_idx):
             # Select iteration value and make plot
+            value = iter_values[i]
             self._logger.info("Plot %s iteration value %s", iter_axis, value)
             plot_inputs['selection'][iter_axis] = value
             plot = self._do_plot(plot_inputs)

@@ -12,7 +12,8 @@ import hvplot.pandas
 
 from casagui.bokeh.format import get_time_formatter
 from casagui.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from casagui.plot._xds_plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels
+from casagui.plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels
+#from casagui.plot._xds_plot_axes import get_coordinate_labels, get_axis_labels, get_vis_axis_labels
 
 def raster_plot_params(xds, plot_inputs):
     '''
@@ -29,7 +30,7 @@ def raster_plot_params(xds, plot_inputs):
     if plot_inputs['title']:
         plot_params['title'] = plot_inputs['title']
     else:
-        plot_params['title'] = _get_plot_title(xds, plot_inputs)
+        plot_params['title'] = _get_plot_title(plot_inputs)
 
     x_axis_labels = get_axis_labels(xds, plot_inputs['x_axis'])
     y_axis_labels = get_axis_labels(xds, plot_inputs['y_axis'])
@@ -40,14 +41,21 @@ def raster_plot_params(xds, plot_inputs):
     _set_axis_label_params(plot_params, 'c', c_axis_labels)
     return plot_params
 
-def _get_plot_title(xds, plot_inputs):
+def _get_plot_title(plot_inputs):
     ''' Form string containing ms name and selected values '''
-    selection = plot_inputs['selection']
-    data_dims = plot_inputs['data_dims']
     ms_name = plot_inputs['ms_basename']
+    iter_axis = plot_inputs['iter_axis']
+    selection = plot_inputs['selection']
 
     title = f"{ms_name}\n"
 
+    # Add iter_axis selection
+    if iter_axis and iter_axis in selection:
+        title += f"{iter_axis} {selection[iter_axis]}"
+
+    '''
+    # Include complete selection?
+    data_dims = plot_inputs['data_dims']
     ps_selection = []
     dim_selections = []
 
@@ -77,6 +85,7 @@ def _get_plot_title(xds, plot_inputs):
             dim_selections.append(dim_selection)
     title += '\n'.join(ps_selection) + '\n'
     title += '  '.join(dim_selections)
+    '''
     return title
 
 def _get_c_axis_labels(xds, plot_inputs):
