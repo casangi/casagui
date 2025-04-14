@@ -7,6 +7,7 @@ import time
 
 import hvplot
 import numpy as np
+import panel as pn
 
 try:
     from toolviper.utils.logger import setup_logger
@@ -39,7 +40,13 @@ class MsPlot:
         self._interactive = interactive
         self._app_name = app_name
 
-        # Initialize plot inputs
+        if interactive:
+            # enable "toast" notifications
+            pn.config.notifications = True
+            pn.state.notifications.position = 'top-center'
+            self._toast = None # destroy toast when user does not close
+
+        # Initialize plot inputs and params
         self._plot_inputs = {}
         self._plot_inputs['have_inputs'] = False
 
@@ -48,11 +55,9 @@ class MsPlot:
         self._plot_init = False
 
         # Set data (if ms)
-        self._ms_info = {}
         self._data = None
-        error, _ = self._set_ms(ms)
-        if error:
-            self._logger.error(error)
+        self._ms_info = {}
+        self._set_ms(ms)
 
     def summary(self, columns=None):
         ''' Print ProcessingSet summary.
@@ -83,14 +88,14 @@ class MsPlot:
         '''
         self._data.plot_phase_centers(label_all_fields, data_group)
 
+    def clear_plots(self):
+        ''' Clear plot list '''
+        self._plots.clear()
+
     def clear_selection(self):
         ''' Clear selection in data and restore to original '''
         if self._data:
             self._data.clear_selection()
-
-    def clear_plots(self):
-        ''' Clear plot list '''
-        self._plots.clear()
 
     def show(self, title=None, port=0):
         ''' 
@@ -173,9 +178,9 @@ class MsPlot:
         ''' Update settings for input data filepath from ctor or GUI (MSv2 or zarr path) '''
         self._ms_info['ms'] = ms
         ms_error = ""
-        is_new_ms = ms and (not self._data or not self._data.is_ms_path(ms))
+        ms_changed = ms and (not self._data or not self._data.is_ms_path(ms))
 
-        if is_new_ms:
+        if ms_changed:
             try:
                 # Set new MS data
                 self._data = MsData(ms, self._logger)
@@ -189,4 +194,28 @@ class MsPlot:
             except RuntimeError as e:
                 ms_error = str(e)
                 self._data = None
-        return ms_error, is_new_ms
+        if ms_error:
+            self._notify(ms_error, 'error', 0)
+        return ms_changed
+
+    def _notify(self, message, level, duration=3000):
+        ''' Log message. If interactive, notify user with toast for duration in ms.
+            Zero duration must be dismissed. '''
+        if self._toast:
+            self._toast.destroy()
+        if level == "info":
+            self._logger.info(message)
+            if self._interactive:
+                self._toast = pn.state.notifications.info(message, duration=duration)
+        elif level == "error":
+            self._logger.error(message)
+            if self._interactive:
+                self._toast = pn.state.notifications.error(message, duration=duration)
+        elif level == "success":
+            self._logger.info(message)
+            if self._interactive:
+                self._toast = pn.state.notifications.success(message, duration=duration)
+        elif level == "warning":
+            self._logger.warning(message)
+            if self._interactive:
+                self._toast = pn.state.notifications.warning(message, duration=duration)
