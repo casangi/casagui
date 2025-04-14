@@ -84,5 +84,8 @@ def _check_other_inputs(inputs):
     if inputs['subplots']:
         if not (isinstance(inputs['subplots'], tuple) and len(inputs['subplots']) == 2):
             raise RuntimeError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
+    if inputs['color_limits']:
+        if not (isinstance(inputs['color_limits'], tuple) and len(inputs['color_limits']) == 2):
+            raise RuntimeError("Invalid parameter type: color_limits must be None or a tuple of (min, max).")
     if inputs['title'] and not isinstance(inputs['title'], str):
         raise RuntimeError("Invalid parameter type: title must be None or a string.")
