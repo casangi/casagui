@@ -33,12 +33,14 @@ class MsData:
             return self._data.get_path() # path to zarr file
         if self._ms_path:
             return self._ms_path # path to ms v2
+        return None
 
     def get_basename(self):
         ''' Returns basename of MS path or None if not set. '''
         if self._ms_path:
             return os.path.splitext(os.path.basename(self._ms_path))[0]
         self._log_no_ms()
+        return None
 
     def summary(self, columns=None):
         ''' Print summary of Processing Set data.
@@ -67,6 +69,7 @@ class MsData:
         if self._data_initialized:
             return self._data.get_data_groups()
         self._log_no_ms()
+        return None
 
     def get_antennas(self, plot_positions=False):
         ''' Returns list of antenna names in data.
@@ -75,6 +78,7 @@ class MsData:
         if self._data_initialized:
             return self._data.get_antennas(plot_positions)
         self._log_no_ms()
+        return None
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
@@ -92,18 +96,21 @@ class MsData:
         if self._data_initialized:
             return self._data.get_ps_len()
         self._log_no_ms()
+        return None
 
     def get_max_data_dims(self):
         ''' Returns maximum length of dimensions in data. '''
         if self._data_initialized:
             return self._data.get_ps_max_dims()
         self._log_no_ms()
+        return None
 
     def get_data_dimensions(self):
         ''' Returns names of data dimensions. '''
         if self._data_initialized:
             return self._data.get_data_dimensions()
         self._log_no_ms()
+        return None
 
     def get_dimension_values(self, dim):
         ''' Return values for dimension in current data.
@@ -112,12 +119,14 @@ class MsData:
         if self._data_initialized:
             return self._data.get_dimension_values(dim)
         self._log_no_ms()
+        return None
 
     def get_first_spw(self):
         ''' Returns name of first spw by id. '''
         if self._data_initialized:
             return self._data.get_first_spw()
         self._log_no_ms()
+        return None
 
     def select_data(self, selection):
         ''' Apply selection in data.
@@ -133,6 +142,7 @@ class MsData:
         if self._data_initialized:
             return self._data.get_selection()
         self._log_no_ms()
+        return None
 
     def clear_selection(self):
         ''' Clears selection dict and selected data. '''
@@ -146,18 +156,21 @@ class MsData:
         if self._data_initialized:
             return self._data.get_vis_stats(selection, vis_axis)
         self._log_no_ms()
+        return None
 
     def get_correlated_data(self, data_group):
         ''' Returns name of correlated data variable in Processing Set data group '''
         if self._data_initialized:
             return self._data.get_correlated_data(data_group)
         self._log_no_ms()
+        return None
 
     def get_raster_data(self, plot_inputs):
         ''' Returns xarray Dataset after applying plot inputs and raster plane selection '''
         if self._data_initialized:
             return self._data.get_raster_data(plot_inputs)
         self._log_no_ms()
+        return None
 
     def _log_no_ms(self):
         self._logger.info("No MS path set, cannot access data")

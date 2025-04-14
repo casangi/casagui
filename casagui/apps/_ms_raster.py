@@ -4,12 +4,11 @@ Implementation of the ``MsRaster`` application for measurement set raster plotti
 
 import time
 
-import holoviews as hv
 import numpy as np
 
 from casagui.plot import MsPlot
 from casagui.plot._raster_plot_inputs import check_inputs
-from casagui.plot._xds_raster_plot import raster_plot_params, raster_plot
+from casagui.plot._raster_plot import RasterPlot
 
 class MsRaster(MsPlot):
     '''
@@ -31,15 +30,37 @@ class MsRaster(MsPlot):
 
     def __init__(self, ms=None, log_level="info", interactive=False):
         super().__init__(ms, log_level, interactive, "MsRaster")
-        self._spw_color_limits = {}
+        self._raster_plot = RasterPlot()
+        self._spw_color_limits = {} # store calculated color limits
 
         if interactive:
-            self._logger.warning("Interactive mode is not implemented yet")
-            self._interactive = False
+            # Set defaults
+            self._plot()
+            self._launch_gui()
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments
+    def set_ms(self, ms):
+        ''' Set MS path for current MsRaster '''
+        ms_changed = super().set_ms(ms)
+        if ms_changed:
+            self._raster_plot.reset_xds_plot_params()
+            self._spw_color_limits = {}
+        return ms_changed
+
+    def set_style_params(self, unflagged_cmap='viridis', flagged_cmap='reds', show_colorbar=True):
+        '''
+            Set styling parameters for the plot, such as colormaps and whether to show colorbar.
+            Placeholder for future styling such as fonts.
+
+            Args:
+                unflagged_cmap (str): colormap to use for unflagged data.
+                flagged_cmap (str): colormap to use for flagged data.
+                show_colorbar (bool): Whether to show colorbar with plot.  Default True.
+        '''
+        self._raster_plot.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar)
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None,
-             iter_axis= None, iter_range=None, subplots=None, title=None, clear_plots=True):
+             iter_axis= None, iter_range=None, subplots=None, color_limits=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -78,6 +99,8 @@ class MsRaster(MsPlot):
             subplots (None, tuple): set a grid of (rows, columns).  None = (1, 1) for single plot.
                 Use with iter_axis and iter_range, or clear_plots=False.
                 If used in multiple calls, the last subplots tuple will be used to determine grid to show or save.
+            color_limits (tuple): (min, max) of colorbar.  Default None is to autoscale.
+                When color_limits=None and vis_axis='amp', limits will be computed from statistics.
             title (str): Plot title, default None (generate title from ms and selection).
             clear_plots (bool): whether to clear list of plots.
 
@@ -85,35 +108,34 @@ class MsRaster(MsPlot):
         '''
         start = time.time()
 
-        # Check valid MS is set
-        if not self._data or not self._data.is_valid():
-            raise RuntimeError("Input MS path is invalid or missing, cannot plot")
+        inputs = locals() # collect arguments into dict (not unused as pylint complains!)
 
         # Clear for new plot
-        self._reset_plot(clear_plots)
+        self._reset_plot(inputs['clear_plots'])
 
         # Validate input arguments
-        inputs = {'x_axis': x_axis, 'y_axis': y_axis, 'vis_axis': vis_axis, 'selection': selection,
-                  'aggregator': aggregator, 'agg_axis': agg_axis, 'iter_axis': iter_axis, 'iter_range': iter_range,
-                  'subplots': subplots, 'title': title}
-        inputs['data_dims'] = self._ms_info['data_dims'] # needed to check axis values and select dimensions
+        inputs['data_dims'] = self._ms_info['data_dims'] # needed to check axis values and rename dimensions
         check_inputs(inputs)
         self._plot_inputs = inputs
 
-        # Preserve user selection dict; plot selection will be modified for plot
-        if self._plot_inputs['selection']:
-            self._plot_inputs['selection'] = self._plot_inputs['selection'].copy()
+        # Do plot if valid MS is set
+        if self._data and self._data.is_valid():
+            if self._plot_inputs['selection']:
+                # Preserve user selection dict; plot selection will be modified for plot
+                self._plot_inputs['selection'] = self._plot_inputs['selection'].copy()
 
-        if self._interactive:
-            self._update_gui() # triggers plot
-        else:
-            if self._plot_inputs['iter_axis']:
-                self._do_iter_plot(self._plot_inputs)
+            if self._interactive:
+                self._update_gui() # triggers plot
             else:
-                plot = self._do_plot(self._plot_inputs)
-                self._plots.append(plot)
+                if self._plot_inputs['iter_axis']:
+                    self._do_iter_plot(self._plot_inputs)
+                else:
+                    plot, _ = self._do_plot(self._plot_inputs)
+                    self._plots.append(plot)
+        else:
+            self._logger.warning("Plot inputs set but cannot plot: input MS path is invalid or missing.")
         self._logger.debug("Plot elapsed time: %.2fs.", time.time() - start)
-# pylint: enable=too-many-arguments, too-many-positional-arguments
+# pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
 
     def save(self, filename='', fmt='auto', export_range='one'):
         '''
@@ -135,46 +157,32 @@ class MsRaster(MsPlot):
     def _do_plot(self, plot_inputs):
         ''' Create plot using plot inputs '''
         plot = None
+        plot_params = {}
 
         if not self._plot_init:
             self._init_plot(plot_inputs)
 
         try:
             # Select vis_axis data to plot and update selection; returns xarray Dataset
-            raster_data, selection = self._data.get_raster_data(plot_inputs)
+            raster_data = self._data.get_raster_data(plot_inputs)
         except RuntimeError as e:
             error = f"Plot data failed: {str(e)}"
-            self._notify(error, "error")
-            return plot
+            super()._notify(error, "error", 0)
+            return plot, plot_params
 
-        plot_inputs['selection'] = selection
 
         # Get params needed for plot, such as title, labels, and ticks
-        plot_inputs['ms_basename'] = self._ms_info['basename'] # for title
-        plot_params = raster_plot_params(raster_data, plot_inputs)
-        plot_params['color_limits'] = self._get_color_limits(plot_inputs)
+        plot_inputs['color_limits'] = self._get_color_limits(plot_inputs)
+        plot_inputs['ms_name'] = self._ms_info['basename'] # for title
+        self._raster_plot.set_data_params(raster_data, plot_inputs)
 
         # Make plot
         try:
-            plot = raster_plot(raster_data, plot_params)
+            plot, colorbar_params = self._raster_plot.raster_plot(raster_data, self._logger)
         except RuntimeError as e:
             error = f"Plot failed: {str(e)}"
-            self._notify(error, "error")
-            return plot
-
-        if self._interactive:
-            # Update colorbar title with vis axis; plot updates but colorbar does not.
-            # plot is hv.Overlay composed of QuadMesh.I (flagged) and QuadMesh.II (unflagged)
-            c_label = plot_params['axis_labels']['c']['label']
-            if plot_params['colorbar']['flagged']:
-                plot.QuadMesh.I = plot.QuadMesh.I.opts(backend_opts={"colorbar.title": "Flagged " + c_label})
-            if plot_params['colorbar']['unflagged']:
-                plot.QuadMesh.II = plot.QuadMesh.II.opts(backend_opts={"colorbar.title": c_label})
-            plot = plot.opts(
-                       hv.opts.QuadMesh(tools=['hover'])
-                   )
-
-        return plot
+            super()._notify(error, "error", 0)
+        return plot, colorbar_params
 
     def _do_iter_plot(self, plot_inputs):
         ''' Create one plot per iteration value in iter_range which fits into subplots '''
@@ -209,7 +217,7 @@ class MsRaster(MsPlot):
             value = iter_values[i]
             self._logger.info("Plot %s iteration value %s", iter_axis, value)
             plot_inputs['selection'][iter_axis] = value
-            plot = self._do_plot(plot_inputs)
+            plot, _ = self._do_plot(plot_inputs)
             self._plots.append(plot)
 
     def _init_plot(self, plot_inputs):
@@ -220,23 +228,26 @@ class MsRaster(MsPlot):
 
         # Do selection and add spw
         self._data.select_data(plot_inputs['selection'])
-        self._select_first_spw()
+        self._select_first_spw(plot_inputs)
         self._plot_init = True
 
-        # Print data info
+        # Print data info for spw selection
         self._logger.info("Plotting %s msv4 datasets.", self._data.get_num_ms())
         self._logger.info("Maximum dimensions for selected spw: %s", self._data.get_max_data_dims())
 
-    def _select_first_spw(self):
+    def _select_first_spw(self, plot_inputs):
         ''' Determine first spw if not in user selection '''
-        if 'spw_name' not in self._plot_inputs['selection']:
+        if 'spw_name' not in plot_inputs['selection']:
             first_spw = self._data.get_first_spw()
-            self._plot_inputs['selection']['spw_name'] = first_spw
             self._data.select_data({'spw_name': first_spw})
+            plot_inputs['selection']['spw_name'] = first_spw
 
     def _get_color_limits(self, plot_inputs):
         ''' Calculate stats for color limits for non-interactive amplitude plots. '''
         color_limits = None
+        if 'color_limits' in plot_inputs and plot_inputs['color_limits'] is not None:
+            return plot_inputs['color_limits']
+
         if plot_inputs['vis_axis']=='amp' and not plot_inputs['aggregator']:
             # For amplitude, limit colorbar range using ms stats
             spw_name = plot_inputs['selection']['spw_name']
@@ -286,7 +297,9 @@ class MsRaster(MsPlot):
         # Reset selection in data
         super().clear_selection()
 
-        # Plot not initialized
+        # Reset data-related plot params
+        self._raster_plot.reset_data_params()
+
         self._plot_init = False
 
     def _set_data_group(self, plot_inputs):
@@ -298,16 +311,5 @@ class MsRaster(MsPlot):
         if self._data and self._data.is_valid():
             plot_inputs['correlated_data'] = self._data.get_correlated_data(plot_inputs['selection']['data_group'])
 
-    def _notify(self, message, level):
-        ''' Log message. '''
-        # Placeholder for GUI notifications; use logger for non-gui logging.
-        if level == "debug":
-            self._logger.debug(message)
-        if level == "info":
-            self._logger.info(message)
-        elif level == "error":
-            self._logger.error(message)
-        elif level == "success":
-            self._logger.info(message)
-        elif level == "warning":
-            self._logger.warning(message)
+    def _launch_gui(self):
+        pass

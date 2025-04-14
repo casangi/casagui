@@ -12,9 +12,13 @@ import hvplot.pandas
 
 from casagui.bokeh.format import get_time_formatter
 from casagui.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from casagui.plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels
+from casagui.plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels, get_coordinate_labels
 
 class RasterPlot:
+    '''
+        Class to create a raster plot from MS data.
+        Implemented with xArray Dataset and hvPlot, but could change data and plotting backends using same interface.
+    '''
 
     def __init__(self):
         self._plot_params = {'data': {'params': False}}
@@ -35,10 +39,10 @@ class RasterPlot:
         self._plot_params['flagged_cmap'] = flagged_cmap
         self._plot_params['colorbar'] = {'show': show_colorbar}
 
-    def set_data_params(self, xds, plot_inputs):
+    def set_data_params(self, data, plot_inputs):
         '''
         Set parameters needed for raster plot from data and plot inputs.
-            xds (xarray Dataset): selected dataset of MSv4 data to plot
+            data (xarray Dataset): selected dataset of MSv4 data to plot
             plot_inputs (dict): user inputs to plot.
             color_limits (tuple): (min, max) of colorbar.  Default None is to autoscale.
         '''
@@ -51,12 +55,12 @@ class RasterPlot:
         if plot_inputs['title']:
             self._plot_params['data']['title'] = plot_inputs['title']
         else:
-            self._plot_params['data']['title'] = self._get_plot_title(plot_inputs)
+            self._plot_params['data']['title'] = self._get_plot_title(plot_inputs, data)
 
         # Set x, y, c axis labels and ticks
-        x_axis_labels = get_axis_labels(xds, plot_inputs['x_axis'])
-        y_axis_labels = get_axis_labels(xds, plot_inputs['y_axis'])
-        c_axis_labels = self._get_c_axis_labels(xds, plot_inputs)
+        x_axis_labels = get_axis_labels(data, plot_inputs['x_axis'])
+        y_axis_labels = get_axis_labels(data, plot_inputs['y_axis'])
+        c_axis_labels = self._get_c_axis_labels(data, plot_inputs)
         self._set_axis_label_params('x', x_axis_labels)
         self._set_axis_label_params('y', y_axis_labels)
         self._set_axis_label_params('c', c_axis_labels)
@@ -67,8 +71,8 @@ class RasterPlot:
         ''' Remove and invalidate data plot params '''
         self._plot_params['data'] = {'params': False}
 
-    def raster_plot(self, xds, logger):
-        ''' Create raster plot for input xarray Dataset using plot params.
+    def raster_plot(self, data, logger):
+        ''' Create raster plot (hvPlot) for input data (xarray Dataset) using plot params.
             Returns Overlay of unflagged and flagged plots and colorbar params for interactive plot.
         '''
         if not self._plot_params['data']['params']:
@@ -81,7 +85,7 @@ class RasterPlot:
         c_axis = data_params['axis_labels']['c']['axis']
 
         # Set plot axes to numeric coordinates if needed
-        xds = set_index_coordinates(xds, (x_axis, y_axis))
+        xds = set_index_coordinates(data, (x_axis, y_axis))
 
         # Unflagged and flagged data.  Use same name, for histogram dimension.
         # c axis labels are (axis, label)
@@ -91,72 +95,74 @@ class RasterPlot:
         xda = xds[data_params['correlated_data']].where(xds.FLAG == 0.0).rename(xda_name)
         flagged_xda = xds[data_params['correlated_data']].where(xds.FLAG == 1.0).rename("flagged_" + xda_name)
 
-        # Plot data
+        # Plot data and make Overlay plot with hover tools
         # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
         unflagged_plot = self._plot_xda(xda)
         flagged_plot = self._plot_xda(flagged_xda, True)
-
-        # Return Overlay plot with hover tools
         plot = (flagged_plot * unflagged_plot).opts(
             hv.opts.QuadMesh(tools=['hover'])
         )
+
+        # Return Overlay plot and colorbar params for interactive plot
         return plot, self._plot_params['colorbar']
 
-    def _get_plot_title(self, plot_inputs):
-        ''' Form string containing ms name and selected values '''
+# pylint: disable=too-many-locals
+    def _get_plot_title(self, plot_inputs, data, include_selections=False):
+        ''' Form string containing ms name and selected values using data (xArray Dataset) '''
         ms_name = plot_inputs['ms_name']
         iter_axis = plot_inputs['iter_axis']
         selection = plot_inputs['selection']
 
         title = f"{ms_name}\n"
 
-        # Add iter_axis selection
-        if iter_axis and iter_axis in selection:
-            title += f"{iter_axis} {selection[iter_axis]}"
+        if not include_selections:
+            # Add iter_axis selection only
+            if iter_axis and iter_axis in selection:
+                title += f"{iter_axis} {selection[iter_axis]}"
+        else:
+            # TBD: include complete selection?
+            data_dims = plot_inputs['data_dims']
+            ps_selections = []
+            dim_selections = []
 
-        '''
-        # Include complete selection?
-        data_dims = plot_inputs['data_dims']
-        ps_selection = []
-        dim_selections = []
+            for key in selection:
+                # Add processing set selection: spw, field, and intent
+                if key == 'spw_name':
+                    spw_selection = f"spw: {selection[key]}"
+                    if 'frequency' in data:
+                        spw_selection += f" ({data.frequency.spectral_window_id})"
+                    ps_selections.append(spw_selection)
+                elif key == 'field_name':
+                    ps_selections.append(f"field: {selection[key]}")
+                elif key == 'source_name':
+                    ps_selections.append(f"source: {selection[key]}")
+                elif key == 'intents':
+                    ps_selections.append(f"intents: {selection[key]}")
+                elif key == 'data_group':
+                    continue # do not include?
+                elif key in data_dims:
+                    # Add selected dimensions to title: name (index)
+                    label = get_coordinate_labels(data, key)
+                    index = selection[key] if isinstance(selection[key], int) else None
+                    dim_selection = f"{key}: {label}"
+                    if index is not None:
+                        index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
+                        dim_selection += index_label
+                    dim_selections.append(dim_selection)
+            title += '\n'.join(ps_selections) + '\n'
+            title += '  '.join(dim_selections)
 
-        for key in selection:
-            # Add processing set selection: spw, field, and intent
-            if key == 'spw_name':
-                spw_selection = f"spw: {selection[key]}"
-                if 'frequency' in xds:
-                    spw_selection += f" ({xds.frequency.spectral_window_id})"
-                ps_selection.append(spw_selection)
-            elif key == 'field_name':
-                ps_selection.append(f"field: {selection[key]}")
-            elif key == 'source_name':
-                ps_selection.append(f"source: {selection[key]}")
-            elif key == 'intents':
-                ps_selection.append(f"intents: {selection[key]}")
-            elif key == 'data_group':
-                continue # do not include?
-            elif key in data_dims:
-                # Add selected dimensions to title: name (index)
-                label = get_coordinate_labels(xds, key)
-                index = selection[key] if isinstance(selection[key], int) else None
-                dim_selection = f"{key}: {label}"
-                if index is not None:
-                    index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
-                    dim_selection += index_label
-                dim_selections.append(dim_selection)
-        title += '\n'.join(ps_selection) + '\n'
-        title += '  '.join(dim_selections)
-        '''
         return title
+# pylint: enable=too-many-locals
 
-    def _get_c_axis_labels(self, xds, plot_inputs):
-        ''' Set axis and label for c axis '''
+    def _get_c_axis_labels(self, data, plot_inputs):
+        ''' Set axis and label for c axis using input data xArray Dataset. '''
         data_group = plot_inputs['selection']['data_group']
         correlated_data = plot_inputs['correlated_data']
         vis_axis = plot_inputs['vis_axis']
         aggregator = plot_inputs['aggregator']
 
-        axis, label = get_vis_axis_labels(xds, data_group, correlated_data, vis_axis)
+        axis, label = get_vis_axis_labels(data, data_group, correlated_data, vis_axis)
         if aggregator:
             label = " ".join([aggregator.capitalize(), label])
         return (axis, label, None)
