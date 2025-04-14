@@ -22,6 +22,7 @@ def raster_data(ps, plot_inputs, logger):
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
     raster_ps, updated_selection = _select_raster_ps(ps, plot_inputs, logger)
+    plot_inputs['selection'] = updated_selection
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
@@ -42,7 +43,7 @@ def raster_data(ps, plot_inputs, logger):
         raster_xds = aggregate_data(raster_xds, plot_inputs, logger)
 
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
-    return raster_xds, updated_selection
+    return raster_xds
 
 def _select_raster_ps(ps, plot_inputs, logger):
     ''' Select default dimensions if needed for raster data '''

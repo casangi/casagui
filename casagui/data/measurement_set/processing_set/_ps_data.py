@@ -176,7 +176,7 @@ class PsData:
         return get_correlated_data(self._get_ps().get(0), data_group)
 
     def get_raster_data(self, plot_inputs):
-        ''' Returns xarray Dataset after applying plot inputs '''
+        ''' Returns xarray Dataset after applying plot inputs and raster plane selection '''
         return raster_data(self._get_ps(),
             plot_inputs,
             self._logger
