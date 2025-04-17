@@ -2047,7 +2047,7 @@ class InteractiveClean:
 
         self._clean['gclean'] = None
         self._clean['imid'] = [ ]
-        if USE_MULTIPLE_GCLEAN_HACK: self._clean['gclean_rest'] = [ ]
+        self._clean['gclean_rest'] = [ ]
         for imid, imdetails in self._clean_targets.items( ):
             self._clean['imid'].append(imid)
 
@@ -2066,6 +2066,11 @@ class InteractiveClean:
                 self._clean['gclean_rest'].append(_gclean( **imdetails['args'] ) )
                 imdetails['path']['residual'] = self._residual_path(self._clean['gclean_rest'][-1],imid)
                 imdetails['path']['mask'] = self._mask_path(self._clean['gclean_rest'][-1],imid)
+
+            else:
+
+                imdetails['path']['residual'] = self._residual_path(self._clean['gclean'],imid)
+                imdetails['path']['mask'] = self._mask_path(self._clean['gclean'],imid)
 
         for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
