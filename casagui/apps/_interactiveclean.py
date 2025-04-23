@@ -53,19 +53,11 @@ from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip, EvTextInput
-from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import resource_manager, reset_resource_manager, is_notebook, find_pkg, load_pkg
 from ..utils import ContextMgrChain as CMC
 
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
-try:
-    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-except Exception as e:
-    import inspect as _insp
-    import os as _os
-    from casagui.private._gclean import gclean as _gclean
-    print( f'''>>>--caution--> Using cached gclean API from {_os.path.dirname(_os.path.abspath(_insp.getsourcefile(_gclean)))}''' )
-    print( f'''                {e}''' )
 
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
@@ -1921,7 +1913,24 @@ class InteractiveClean:
         ###
         return "%s.mask" % imid
 
-    def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, outlierfile='', weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False ):
+    def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, outlierfile='', weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False, iclean_backend="PROD" ):
+
+        ###
+        ### iclean_backend can be used to select alternate backends for interactive clean. This could be used
+        ### to enable a backend with extended features or it could be used to select a stub backend designed
+        ### for testing
+        ###
+        mod_specs = None
+        self._gclean_module = None
+        if iclean_backend == 'PROD':
+            mod_specs = find_pkg( "casatasks.private.imagerhelpers._gclean" )
+        else:
+            mod_specs = find_pkg( f"_gclean_{iclean_backend}" )
+
+        if mod_specs:
+            self._gclean_module = load_pkg(mod_specs[0])
+        else:
+            raise ImportError(f"Could not locate {iclean_backend} kind of iclean backend")
 
         ###
         ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
@@ -1989,12 +1998,6 @@ class InteractiveClean:
         self._last_mask_breadcrumbs = ''
 
         ###
-        ### clean generator
-        ###
-        if _gclean is None:
-            raise RuntimeError('casatasks gclean interface is not available')
-
-        ###
         ### Set up dictionary of javascript code snippets
         ###
         self._initialize_javascript( )
@@ -2057,13 +2060,13 @@ class InteractiveClean:
             if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
 
-                self._clean['gclean'] = _gclean( **imdetails['args'] )
+                self._clean['gclean'] = self._gclean_module.gclean( **imdetails['args'] )
                 imdetails['path']['residual'] = self._residual_path(self._clean['gclean'],imid)
                 imdetails['path']['mask'] = self._mask_path(self._clean['gclean'],imid)
 
             elif USE_MULTIPLE_GCLEAN_HACK:
 
-                self._clean['gclean_rest'].append(_gclean( **imdetails['args'] ) )
+                self._clean['gclean_rest'].append(self._gclean_module.gclean( **imdetails['args'] ) )
                 imdetails['path']['residual'] = self._residual_path(self._clean['gclean_rest'][-1],imid)
                 imdetails['path']['mask'] = self._mask_path(self._clean['gclean_rest'][-1],imid)
 

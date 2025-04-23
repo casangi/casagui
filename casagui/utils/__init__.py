@@ -42,8 +42,9 @@ from ._logging import get_logger
 from ._regions import polygon_indexes
 from ._docenum import DocEnum
 from ._copydoc import copydoc
+from ._pkgs import find_pkg, load_pkg
 
-from astropy import units as u
+from astropy import units
 from regions import PixCoord
 from regions import RectanglePixelRegion, PolygonPixelRegion
 
@@ -428,7 +429,7 @@ def convert_masks(masks: dict, coord='pixel', cdesc=None)->list:
         if mask_shape=='rect':
             region = RectanglePixelRegion(
                 PixCoord(x=center_pixels[0], y=center_pixels[1]), 
-                width=width, height=height, angle=0*u.deg
+                width=width, height=height, angle=0*units.deg
         )
         elif mask_shape=='poly':
             region = PolygonPixelRegion(
