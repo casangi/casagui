@@ -4,9 +4,7 @@ from astropy import constants
 import numpy as np
 import xarray as xr
 
-VIS_AXIS_OPTIONS = ['amp', 'phase', 'real', 'imag']
-UVW_AXIS_OPTIONS = ['u', 'v', 'w', 'uvdist']
-WEIGHT_AXIS_OPTIONS = ['weight', 'sigma']
+from casagui.plot._ms_plot_constants import SPECTRUM_AXIS_OPTIONS, UVW_AXIS_OPTIONS, VIS_AXIS_OPTIONS, WEIGHT_AXIS_OPTIONS
 
 def get_correlated_data(xds, data_group):
     ''' Return correlated_data value in data_group dict '''
@@ -90,9 +88,9 @@ def _calc_vis_axis(xds, axis, group_info):
 
     # Single dish spectrum
     if correlated_data == "SPECTRUM":
-        if axis in ['amp', 'real']:
+        if axis in SPECTRUM_AXIS_OPTIONS:
             return xda.assign_attrs(units='Jy')
-        raise RuntimeError(f"{axis} invalid for SPECTRUM dataset")
+        raise RuntimeError(f"Vis axis {axis} invalid for SPECTRUM dataset, select from {SPECTRUM_AXIS_OPTIONS}")
 
     # Interferometry visibilities
     if axis == 'amp':

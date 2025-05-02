@@ -1,5 +1,27 @@
 ''' Classes to support MS plotting '''
 
-from ._ms_plot import MsPlot, PLOT_WIDTH, PLOT_HEIGHT
+from ._ms_plot import MsPlot
+
+from ._ms_plot_constants import (
+    PLOT_WIDTH,
+    PLOT_HEIGHT,
+    SPECTRUM_AXIS_OPTIONS,
+    UVW_AXIS_OPTIONS,
+    VIS_AXIS_OPTIONS,
+    WEIGHT_AXIS_OPTIONS,
+    AGGREGATOR_OPTIONS,
+    DEFAULT_UNFLAGGED_CMAP,
+    DEFAULT_FLAGGED_CMAP,
+)
+
+from ._panel_selectors import (
+    file_selector,
+    title_selector,
+    style_selector,
+    axis_selector,
+    aggregation_selector,
+    iteration_selector,
+)
+
 from ._raster_plot_inputs import check_inputs
 from ._raster_plot import RasterPlot

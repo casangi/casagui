@@ -25,7 +25,7 @@ class RasterPlot:
         self._spw_color_limits = {}
         self.set_style_params() # use defaults unless set externally
 
-    def set_style_params(self, unflagged_cmap='viridis', flagged_cmap='reds',  show_colorbar=True):
+    def set_style_params(self, unflagged_cmap='Viridis', flagged_cmap='Reds',  show_colorbar=True):
         '''
             Set styling parameters for the plot.  Currently only colorbar settings.
             Placeholder for future styling such as fonts.
@@ -34,36 +34,37 @@ class RasterPlot:
                 unflagged_cmap (str): colormap to use for unflagged data.
                 flagged_cmap (str): colormap to use for flagged data.
                 show_colorbar (bool): Whether to show colorbar with plot.  Default True.
+
+            Colormap options: Bokeh palettes
+            https://docs.bokeh.org/en/latest/docs/reference/palettes.html
         '''
         self._plot_params['unflagged_cmap'] = unflagged_cmap
         self._plot_params['flagged_cmap'] = flagged_cmap
         self._plot_params['colorbar'] = {'show': show_colorbar}
+
+    def get_plot_params(self):
+        ''' Return dict of plot params (default only if data params not set) '''
+        return self._plot_params
 
     def set_data_params(self, data, plot_inputs):
         '''
         Set parameters needed for raster plot from data and plot inputs.
             data (xarray Dataset): selected dataset of MSv4 data to plot
             plot_inputs (dict): user inputs to plot.
-            color_limits (tuple): (min, max) of colorbar.  Default None is to autoscale.
         '''
-        # Set some plot params from inputs
+        # Set plot params from inputs
         self._plot_params['data']['correlated_data'] = plot_inputs['correlated_data']
         self._plot_params['data']['aggregator'] = plot_inputs['aggregator']
         self._plot_params['data']['color_limits'] = plot_inputs['color_limits']
 
-        # Set title from user inputs or auto (ms name and iterator)
+        # Set title from user inputs or auto (ms name and iterator value)
         if plot_inputs['title']:
             self._plot_params['data']['title'] = plot_inputs['title']
         else:
             self._plot_params['data']['title'] = self._get_plot_title(plot_inputs, data)
 
         # Set x, y, c axis labels and ticks
-        x_axis_labels = get_axis_labels(data, plot_inputs['x_axis'])
-        y_axis_labels = get_axis_labels(data, plot_inputs['y_axis'])
-        c_axis_labels = self._get_c_axis_labels(data, plot_inputs)
-        self._set_axis_label_params('x', x_axis_labels)
-        self._set_axis_label_params('y', y_axis_labels)
-        self._set_axis_label_params('c', c_axis_labels)
+        self._set_axis_labels(data, plot_inputs)
 
         self._plot_params['data']['params'] = True
 
@@ -71,9 +72,10 @@ class RasterPlot:
         ''' Remove and invalidate data plot params '''
         self._plot_params['data'] = {'params': False}
 
-    def raster_plot(self, data, logger):
+    def raster_plot(self, data, logger, get_data_range=False):
         ''' Create raster plot (hvPlot) for input data (xarray Dataset) using plot params.
-            Returns Overlay of unflagged and flagged plots and colorbar params for interactive plot.
+            Returns Overlay of unflagged and flagged plots and optionally plot info for interactive plot.
+            Plot info includes plot parameters for colorbar title and the unflagged data min/max for colorbar range.
         '''
         if not self._plot_params['data']['params']:
             logger.error('Parameters have not been set from plot data. Cannot plot.')
@@ -96,64 +98,88 @@ class RasterPlot:
         flagged_xda = xds[data_params['correlated_data']].where(xds.FLAG == 1.0).rename("flagged_" + xda_name)
 
         # Plot data and make Overlay plot with hover tools
-        # holoviews colormaps: https://holoviews.org/user_guide/Colormaps.html
         unflagged_plot = self._plot_xda(xda)
         flagged_plot = self._plot_xda(flagged_xda, True)
         plot = (flagged_plot * unflagged_plot).opts(
             hv.opts.QuadMesh(tools=['hover'])
         )
 
-        # Return Overlay plot and colorbar params for interactive plot
-        return plot, self._plot_params['colorbar']
+        # Return data range in plot params if requested
+        if get_data_range:
+            self._add_data_range(xda)
 
-# pylint: disable=too-many-locals
+        return plot, self._plot_params
+
     def _get_plot_title(self, plot_inputs, data, include_selections=False):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
-        ms_name = plot_inputs['ms_name']
-        iter_axis = plot_inputs['iter_axis']
-        selection = plot_inputs['selection']
+        title = f"{plot_inputs['ms_name']}\n"
 
-        title = f"{ms_name}\n"
-
-        if not include_selections:
-            # Add iter_axis selection only
-            if iter_axis and iter_axis in selection:
-                title += f"{iter_axis} {selection[iter_axis]}"
-        else:
+        if include_selections:
             # TBD: include complete selection?
-            data_dims = plot_inputs['data_dims']
-            ps_selections = []
-            dim_selections = []
-
-            for key in selection:
-                # Add processing set selection: spw, field, and intent
-                if key == 'spw_name':
-                    spw_selection = f"spw: {selection[key]}"
-                    if 'frequency' in data:
-                        spw_selection += f" ({data.frequency.spectral_window_id})"
-                    ps_selections.append(spw_selection)
-                elif key == 'field_name':
-                    ps_selections.append(f"field: {selection[key]}")
-                elif key == 'source_name':
-                    ps_selections.append(f"source: {selection[key]}")
-                elif key == 'intents':
-                    ps_selections.append(f"intents: {selection[key]}")
-                elif key == 'data_group':
-                    continue # do not include?
-                elif key in data_dims:
-                    # Add selected dimensions to title: name (index)
-                    label = get_coordinate_labels(data, key)
-                    index = selection[key] if isinstance(selection[key], int) else None
-                    dim_selection = f"{key}: {label}"
-                    if index is not None:
-                        index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
-                        dim_selection += index_label
-                    dim_selections.append(dim_selection)
-            title += '\n'.join(ps_selections) + '\n'
-            title += '  '.join(dim_selections)
-
+            title = self._add_title_selections(data, title, plot_inputs)
+        else:
+            # Add iter_axis selection only
+            iter_axis = plot_inputs['iter_axis']
+            if iter_axis and 'dim_selection' in plot_inputs and iter_axis in plot_inputs['dim_selection']:
+                title += f"{iter_axis} {plot_inputs['dim_selection'][iter_axis]}"
         return title
-# pylint: enable=too-many-locals
+
+    def _add_title_selections(self, data, title, plot_inputs):
+        ''' Add ProcessingSet and data dimension selections to title '''
+        selection = plot_inputs['selection'] if 'selection' in plot_inputs else None
+        dim_selection = plot_inputs['dim_selection'] if 'dim_selection' in plot_inputs else None
+        data_dims = plot_inputs['data_dims'] if 'data_dims' in plot_inputs else None
+
+        ps_selections = []
+        dim_selections = []
+
+        for key in selection:
+            # Add processing set selection: spw, field, source, and intent
+            # TBD: add data group?
+            if key == 'spw_name':
+                spw_selection = f"spw: {selection[key]}"
+                if 'frequency' in data:
+                    spw_selection += f" ({data.frequency.spectral_window_id})"
+                ps_selections.append(spw_selection)
+            elif key == 'field_name':
+                ps_selections.append(f"field: {selection[key]}")
+            elif key == 'source_name':
+                ps_selections.append(f"source: {selection[key]}")
+            elif key == 'intents':
+                ps_selections.append(f"intents: {selection[key]}")
+            elif key in data_dims:
+                # Add user-selected dimensions to title: name (index)
+                label = get_coordinate_labels(data, key)
+                index = selection[key] if isinstance(selection[key], int) else None
+                selected_dim = f"{key}: {label}"
+                if index is not None:
+                    index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
+                    selected_dim += index_label
+                dim_selections.append(selected_dim)
+
+        for key in dim_selection:
+            # Add auto- or iter-selected dimensions to title: name (index)
+            label = get_coordinate_labels(data, key)
+            index = dim_selection[key] if isinstance(dim_selection[key], int) else None
+            selected_dim = f"{key}: {label}"
+            if index is not None:
+                index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
+                selected_dim += index_label
+            dim_selections.append(selected_dim)
+
+        title += '\n'.join(ps_selections) + '\n'
+        title += '  '.join(dim_selections)
+        return title
+
+    def _set_axis_labels(self, data, plot_inputs):
+        ''' Set axis, label, and ticks for x, y, and vis axis '''
+        x_axis_labels = get_axis_labels(data, plot_inputs['x_axis'])
+        y_axis_labels = get_axis_labels(data, plot_inputs['y_axis'])
+        c_axis_labels = self._get_c_axis_labels(data, plot_inputs)
+
+        self._set_axis_label_params('x', x_axis_labels)
+        self._set_axis_label_params('y', y_axis_labels)
+        self._set_axis_label_params('c', c_axis_labels)
 
     def _get_c_axis_labels(self, data, plot_inputs):
         ''' Set axis and label for c axis using input data xArray Dataset. '''
@@ -239,3 +265,12 @@ class RasterPlot:
             marker='s', # square
             hover=True,
         )
+
+    def _add_data_range(self, xda):
+        ''' Add data min/max to plot params and set color limits to this range '''
+        data_min = xda.min().values.item()
+        data_max = xda.max().values.item()
+        self._plot_params['data']['data_min'] = data_min
+        self._plot_params['data']['data_max'] = data_max
+        if not self._plot_params['data']['color_limits']:
+            self._plot_params['data']['color_limits'] = (data_min, data_max)

@@ -11,8 +11,6 @@ from casagui.data.measurement_set.processing_set._ps_coords import set_datetime_
 from casagui.data.measurement_set.processing_set._ps_select import select_ps
 from casagui.data.measurement_set.processing_set._xds_data import get_axis_data
 
-AGGREGATOR_OPTIONS = ['max', 'mean', 'median', 'min', 'std', 'sum', 'var']
-
 def raster_data(ps, plot_inputs, logger):
     '''
     Create raster xds: y_axis vs x_axis for vis axis.
@@ -21,8 +19,10 @@ def raster_data(ps, plot_inputs, logger):
         logger (graphviper logger): logger
     Returns: selected xarray Dataset of visibility component and updated selection
     '''
-    raster_ps, updated_selection = _select_raster_ps(ps, plot_inputs, logger)
-    plot_inputs['selection'] = updated_selection
+    raster_ps, dim_selection = _select_raster_ps(ps, plot_inputs, logger)
+    plot_inputs['dim_selection'] = dim_selection
+    print("input selection:", plot_inputs['selection'])
+    print("dim selection:", dim_selection)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)
@@ -50,21 +50,20 @@ def _select_raster_ps(ps, plot_inputs, logger):
     # Determine which dims must be selected, add to selection, and do selection
     dims_to_select = _get_raster_selection_dims(plot_inputs)
     input_selection = plot_inputs['selection']
+    dim_selection = {}
 
     if dims_to_select:
-        dim_selection = {}
         for dim in dims_to_select:
-            # Select first value (by index) and add to input selection, or apply iter_axis value
+            # Select first value (by index) and add to dim selection, or apply iter_axis value
             # (user selection would have been applied previously)
             if dim not in input_selection:
-                input_selection[dim] = _get_first_dim_value(ps, dim)
-                dim_selection[dim] = input_selection[dim]
-            elif plot_inputs['iter_axis']:
-                dim_selection[dim] = input_selection[dim]
+                dim_selection[dim] = _get_first_dim_value(ps, dim)
+            elif dim == plot_inputs['iter_axis']:
+                dim_selection[dim] = input_selection.pop(dim)
         if dim_selection:
             logger.info(f"Applying default raster plane selection (using first index or iter value): {dim_selection}")
-            return select_ps(ps, dim_selection, logger), input_selection
-    return ps, input_selection
+            return select_ps(ps, dim_selection, logger), dim_selection
+    return ps, dim_selection
 
 def _get_raster_selection_dims(plot_inputs):
     ''' Return which dimensions should be selected for raster plot.
@@ -118,21 +117,24 @@ def aggregate_data(xds, plot_inputs, logger):
     ''' Apply aggregator to agg axis list. '''
     aggregator = plot_inputs['aggregator']
     agg_axis = plot_inputs['agg_axis']
-    logger.debug(f"Applying {aggregator} to {agg_axis}.")
     agg_xds = xds
 
+    # Check if agg axes have been selected (selection or iteration) and are no longer a dimension
+    apply_agg_axis = [axis for axis in agg_axis if axis in xds.dims]
+    logger.debug(f"Applying {aggregator} to {apply_agg_axis}.")
+
     if aggregator == 'max':
-        agg_xds = xds.max(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.max(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'mean':
-        agg_xds = xds.mean(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.mean(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'median':
-        agg_xds = xds.median(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.median(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'min':
-        agg_xds = xds.min(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.min(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'std':
-        agg_xds = xds.std(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.std(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'sum':
-        agg_xds = xds.sum(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.sum(dim=apply_agg_axis, keep_attrs=True)
     elif aggregator == 'var':
-        agg_xds = xds.var(dim=agg_axis, keep_attrs=True)
+        agg_xds = xds.var(dim=apply_agg_axis, keep_attrs=True)
     return agg_xds

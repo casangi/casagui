@@ -16,10 +16,8 @@ except ImportError:
     _HAVE_TOOLVIPER = False
 
 from casagui.data.measurement_set._ms_data import MsData
+from casagui.plot._ms_plot_constants import PLOT_WIDTH, PLOT_HEIGHT
 from casagui.utils._logging import get_logger
-
-PLOT_WIDTH = 900
-PLOT_HEIGHT = 600
 
 class MsPlot:
 
@@ -43,6 +41,7 @@ class MsPlot:
         if interactive:
             # enable "toast" notifications
             pn.config.notifications = True
+            pn.config.sizing_mode = 'stretch_width'
             pn.state.notifications.position = 'top-center'
             self._toast = None # destroy toast when user does not close
 
@@ -108,7 +107,7 @@ class MsPlot:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
         if not title:
-            title = self._app_title
+            title = ' '.join([self._app_name, self._ms_info['basename']]) if not self._interactive else self._app_name
 
         # Single plot or combine plots into layout using subplots (rows, columns)
         # Not layout if subplots is single plot (default if None) or if only one plot saved
@@ -175,7 +174,8 @@ class MsPlot:
         return layout, is_layout
 
     def _set_ms(self, ms):
-        ''' Update settings for input data filepath from ctor or GUI (MSv2 or zarr path) '''
+        ''' Update ms info for input ms filepath (MSv2 or zarr), or None in interactive mode.
+            Return whether ms changed (false if ms is None). '''
         self._ms_info['ms'] = ms
         ms_error = ""
         ms_changed = ms and (not self._data or not self._data.is_ms_path(ms))
@@ -184,12 +184,8 @@ class MsPlot:
             try:
                 # Set new MS data
                 self._data = MsData(ms, self._logger)
+                self._ms_info['ms'] = self._data.get_path()
                 self._ms_info['basename'] = self._data.get_basename()
-                if not self._interactive and self._ms_info['basename']:
-                    self._app_title = ' '.join([self._app_name, self._ms_info['basename']])
-                else:
-                    self._app_title = self._app_name
-                # For checking plot inputs and gui options
                 self._ms_info['data_dims'] = self._data.get_data_dimensions()
             except RuntimeError as e:
                 ms_error = str(e)

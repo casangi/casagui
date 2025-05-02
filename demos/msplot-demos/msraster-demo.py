@@ -51,7 +51,7 @@ def plot_ms_raster():
 
     # Converts ms to zarr, and gets xradio ProcessingSet.
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
-    msr = MsRaster(ms_path, log_level='debug', interactive=False)
+    msr = MsRaster(ms=ms_path, log_level='info', interactive=False)
 
     # ProcessingSet selection using summary column name and value, or MeasurementSetXds coordinates.
     # For PS selection options: msr.summary()

@@ -2,8 +2,7 @@
 Check inputs to MsRaster plot() or its GUI
 '''
 
-from casagui.data.measurement_set.processing_set._xds_data import VIS_AXIS_OPTIONS
-from casagui.data.measurement_set.processing_set._ps_raster_data import AGGREGATOR_OPTIONS
+from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS
 
 def check_inputs(inputs):
     ''' Check plot input types, and axis input values. '''
@@ -16,6 +15,8 @@ def check_inputs(inputs):
 
 def _set_baseline_antenna_axis(inputs):
     ''' Set baseline axis to dimension in data_dims '''
+    if 'data_dims' not in inputs:
+        return
     data_dims = inputs['data_dims']
     baseline_dims = ['baseline', 'antenna_name']
     for dim in data_dims:
@@ -31,19 +32,23 @@ def _check_axis_inputs(inputs):
     ''' Check x_axis, y_axis, vis_axis, and iter_axis inputs. '''
     x_axis = inputs['x_axis']
     y_axis = inputs['y_axis']
-    data_dims = inputs['data_dims']
-
-    if x_axis not in data_dims or y_axis not in data_dims:
-        raise ValueError(f"Invalid parameter value: select x and y axis from {data_dims}.")
-    inputs['x_axis'] = x_axis
-    inputs['y_axis'] = y_axis
-
-    if inputs['vis_axis'] not in VIS_AXIS_OPTIONS:
-        raise ValueError(f"Invalid parameter value: vis_axis {inputs['vis_axis']}. Options include {VIS_AXIS_OPTIONS}")
+    if x_axis == y_axis:
+        raise ValueError(f"Invalid parameter values: x_axis {x_axis} cannot be same as y_axis {y_axis}.")
 
     iter_axis = inputs['iter_axis']
-    if iter_axis and (iter_axis not in data_dims or iter_axis in (x_axis, y_axis)):
-        raise RuntimeError(f"Invalid parameter value: iteration axis {iter_axis}. Must be dimension which is not a plot axis.")
+    if iter_axis and iter_axis in (x_axis, y_axis):
+        raise ValueError(f"Invalid parameter value: iter_axis {iter_axis} cannot be x_axis ({x_axis}) or y_axis ({y_axis}).")
+
+    data_dims = inputs['data_dims'] if 'data_dims' in inputs else None
+    if data_dims:
+        if x_axis not in data_dims or y_axis not in data_dims:
+            raise ValueError(f"Invalid parameter value: x and y axis must be a data dimension in {data_dims}.")
+        if iter_axis and iter_axis not in data_dims:
+            raise ValueError(f"Invalid parameter value: iter_axis {iter_axis} must be a data dimension in {data_dims}.")
+
+    vis_axis = inputs['vis_axis']
+    if vis_axis not in VIS_AXIS_OPTIONS:
+        raise ValueError(f"Invalid parameter value: vis_axis {vis_axis} must be one of {VIS_AXIS_OPTIONS}")
 
 def _check_selection_input(inputs):
     ''' Check selection type and data_group selection.  Make copy of user selection. '''
@@ -51,41 +56,51 @@ def _check_selection_input(inputs):
         user_selection = inputs['selection']
         if user_selection:
             if not isinstance(user_selection, dict):
-                raise RuntimeError("Invalid parameter type: selection must be dictionary.")
+                raise TypeError("Invalid parameter type: selection must be dictionary.")
 
 def _check_agg_inputs(inputs):
     ''' Check aggregator and agg_axis. Set agg_axis if not set. '''
     aggregator = inputs['aggregator']
     agg_axis = inputs['agg_axis']
-    data_dims = inputs['data_dims']
+
+    x_axis = inputs['x_axis']
+    y_axis = inputs['y_axis']
+    data_dims = inputs['data_dims'] if 'data_dims' in inputs else None
 
     if aggregator and aggregator not in AGGREGATOR_OPTIONS:
-        raise RuntimeError(f"Invalid parameter value: aggregator {aggregator}. Options include {AGGREGATOR_OPTIONS}.")
+        raise ValueError(f"Invalid parameter value: aggregator {aggregator} must be one of {AGGREGATOR_OPTIONS}.")
 
     if agg_axis:
         if not isinstance(agg_axis, str) and not isinstance(agg_axis, list):
-            raise RuntimeError(f"Invalid parameter value: agg axis {agg_axis}. Options include one or more dimensions {data_dims}.")
+            raise TypeError(f"Invalid parameter type: agg_axis {agg_axis} must be str or list.")
+
+        # Make agg_axis a list
         if isinstance(agg_axis, str):
             agg_axis = [agg_axis]
+
         for axis in agg_axis:
-            if axis not in data_dims or axis in (inputs['x_axis'], inputs['y_axis']):
-                raise RuntimeError(f"Invalid parameter value: aggregator axis {axis}. Must be dimension which is not a plot axis.")
-    elif aggregator:
+            if axis in (x_axis, y_axis):
+                raise ValueError(f"Invalid parameter value: agg_axis {agg_axis} cannot be x_axis ({x_axis}) or y_axis ({y_axis}).")
+            if data_dims and axis not in data_dims:
+                raise ValueError(f"Invalid parameter value: agg_axis {axis} must be a data dimension in {data_dims}.")
+    elif aggregator and data_dims:
         # Set agg_axis to non-plotted dim axes
         agg_axis = data_dims.copy()
-        agg_axis.remove(inputs['x_axis'])
-        agg_axis.remove(inputs['y_axis'])
+        agg_axis.remove(x_axis)
+        agg_axis.remove(y_axis)
+        if 'iter_axis' in inputs and inputs['iter_axis']:
+            agg_axis.remove(inputs['iter_axis'])
     inputs['agg_axis'] = agg_axis
 
 def _check_other_inputs(inputs):
     if inputs['iter_range']:
         if not (isinstance(inputs['iter_range'], tuple) and len(inputs['iter_range']) == 2):
-            raise RuntimeError("Invalid parameter type: iter_range must be None or a tuple of (start, end).")
+            raise ValueError("Invalid parameter type: iter_range must be None or a tuple of (start, end).")
     if inputs['subplots']:
         if not (isinstance(inputs['subplots'], tuple) and len(inputs['subplots']) == 2):
-            raise RuntimeError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
+            raise ValueError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
     if inputs['color_limits']:
         if not (isinstance(inputs['color_limits'], tuple) and len(inputs['color_limits']) == 2):
-            raise RuntimeError("Invalid parameter type: color_limits must be None or a tuple of (min, max).")
+            raise ValueError("Invalid parameter type: color_limits must be None or a tuple of (min, max).")
     if inputs['title'] and not isinstance(inputs['title'], str):
-        raise RuntimeError("Invalid parameter type: title must be None or a string.")
+        raise TypeError("Invalid parameter type: title must be None or a string.")

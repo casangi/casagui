@@ -56,6 +56,7 @@ def _select_ms_xds(ps, ms_selection, logger):
         return ps
 
     logger.debug(f"Applying selection to measurement set xds: {ms_selection}")
+
     antenna_selection = {}
     for key in ms_selection:
         if 'antenna' in key:
