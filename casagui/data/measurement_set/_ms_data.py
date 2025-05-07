@@ -2,8 +2,6 @@
     Class for accessing and selecting MeasurementSet data using a data backend.
 '''
 
-import os
-
 from casagui.data.measurement_set.processing_set._ps_data import PsData
 
 class MsData:
@@ -35,13 +33,6 @@ class MsData:
             return self._ms_path # path to ms v2
         return None
 
-    def get_basename(self):
-        ''' Returns basename of MS path or None if not set. '''
-        if self._ms_path:
-            return os.path.splitext(os.path.basename(self._ms_path))[0]
-        self._log_no_ms()
-        return None
-
     def summary(self, columns=None):
         ''' Print summary of Processing Set data.
                 columns (None, str, list): type of metadata to list.
@@ -56,13 +47,6 @@ class MsData:
             self._data.summary(columns)
         self._log_no_ms()
 
-    def get_summary_values(self, column):
-        ''' Return list of unique values for summary column '''
-        # ProcessingSet function
-        if self._data_initialized:
-            self._data.get_summary_values(column)
-        self._log_no_ms()
-
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
         # ProcessingSet function
@@ -75,6 +59,7 @@ class MsData:
         ''' Returns list of antenna names in data.
                 plot_positions (bool): Optionally show plot of antenna positions.
         '''
+        # Antenna positions plot is ProcessingSet function
         if self._data_initialized:
             return self._data.get_antennas(plot_positions)
         self._log_no_ms()
@@ -121,6 +106,15 @@ class MsData:
         self._log_no_ms()
         return None
 
+    def get_dimension_attrs(self, dim):
+        ''' Return dict of data attributes for dimension.
+                dim (str): dimension name
+        '''
+        if self._data_initialized:
+            return self._data.get_dimension_attrs(dim)
+        self._log_no_ms()
+        return None
+
     def get_first_spw(self):
         ''' Returns name of first spw by id. '''
         if self._data_initialized:
@@ -136,13 +130,6 @@ class MsData:
             self._data.select_data(selection)
         else:
             self._log_no_ms()
-
-    def get_selection(self):
-        ''' Returns selection dict. '''
-        if self._data_initialized:
-            return self._data.get_selection()
-        self._log_no_ms()
-        return None
 
     def clear_selection(self):
         ''' Clears selection dict and selected data. '''

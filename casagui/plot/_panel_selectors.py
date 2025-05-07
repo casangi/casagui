@@ -11,17 +11,17 @@ def file_selector(description, start_dir, callback):
     ''' Return a layout for file selection with input description and start directory.
         Includes a TextInput and a FileSelector, with a callback to set TextInput from FileSelector.
     '''
-    filename = pn.widgets.TextInput( 
+    filename = pn.widgets.TextInput(
         description=description,
         name="Filename",
         placeholder='Enter filename or use file browser below',
     )
 
-    file_selector = pn.widgets.FileSelector(start_dir)
-    select_file = pn.bind(callback, file_selector)
+    file_select = pn.widgets.FileSelector(start_dir)
+    select_file = pn.bind(callback, file_select)
 
     fs_card = pn.Card(
-        file_selector,
+        file_select,
         title='File browser',
         collapsed=True,
         collapsible=True,
@@ -110,6 +110,7 @@ def axis_selector(x_axis, y_axis, axis_options):
     )
 
     vis_selector = pn.widgets.RadioButtonGroup(
+        name='Vis Axis',
         options=VIS_AXIS_OPTIONS,
         description="Select vis axis component of complex data"
     )
@@ -124,12 +125,9 @@ def axis_selector(x_axis, y_axis, axis_options):
 
 def aggregation_selector(axis_options):
     ''' Return layout of selectors for aggregator and agg axes '''
-    agg_options = ['None']
-    agg_options.extend(AGGREGATOR_OPTIONS)
-
     agg_selector = pn.widgets.Select(
         name="Aggregator",
-        options=agg_options,
+        options=AGGREGATOR_OPTIONS,
         description="Select aggregation type"
     )
 
@@ -146,7 +144,8 @@ def aggregation_selector(axis_options):
 
 def iteration_selector(axis_options, callback):
     ''' Return layout of selectors for iteration axis and player selector for value.
-        Player values are set by callback when axis is selected. '''
+        Callback sets values in iter value player and iter value range selectors when axis is selected.
+    '''
     iter_options = ['None']
     iter_options.extend(axis_options)
 
@@ -156,9 +155,17 @@ def iteration_selector(axis_options, callback):
         description="Select axis over which to iterate"
     )
 
+    update_iter_values = pn.bind(callback, iter_axis_selector)
+
+    iter_value_type = pn.widgets.RadioButtonGroup(
+        name='Iteration selection type',
+        options=['Value', 'Range'],
+        description="Select iteration value or range"
+    )
+
+    # Single value
     iter_value_player = pn.widgets.DiscretePlayer(
         name="Iteration value",
-        options=[],
         show_loop_controls=False,
         show_value=False,
         value_align='start',
@@ -166,10 +173,79 @@ def iteration_selector(axis_options, callback):
         sizing_mode='stretch_width',
     )
 
-    update_iter_values = pn.bind(callback, iter_axis_selector)
+    # Range
+    iter_range_start = pn.widgets.IntInput(
+        name="Iteration start",
+        start=0,
+        value=0,
+        description="Index of first value in iteration",
+    )
+    iter_range_end = pn.widgets.IntInput(
+        name="Iteration end",
+        start=0,
+        value=0,
+        description="Index of last value in iteration",
+    )
+    subplot_rows = pn.widgets.IntInput(
+        name="Subplot rows",
+        start=1,
+        end=10,
+        description="Number of rows to display iteration plots",
+    )
+    subplot_columns = pn.widgets.IntInput(
+        name="Subplot columns",
+        start=1,
+        end=10,
+        description="Number of columns to display iteration plots",
+    )
+    iter_range_widgets = pn.Column(
+        pn.Row( # [0]
+            iter_range_start, # [0]
+            iter_range_end,   # [1]
+        ),
+        pn.Row( # [1]
+            subplot_rows,    # [0]
+            subplot_columns, # [1]
+        ),
+        pn.pane.HTML(
+            "<b>Multiple subplots will be shown in new tab</b>",
+        )
+    )
+
+    # Put iter value/range into accordion
+    iter_value_selectors = pn.Accordion(
+        ('Select Single Iteration Value', iter_value_player), # [0]
+        ('Select Iteration Index Range', iter_range_widgets), # [1]
+        toggle=True,
+    )
+
+    return pn.Column(
+        pn.Row( # [0]
+            iter_axis_selector, # [0]
+            iter_value_type,    # [1]
+            update_iter_values,
+        ),
+        iter_value_selectors, # [1]
+    )
+
+def plot_starter(callback):
+    ''' Create a row with a Plot button and spinner with a button callback to start spinner. '''
+    plot_button = pn.widgets.Button(
+        name='Plot',
+        button_type='primary',
+        sizing_mode='fixed',
+        width=100,
+    )
+
+    plot_spinner = pn.indicators.LoadingSpinner(
+        value=False,
+        size=25,
+    )
+
+    start_spinner = pn.bind(callback, plot_button)
 
     return pn.Row(
-        iter_axis_selector, # [0]
-        iter_value_player,  # [1]
-        update_iter_values,
+        plot_button,
+        plot_spinner,
+        start_spinner,
     )

@@ -21,8 +21,6 @@ def raster_data(ps, plot_inputs, logger):
     '''
     raster_ps, dim_selection = _select_raster_ps(ps, plot_inputs, logger)
     plot_inputs['dim_selection'] = dim_selection
-    print("input selection:", plot_inputs['selection'])
-    print("dim selection:", dim_selection)
 
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xds(raster_ps, logger)

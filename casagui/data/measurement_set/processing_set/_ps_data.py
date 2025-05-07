@@ -12,7 +12,7 @@ try:
     from casagui.data.measurement_set.processing_set._ps_select import select_ps
     from casagui.data.measurement_set.processing_set._ps_stats import calculate_ps_stats
     from casagui.data.measurement_set.processing_set._ps_raster_data import raster_data
-    from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data, get_dimension_values
+    from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data
 except ImportError as e:
     _HAVE_XRADIO = False
 
@@ -76,11 +76,6 @@ class PsData:
             col_df = ps_summary[columns]
             print(col_df)
 
-    def get_summary_values(self, column):
-        ''' Return list of unique values for summary column '''
-        col_df = self._ps.summary()[[column]]
-        return self._get_unique_values(col_df)
-
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
         data_groups = []
@@ -120,10 +115,21 @@ class PsData:
             dims.remove('uvw_label')
         return dims
 
-    def get_dimension_values(self, dim):
-        ''' Return list of values for input dimension in ProcessingSet. '''
+    def get_dimension_values(self, dimension):
+        ''' Return sorted list of unique values for input dimension in ProcessingSet. '''
         ps = self._get_ps()
-        return get_dimension_values(ps, dim)
+        dim_values = []
+        for xds in ps.values():
+            try:
+                dim_values.extend([value.item() for value in xds[dimension].values])
+            except TypeError:
+                dim_values.append(xds[dimension].values.item())
+        return sorted(set(dim_values))
+
+    def get_dimension_attrs(self, dim):
+        ''' Return attributes dict for input dimension in ProcessingSet. '''
+        ps = self._get_ps()
+        return ps.get(0)[dim].attrs
 
     def get_first_spw(self):
         ''' Return first spw name by id '''
@@ -153,10 +159,6 @@ class PsData:
             self._selection |= selection
         else:
             self._selection = selection
-
-    def get_selection(self):
-        ''' Return dict of accumulated selections '''
-        return self._selection
 
     def clear_selection(self):
         ''' Clear previous selections and use original ps '''

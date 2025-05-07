@@ -96,11 +96,14 @@ def _check_other_inputs(inputs):
     if inputs['iter_range']:
         if not (isinstance(inputs['iter_range'], tuple) and len(inputs['iter_range']) == 2):
             raise ValueError("Invalid parameter type: iter_range must be None or a tuple of (start, end).")
+
     if inputs['subplots']:
         if not (isinstance(inputs['subplots'], tuple) and len(inputs['subplots']) == 2):
             raise ValueError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
+
     if inputs['color_limits']:
         if not (isinstance(inputs['color_limits'], tuple) and len(inputs['color_limits']) == 2):
             raise ValueError("Invalid parameter type: color_limits must be None or a tuple of (min, max).")
+
     if inputs['title'] and not isinstance(inputs['title'], str):
         raise TypeError("Invalid parameter type: title must be None or a string.")

@@ -39,11 +39,10 @@ class MsPlot:
         self._app_name = app_name
 
         if interactive:
-            # enable "toast" notifications
-            pn.config.notifications = True
             pn.config.sizing_mode = 'stretch_width'
-            pn.state.notifications.position = 'top-center'
-            self._toast = None # destroy toast when user does not close
+            # Enable "toast" notifications
+            pn.config.notifications = True
+            self._toast = None # for destroy() with new plot or new notification
 
         # Initialize plot inputs and params
         self._plot_inputs = {}
@@ -112,7 +111,6 @@ class MsPlot:
         # Single plot or combine plots into layout using subplots (rows, columns)
         # Not layout if subplots is single plot (default if None) or if only one plot saved
         subplots = self._plot_inputs['subplots']
-        subplots = (1, 1) if subplots is None else subplots
         layout_plot, is_layout = self._layout_plots(subplots)
 
         if is_layout:
@@ -134,7 +132,6 @@ class MsPlot:
         # Single plot or combine plots into layout using subplots (rows, columns).
         # Not layout if subplots is single plot (default if None) or if only one plot saved.
         subplots = self._plot_inputs['subplots']
-        subplots = (1, 1) if subplots is None else subplots
         layout_plot, is_layout = self._layout_plots(subplots)
 
         if is_layout:
@@ -159,6 +156,7 @@ class MsPlot:
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
 
     def _layout_plots(self, subplots):
+        subplots = (1, 1) if subplots is None else subplots
         num_plots = len(self._plots)
         num_layout_plots = min(num_plots, np.prod(subplots))
 
@@ -184,8 +182,9 @@ class MsPlot:
             try:
                 # Set new MS data
                 self._data = MsData(ms, self._logger)
-                self._ms_info['ms'] = self._data.get_path()
-                self._ms_info['basename'] = self._data.get_basename()
+                ms_path = self._data.get_path()
+                self._ms_info['ms'] = ms_path
+                self._ms_info['basename'] = os.path.splitext(os.path.basename(ms_path))[0]
                 self._ms_info['data_dims'] = self._data.get_data_dimensions()
             except RuntimeError as e:
                 ms_error = str(e)
@@ -197,6 +196,7 @@ class MsPlot:
     def _notify(self, message, level, duration=3000):
         ''' Log message. If interactive, notify user with toast for duration in ms.
             Zero duration must be dismissed. '''
+        pn.state.notifications.position = 'top-center'
         if self._toast:
             self._toast.destroy()
         if level == "info":

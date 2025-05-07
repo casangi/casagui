@@ -21,6 +21,7 @@ from ._panel_selectors import (
     axis_selector,
     aggregation_selector,
     iteration_selector,
+    plot_starter,
 )
 
 from ._raster_plot_inputs import check_inputs

@@ -46,7 +46,7 @@ class RasterPlot:
         ''' Return dict of plot params (default only if data params not set) '''
         return self._plot_params
 
-    def set_data_params(self, data, plot_inputs):
+    def set_data_params(self, data, plot_inputs, ms_name):
         '''
         Set parameters needed for raster plot from data and plot inputs.
             data (xarray Dataset): selected dataset of MSv4 data to plot
@@ -61,7 +61,7 @@ class RasterPlot:
         if plot_inputs['title']:
             self._plot_params['data']['title'] = plot_inputs['title']
         else:
-            self._plot_params['data']['title'] = self._get_plot_title(plot_inputs, data)
+            self._plot_params['data']['title'] = self._get_plot_title(data, plot_inputs, ms_name)
 
         # Set x, y, c axis labels and ticks
         self._set_axis_labels(data, plot_inputs)
@@ -110,9 +110,9 @@ class RasterPlot:
 
         return plot, self._plot_params
 
-    def _get_plot_title(self, plot_inputs, data, include_selections=False):
+    def _get_plot_title(self, data, plot_inputs, ms_name, include_selections=False):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
-        title = f"{plot_inputs['ms_name']}\n"
+        title = f"{ms_name}\n"
 
         if include_selections:
             # TBD: include complete selection?
@@ -120,8 +120,9 @@ class RasterPlot:
         else:
             # Add iter_axis selection only
             iter_axis = plot_inputs['iter_axis']
-            if iter_axis and 'dim_selection' in plot_inputs and iter_axis in plot_inputs['dim_selection']:
-                title += f"{iter_axis} {plot_inputs['dim_selection'][iter_axis]}"
+            if iter_axis:
+                iter_label = get_coordinate_labels(data, iter_axis)
+                title += f"{iter_axis} {iter_label}"
         return title
 
     def _add_title_selections(self, data, title, plot_inputs):

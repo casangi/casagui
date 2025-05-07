@@ -21,5 +21,4 @@ from ._ps_raster_data import (
 from ._xds_data import (
     get_axis_data,
     get_correlated_data,
-    get_dimension_values,
 )

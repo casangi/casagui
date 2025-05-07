@@ -43,16 +43,6 @@ def get_axis_data(xds, axis, data_group=None):
         xda = xr.DataArray(np.array(range(xds.frequency.size)))
     return xda
 
-def get_dimension_values(ps, dimension):
-    ''' Return sorted list of unique values for dimension '''
-    dim_values = []
-    for xds in ps.values():
-        try:
-            dim_values.extend([value.item() for value in xds[dimension].values])
-        except TypeError:
-            dim_values.append(xds[dimension].values.item())
-    return sorted(set(dim_values))
-
 def _is_coordinate_axis(axis):
     return axis in ['scan_number', 'time', 'frequency', 'polarization',
         #'velocity': 'frequency', # calculate
