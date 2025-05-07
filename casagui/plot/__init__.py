@@ -9,6 +9,8 @@ from ._ms_plot_constants import (
     UVW_AXIS_OPTIONS,
     VIS_AXIS_OPTIONS,
     WEIGHT_AXIS_OPTIONS,
+    PS_SELECTION_OPTIONS,
+    MS_SELECTION_OPTIONS,
     AGGREGATOR_OPTIONS,
     DEFAULT_UNFLAGGED_CMAP,
     DEFAULT_FLAGGED_CMAP,
@@ -21,6 +23,7 @@ from ._panel_selectors import (
     axis_selector,
     aggregation_selector,
     iteration_selector,
+    selection_selector,
     plot_starter,
 )
 

@@ -14,7 +14,7 @@ from casagui.bokeh.format import get_time_formatter
 from casagui.bokeh.state._palette import available_palettes
 from casagui.plot._ms_plot import MsPlot
 from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PLOT_WIDTH, PLOT_HEIGHT
-from casagui.plot._panel_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, plot_starter
+from casagui.plot._panel_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
 from casagui.plot._raster_plot_inputs import check_inputs
 from casagui.plot._raster_plot import RasterPlot
 
@@ -111,7 +111,7 @@ class MsRaster(MsPlot):
                     'query': for pandas query of summary() columns.
                     Default: select first spw (by id).
                 MeasurementSetXds selection:
-                    Name for correlated data, flags, weights, and uvw: 'data_group'. Default value 'base'.
+                    'data_group': name for correlated data, flags, weights, and uvw. Default value 'base'.
                         Use data_groups() to get data group names.
                     Dimensions:
                         Visibility dimensions: 'baseline' 'time', 'frequency', 'polarization'
@@ -377,14 +377,18 @@ class MsRaster(MsPlot):
         # Select iter_axis and iter_value
         iter_selectors = iteration_selector(axis_options, self._set_iter_values)
 
+        # Select from ProcessingSet and MeasurementSet
+        selection_selectors = selection_selector()
+
         # Put user input widgets in accordion with only one card active at a time
         selectors = pn.Accordion(
-            ("Select file", file_selectors), # [0]
-            ("Plot title", title_input),     # [1]
-            ("Plot style", style_selectors), # [2]
-            ("Plot axes", axis_selectors),   # [3]
-            ("Aggregation", agg_selectors),  # [4]
-            ("Iteration", iter_selectors),   # [5]
+            ("Select file", file_selectors),    # [0]
+            ("Plot title", title_input),        # [1]
+            ("Plot style", style_selectors),    # [2]
+            ("Plot axes", axis_selectors),      # [3]
+            ("Aggregation", agg_selectors),     # [4]
+            ("Iteration", iter_selectors),      # [5]
+            ("Selection", selection_selectors), # [6]
         )
         selectors.toggle = True
 
@@ -418,11 +422,12 @@ class MsRaster(MsPlot):
             width=PLOT_WIDTH, height=PLOT_HEIGHT
         )
 
-        # Layout plot and widget box in a row
+
+        # Layout plot and input widgets in a row
         self._gui_layout = pn.Row(
-            dmap,                 # [0]
-            pn.Spacer(width=10),  # [1]
-            pn.Column(            # [2]
+            dmap,                # [0]
+            pn.Spacer(width=10), # [1]
+            pn.Column(
                 pn.Spacer(height=25), # [0]
                 selectors,            # [1]
                 init_plot,            # [2]
@@ -433,23 +438,22 @@ class MsRaster(MsPlot):
         # print("gui layout:", self._gui_layout) # for debugging
         self._gui_layout.show(title=self._app_name, threaded=True)
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
-    def _update_plot(
-        self, ms, title, unflagged_cmap, flagged_cmap, show_colorbar, auto_color_limits, color_limits, x_axis, y_axis, vis_axis, aggregator, agg_axis, iter_axis, iter_value_type,
-        iter_value, iter_range_start, iter_range_end, subplot_rows, subplot_columns, do_plot):
-        ''' Create plot with inputs from GUI if possible.  Must return plot for DynamicMap. '''
-        gui_inputs = locals()
-        # print("***** _update_plot: inputs=", gui_inputs)
+# pylint: disable=too-many-locals
+    def _update_plot(self, **kwargs):
+        ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap.
+            See binding for DynamicMap to see function arguments. '''
+        gui_inputs = {**kwargs}
+        print("***** _update_plot: inputs=", gui_inputs)
 
         if self._toast:
             self._toast.destroy()
 
-        if not ms:
+        if not gui_inputs['ms']:
             # Launched GUI with no MS
             self._last_gui_plot = self._empty_plot
             return self._last_gui_plot
 
-        if not do_plot and self._last_gui_plot:
+        if not gui_inputs['do_plot'] and self._last_gui_plot:
             # Not ready to update plot yet, return last plot
             return self._last_gui_plot
 
@@ -460,7 +464,7 @@ class MsRaster(MsPlot):
         plot_inputs = self._set_plot_inputs(gui_inputs)
 
         # If ms changed, update GUI with ms info
-        if self._set_ms(ms) and self._data:
+        if self._set_ms(gui_inputs['ms']) and self._data:
             self._update_gui_axis_options()
 
         # Do new plot
@@ -490,7 +494,7 @@ class MsRaster(MsPlot):
         self._last_gui_plot = gui_plot
         self._update_plot_spinner(False)
         return gui_plot
-# pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
+# pylint: disable=too-many-locals
 
     def _do_gui_plot(self):
         ''' Create plot based on gui plot inputs '''

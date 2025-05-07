@@ -5,7 +5,7 @@ Create panel widgets for various functions
 import panel as pn
 
 from casagui.bokeh.state._palette import available_palettes
-from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
+from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
 
 def file_selector(description, start_dir, callback):
     ''' Return a layout for file selection with input description and start directory.
@@ -144,7 +144,7 @@ def aggregation_selector(axis_options):
 
 def iteration_selector(axis_options, callback):
     ''' Return layout of selectors for iteration axis and player selector for value.
-        Callback sets values in iter value player and iter value range selectors when axis is selected.
+        Callback sets values in iter value player and iter value range selectors when iter_axis is selected.
     '''
     iter_options = ['None']
     iter_options.extend(axis_options)
@@ -228,6 +228,40 @@ def iteration_selector(axis_options, callback):
         iter_value_selectors, # [1]
     )
 
+def selection_selector():
+    ''' Return layout of selectors for ProcessingSet and MSv4 selection. '''
+    # Create column of ps selectors; values added from PS summary later.
+    ps_selection = pn.Column()
+    ps_selection.append(
+        pn.widgets.TextInput(
+            name="Query",
+            placeholder='Enter Pandas DataFrame query for summary columns',
+        )
+    )
+    _add_select_none(ps_selection, PS_SELECTION_OPTIONS)
+
+    # Create column of ms selectors; values added from MS later.
+    ms_selection = pn.Column()
+    _add_select_none(ms_selection, MS_SELECTION_OPTIONS)
+
+    return pn.Accordion(
+        ("Select ProcessingSet", ps_selection),  # [0]
+        ("Select MeasurementSets", ms_selection), # [1]
+        toggle=False,
+    )
+
+def _add_select_none(pn_column, names):
+    ''' Add Panel Select widgets for list of names with option 'None'. 
+        pn_column is a Panel Column to which to add selectors.
+    '''
+    for name in names:
+        pn_column.append(
+            pn.widgets.Select(
+                name=name,
+                options=['None'],
+            )
+        )
+
 def plot_starter(callback):
     ''' Create a row with a Plot button and spinner with a button callback to start spinner. '''
     plot_button = pn.widgets.Button(
@@ -245,7 +279,7 @@ def plot_starter(callback):
     start_spinner = pn.bind(callback, plot_button)
 
     return pn.Row(
-        plot_button,
-        plot_spinner,
+        plot_button,  # [0]
+        plot_spinner, # [1]
         start_spinner,
     )
