@@ -76,6 +76,10 @@ class PsData:
             col_df = ps_summary[columns]
             print(col_df)
 
+    def get_summary(self):
+        ''' Return summary of original ps '''
+        return self._ps.summary()
+
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
         data_groups = []

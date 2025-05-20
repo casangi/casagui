@@ -12,28 +12,22 @@ def select_ps(ps, selection, logger):
     if not selection:
         return ps
 
+    ps_selection_keys = list(ps.summary().columns.array)
+    ps_selection_keys.append('query')
+    ms_selection_keys = list(ps.get(0).coords.keys())
+    ms_selection_keys.append('data_group')
+
     ps_selection = {}
     ms_selection = {}
 
-    if selection:
-        ps_selection_keys = list(ps.summary().columns.array)
-        ps_selection_keys.append('query')
-
-        ms_selection_keys = []
-        ms_selection_keys.extend(ps.get(0).coords.keys())
-
-        for key in selection:
-            if key in ps_selection_keys:
-                ps_selection[key] = selection[key]
-                if key in ms_selection_keys:
-                    # ps selection selects ms_xdss which _contain_ value but also need to _select_ value
-                    ms_selection[key] = selection[key]
-            else: # assume in ms_xds
-                ms_selection[key] = selection[key]
+    for key in selection:
+        if key in ps_selection_keys and selection[key]:
+            ps_selection[key] = selection[key]
+        if key in ms_selection_keys and selection[key]:
+            ms_selection[key] = selection[key]
 
     # Do ProcessingSet selection
     if ps_selection:
-        logger.debug(f"Applying selection to processing set: {ps_selection}")
         selected_ps = ps.sel(**ps_selection)
         if len(selected_ps) == 0:
             raise RuntimeError("Selection failed: ps selection yielded empty processing set.")

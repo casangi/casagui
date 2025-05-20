@@ -51,12 +51,13 @@ class AppContext:
         value = re.sub(r'[^\w\s-]', '', value.lower())
         return re.sub(r'[-\s]+', '-', value).strip('-_')
 
-    def __init__( self, title, prefix=None ):
+    def __init__( self, title, prefix=None, init_bokeh=True ):
 
         ###
         ### Setup up Bokeh paths, inject casagui libraries into Bokeh HTML output
         ###
-        initialize_bokeh( )
+        if init_bokeh:
+            initialize_bokeh( )
 
         if prefix is None:
             ## create a prefix from the title

@@ -5,7 +5,9 @@ Base class for ms plots
 import os
 import time
 
+from bokeh.plotting import show
 import hvplot
+import holoviews as hv
 import numpy as np
 import panel as pn
 
@@ -16,16 +18,16 @@ except ImportError:
     _HAVE_TOOLVIPER = False
 
 from casagui.data.measurement_set._ms_data import MsData
-from casagui.plot._ms_plot_constants import PLOT_WIDTH, PLOT_HEIGHT
+from casagui.toolbox import AppContext
 from casagui.utils._logging import get_logger
 
 class MsPlot:
 
     ''' Base class for MS plots with common functionality '''
 
-    def __init__(self, ms=None, log_level="info", interactive=False, app_name="MsPlot"):
-        if not ms and not interactive:
-            raise RuntimeError("Must provide ms/zarr path if not interactive.")
+    def __init__(self, ms=None, log_level="info", show_gui=False, app_name="MsPlot"):
+        if not ms and not show_gui:
+            raise RuntimeError("Must provide ms/zarr path if gui not shown.")
 
         # Set logger: use toolviper logger else casalog else python logger
         if _HAVE_TOOLVIPER:
@@ -35,22 +37,24 @@ class MsPlot:
             self._logger.setLevel(log_level.upper())
 
         # Save parameters; ms set below
-        self._interactive = interactive
+        self._show_gui = show_gui
         self._app_name = app_name
 
-        if interactive:
-            pn.config.sizing_mode = 'stretch_width'
+        # Set up temp dir for output html files; do not add casagui bokeh libraries
+        self._app_context = AppContext(app_name, init_bokeh=False)
+
+        if show_gui:
             # Enable "toast" notifications
             pn.config.notifications = True
             self._toast = None # for destroy() with new plot or new notification
 
         # Initialize plot inputs and params
         self._plot_inputs = {}
-        self._plot_inputs['have_inputs'] = False
 
         # Initialize plots
-        self._plots = []
         self._plot_init = False
+        self._plots_locked = False
+        self._plots = []
 
         # Set data (if ms)
         self._data = None
@@ -88,6 +92,8 @@ class MsPlot:
 
     def clear_plots(self):
         ''' Clear plot list '''
+        while self._plots_locked:
+            time.sleep(1)
         self._plots.clear()
 
     def clear_selection(self):
@@ -95,32 +101,39 @@ class MsPlot:
         if self._data:
             self._data.clear_selection()
 
-    def show(self, title=None, port=0):
+    def show(self, title=None):
         ''' 
         Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
         Multiple plots can be shown in a grid using plot parameter `subplots`.  Default is to show a single plot.
             title (str): browser tab title.  Default is "{app} {ms_name}".
-            port (int): optional port number to use.  Default 0 will select a port number.
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
+        # Do not delete plot list until rendered
+        self._plots_locked = True
+
         if not title:
-            title = ' '.join([self._app_name, self._ms_info['basename']]) if not self._interactive else self._app_name
+            title = ' '.join([self._app_name, self._ms_info['basename']]) if not self._show_gui else self._app_name
 
         # Single plot or combine plots into layout using subplots (rows, columns)
         # Not layout if subplots is single plot (default if None) or if only one plot saved
         subplots = self._plot_inputs['subplots']
         layout_plot, is_layout = self._layout_plots(subplots)
 
+        # Render to bokeh figure
         if is_layout:
             # Show plots in columns
-            hvplot.show(layout_plot.cols(subplots[1]), title=title, port=port, threaded=True)
+            plot = hv.render(layout_plot.cols(subplots[1]))
         else:
             # Show single plot
-            hvplot.show(layout_plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), title=title, port=port, threaded=True)
+            plot = hv.render(layout_plot)
 
-    def save(self, filename='ms_plot.png', fmt='auto', export_range='one'):
+        self._plots_locked = False
+        show(plot)
+
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600, export_range='one'):
         '''
         Save plot to file with filename and format. If iteration plots, export 'one' or 'all'.
         '''
@@ -129,8 +142,8 @@ class MsPlot:
 
         start_time = time.time()
 
-        # Single plot or combine plots into layout using subplots (rows, columns).
-        # Not layout if subplots is single plot (default if None) or if only one plot saved.
+        # Save single plot or combine plots into layout using subplots (rows, columns).
+        # Not layout if subplots is single plot or if only one plot saved.
         subplots = self._plot_inputs['subplots']
         layout_plot, is_layout = self._layout_plots(subplots)
 
@@ -141,24 +154,29 @@ class MsPlot:
         else:
             # Save plots individually, with index appended if exprange='all' and multiple plots.
             if self._plot_inputs['iter_axis'] is None or export_range=='one':
-                hvplot.save(layout_plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=filename, fmt=fmt)
+                hvplot.save(layout_plot.opts(width=width, height=height), filename=filename, fmt=fmt)
+                self._logger.info("Saved plot to %s.", filename)
             else:
                 name, ext = os.path.splitext(filename)
-                plot_range = self._plot_inputs['iter_range'] # None or (start, end), default (0, 0)
-                plot_idx = 0 if plot_range is None else plot_range[0]
+                iter_range = self._plot_inputs['iter_range'] # None or (start, end)
+                plot_idx = 0 if iter_range is None else iter_range[0]
 
                 for plot in self._plots:
                     exportname = f"{name}_{plot_idx}.{ext}"
-                    hvplot.save(plot.opts(width=PLOT_WIDTH, height=PLOT_HEIGHT), filename=exportname, fmt=fmt)
+                    hvplot.save(plot.opts(width=width, height=height), filename=exportname, fmt=fmt)
                     self._logger.info("Saved plot to %s.", exportname)
                     plot_idx += 1
 
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
+# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
 
     def _layout_plots(self, subplots):
         subplots = (1, 1) if subplots is None else subplots
         num_plots = len(self._plots)
         num_layout_plots = min(num_plots, np.prod(subplots))
+
+        if num_layout_plots == 1:
+            return self._plots[0], False
 
         # Set plots in layout
         plot_count = 0
@@ -172,7 +190,7 @@ class MsPlot:
         return layout, is_layout
 
     def _set_ms(self, ms):
-        ''' Update ms info for input ms filepath (MSv2 or zarr), or None in interactive mode.
+        ''' Update ms info for input ms filepath (MSv2 or zarr), or None in show_gui mode.
             Return whether ms changed (false if ms is None). '''
         self._ms_info['ms'] = ms
         ms_error = ""
@@ -184,34 +202,39 @@ class MsPlot:
                 self._data = MsData(ms, self._logger)
                 ms_path = self._data.get_path()
                 self._ms_info['ms'] = ms_path
-                self._ms_info['basename'] = os.path.splitext(os.path.basename(ms_path))[0]
+                root, ext = os.path.splitext(os.path.basename(ms_path))
+                while ext != '':
+                    root, ext = os.path.splitext(root)
+                self._ms_info['basename'] = root
                 self._ms_info['data_dims'] = self._data.get_data_dimensions()
             except RuntimeError as e:
                 ms_error = str(e)
                 self._data = None
+
         if ms_error:
             self._notify(ms_error, 'error', 0)
+
         return ms_changed
 
     def _notify(self, message, level, duration=3000):
-        ''' Log message. If interactive, notify user with toast for duration in ms.
+        ''' Log message. If show_gui, notify user with toast for duration in ms.
             Zero duration must be dismissed. '''
         pn.state.notifications.position = 'top-center'
         if self._toast:
             self._toast.destroy()
         if level == "info":
             self._logger.info(message)
-            if self._interactive:
+            if self._show_gui:
                 self._toast = pn.state.notifications.info(message, duration=duration)
         elif level == "error":
             self._logger.error(message)
-            if self._interactive:
+            if self._show_gui:
                 self._toast = pn.state.notifications.error(message, duration=duration)
         elif level == "success":
             self._logger.info(message)
-            if self._interactive:
+            if self._show_gui:
                 self._toast = pn.state.notifications.success(message, duration=duration)
         elif level == "warning":
             self._logger.warning(message)
-            if self._interactive:
+            if self._show_gui:
                 self._toast = pn.state.notifications.warning(message, duration=duration)

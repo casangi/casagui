@@ -10,8 +10,8 @@ def check_inputs(inputs):
     _check_axis_inputs(inputs)
     _check_selection_input(inputs)
     _check_agg_inputs(inputs)
+    _check_color_inputs(inputs)
     _check_other_inputs(inputs)
-    inputs['have_inputs'] = True
 
 def _set_baseline_antenna_axis(inputs):
     ''' Set baseline axis to dimension in data_dims '''
@@ -68,7 +68,7 @@ def _check_agg_inputs(inputs):
     data_dims = inputs['data_dims'] if 'data_dims' in inputs else None
 
     if aggregator and aggregator not in AGGREGATOR_OPTIONS:
-        raise ValueError(f"Invalid parameter value: aggregator {aggregator} must be one of {AGGREGATOR_OPTIONS}.")
+        raise ValueError(f"Invalid parameter value: aggregator {aggregator} must be None or one of {AGGREGATOR_OPTIONS}.")
 
     if agg_axis:
         if not isinstance(agg_axis, str) and not isinstance(agg_axis, list):
@@ -92,6 +92,18 @@ def _check_agg_inputs(inputs):
             agg_axis.remove(inputs['iter_axis'])
     inputs['agg_axis'] = agg_axis
 
+def _check_color_inputs(inputs):
+    if inputs['color_mode']:
+        color_mode = inputs['color_mode'].lower()
+        valid_color_modes = ['auto', 'manual']
+        if color_mode not  in valid_color_modes:
+            raise ValueError(f"Invalid parameter value: color_mode {color_mode} must be None or one of {valid_color_modes}.")
+        inputs['color_mode'] = color_mode
+
+    if inputs['color_range']:
+        if not (isinstance(inputs['color_range'], tuple) and len(inputs['color_range']) == 2):
+            raise ValueError("Invalid parameter type: color_range must be None or a tuple of (min, max).")
+
 def _check_other_inputs(inputs):
     if inputs['iter_range']:
         if not (isinstance(inputs['iter_range'], tuple) and len(inputs['iter_range']) == 2):
@@ -100,10 +112,6 @@ def _check_other_inputs(inputs):
     if inputs['subplots']:
         if not (isinstance(inputs['subplots'], tuple) and len(inputs['subplots']) == 2):
             raise ValueError("Invalid parameter type: subplots must be None or a tuple of (rows, columns).")
-
-    if inputs['color_limits']:
-        if not (isinstance(inputs['color_limits'], tuple) and len(inputs['color_limits']) == 2):
-            raise ValueError("Invalid parameter type: color_limits must be None or a tuple of (min, max).")
 
     if inputs['title'] and not isinstance(inputs['title'], str):
         raise TypeError("Invalid parameter type: title must be None or a string.")

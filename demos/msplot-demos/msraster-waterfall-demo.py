@@ -51,7 +51,7 @@ def plot_ms_waterfall():
 
     # Converts ms to zarr, and gets xradio ProcessingSet.
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
-    msr = MsRaster(ms_path, log_level='info', interactive=False)
+    msr = MsRaster(ms_path, log_level='info', show_gui=False)
 
     # ProcessingSet selection using summary column name and value, or MeasurementSetXds coordinates.
     # For selection options: msr.summary()
@@ -61,7 +61,7 @@ def plot_ms_waterfall():
     }
 
     # Demo waterfall plots with baseline iteration
-    msr.plot(selection=selection, x_axis='frequency', iter_axis='baseline', iter_range=(0, -1), subplots=(5, 4))
+    msr.plot(selection=selection, x_axis='frequency', iter_axis='baseline', iter_range=(0, -1), subplots=(4, 4))
     msr.show(title="waterfall plots")
     filename=os.path.join(plot_dir, "waterfall_plots.png")
     msr.save(filename)

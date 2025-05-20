@@ -21,11 +21,11 @@ class RasterPlot:
     '''
 
     def __init__(self):
-        self._plot_params = {'data': {'params': False}}
+        self._plot_params = {'data': {}, 'plot': {'params': False}, 'style': {}}
         self._spw_color_limits = {}
         self.set_style_params() # use defaults unless set externally
 
-    def set_style_params(self, unflagged_cmap='Viridis', flagged_cmap='Reds',  show_colorbar=True):
+    def set_style_params(self, unflagged_cmap='Viridis', flagged_cmap='Reds',  show_colorbar=True, show_flagged_colorbar=True):
         '''
             Set styling parameters for the plot.  Currently only colorbar settings.
             Placeholder for future styling such as fonts.
@@ -38,77 +38,85 @@ class RasterPlot:
             Colormap options: Bokeh palettes
             https://docs.bokeh.org/en/latest/docs/reference/palettes.html
         '''
-        self._plot_params['unflagged_cmap'] = unflagged_cmap
-        self._plot_params['flagged_cmap'] = flagged_cmap
-        self._plot_params['colorbar'] = {'show': show_colorbar}
+        style_params = self._plot_params['style']
+        style_params['unflagged_cmap'] = unflagged_cmap
+        style_params['flagged_cmap'] = flagged_cmap
+        style_params['show_colorbar'] = show_colorbar
+        style_params['show_flagged_colorbar'] = show_flagged_colorbar
 
     def get_plot_params(self):
         ''' Return dict of plot params (default only if data params not set) '''
         return self._plot_params
 
-    def set_data_params(self, data, plot_inputs, ms_name):
+    def set_plot_params(self, data, plot_inputs, ms_name):
         '''
         Set parameters needed for raster plot from data and plot inputs.
             data (xarray Dataset): selected dataset of MSv4 data to plot
             plot_inputs (dict): user inputs to plot.
         '''
-        # Set plot params from inputs
         self._plot_params['data']['correlated_data'] = plot_inputs['correlated_data']
         self._plot_params['data']['aggregator'] = plot_inputs['aggregator']
-        self._plot_params['data']['color_limits'] = plot_inputs['color_limits']
+
+        color_mode = plot_inputs['color_mode']
+        if color_mode == 'manual':
+            self._plot_params['plot']['color_limits'] = plot_inputs['color_range']
+        elif color_mode == 'auto':
+            self._plot_params['plot']['color_limits'] = plot_inputs['auto_color_range']
+        else:
+            self._plot_params['plot']['color_limits'] = None
 
         # Set title from user inputs or auto (ms name and iterator value)
         if plot_inputs['title']:
-            self._plot_params['data']['title'] = plot_inputs['title']
+            self._plot_params['plot']['title'] = plot_inputs['title']
         else:
-            self._plot_params['data']['title'] = self._get_plot_title(data, plot_inputs, ms_name)
+            self._plot_params['plot']['title'] = self._get_plot_title(data, plot_inputs, ms_name)
 
         # Set x, y, c axis labels and ticks
         self._set_axis_labels(data, plot_inputs)
 
-        self._plot_params['data']['params'] = True
+        self._plot_params['plot']['params'] = True
 
-    def reset_data_params(self):
+    def reset_plot_params(self):
         ''' Remove and invalidate data plot params '''
-        self._plot_params['data'] = {'params': False}
+        self._plot_params['plot'] = {'params': False}
 
-    def raster_plot(self, data, logger, get_data_range=False):
+    def raster_plot(self, data, logger, is_gui=False):
         ''' Create raster plot (hvPlot) for input data (xarray Dataset) using plot params.
-            Returns Overlay of unflagged and flagged plots and optionally plot info for interactive plot.
-            Plot info includes plot parameters for colorbar title and the unflagged data min/max for colorbar range.
+            Returns Overlay of unflagged and flagged plots.
+            Optionally add the unflagged data min/max to plot params for interactive gui colorbar range.
         '''
-        if not self._plot_params['data']['params']:
+        if not self._plot_params['plot']['params']:
             logger.error('Parameters have not been set from plot data. Cannot plot.')
             return None
 
         data_params = self._plot_params['data']
-        x_axis = data_params['axis_labels']['x']['axis']
-        y_axis = data_params['axis_labels']['y']['axis']
-        c_axis = data_params['axis_labels']['c']['axis']
+        plot_params = self._plot_params['plot']
+
+        x_axis = plot_params['axis_labels']['x']['axis']
+        y_axis = plot_params['axis_labels']['y']['axis']
+        c_axis = plot_params['axis_labels']['c']['axis']
 
         # Set plot axes to numeric coordinates if needed
         xds = set_index_coordinates(data, (x_axis, y_axis))
 
-        # Unflagged and flagged data.  Use same name, for histogram dimension.
-        # c axis labels are (axis, label)
+        # Prefix c_axis name with aggregator
         xda_name = c_axis
         if data_params['aggregator']:
             xda_name = "_".join([data_params['aggregator'], xda_name])
-        xda = xds[data_params['correlated_data']].where(xds.FLAG == 0.0).rename(xda_name)
-        flagged_xda = xds[data_params['correlated_data']].where(xds.FLAG == 1.0).rename("flagged_" + xda_name)
 
-        # Plot data and make Overlay plot with hover tools
+        # Plot unflagged and flagged data
+        xda = xds[data_params['correlated_data']].where(xds.FLAG == 0.0).rename(xda_name)
         unflagged_plot = self._plot_xda(xda)
+        flagged_xda = xds[data_params['correlated_data']].where(xds.FLAG == 1.0).rename("flagged_" + xda_name)
         flagged_plot = self._plot_xda(flagged_xda, True)
-        plot = (flagged_plot * unflagged_plot).opts(
+
+        if is_gui: # update data range for colorbar
+            self._plot_params['data']['data_range'] = (xda.min().values.item(), xda.max().values.item())
+
+        # Make Overlay plot with hover tools
+        return (flagged_plot * unflagged_plot).opts(
             hv.opts.QuadMesh(tools=['hover'])
         )
-
-        # Return data range in plot params if requested
-        if get_data_range:
-            self._add_data_range(xda)
-
-        return plot, self._plot_params
 
     def _get_plot_title(self, data, plot_inputs, ms_name, include_selections=False):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
@@ -196,82 +204,85 @@ class RasterPlot:
 
     def _set_axis_label_params(self, axis, axis_labels):
         # Axis labels are (axis, label, ticks).
-        if 'axis_labels' not in self._plot_params['data']:
-            self._plot_params['data']['axis_labels'] = {}
-        self._plot_params['data']['axis_labels'][axis] = {}
-        self._plot_params['data']['axis_labels'][axis]['axis'] = axis_labels[0]
-        self._plot_params['data']['axis_labels'][axis]['label'] = axis_labels[1]
-        self._plot_params['data']['axis_labels'][axis]['ticks'] = axis_labels[2]
+        if 'axis_labels' not in self._plot_params['plot']:
+            self._plot_params['plot']['axis_labels'] = {}
+        self._plot_params['plot']['axis_labels'][axis] = {}
+        self._plot_params['plot']['axis_labels'][axis]['axis'] = axis_labels[0]
+        self._plot_params['plot']['axis_labels'][axis]['label'] = axis_labels[1]
+        self._plot_params['plot']['axis_labels'][axis]['ticks'] = axis_labels[2]
 
     def _plot_xda(self, xda, is_flagged=False):
         # Returns Quadmesh plot if raster 2D data, Scatter plot if raster 1D data, or None if no data
-        data_params = self._plot_params['data']
-        x_axis = data_params['axis_labels']['x']['axis']
-        y_axis = data_params['axis_labels']['y']['axis']
-        c_label = data_params['axis_labels']['c']['label']
+        plot_params = self._plot_params['plot']
+        style_params = self._plot_params['style']
+
+        x_axis = plot_params['axis_labels']['x']['axis']
+        y_axis = plot_params['axis_labels']['y']['axis']
+        c_label = plot_params['axis_labels']['c']['label']
+        c_lim = plot_params['color_limits']
 
         x_formatter = get_time_formatter() if x_axis == 'time' else None
         y_formatter = get_time_formatter() if y_axis == 'time' else None
+
         # Hide flagged colorbar if unflagged colorbar is shown
-        if is_flagged and self._plot_params['colorbar']['unflagged']:
-            show_colorbar = False
+        if xda.count().values > 0:
+            if is_flagged:
+                show_colorbar = style_params['show_flagged_colorbar']
+            else :
+                show_colorbar = style_params['show_colorbar']
         else:
-            show_colorbar = self._plot_params['colorbar']['show'] and (xda.count().values > 0)
+            show_colorbar = False
 
         if is_flagged:
             c_label = "Flagged " + c_label
-            colormap = self._plot_params['flagged_cmap']
-            self._plot_params['colorbar']['flagged'] = show_colorbar # return value for interactive plot
-
+            colormap = style_params['flagged_cmap']
+            plot_params['flagged_colorbar'] = show_colorbar
         else:
-            colormap = self._plot_params['unflagged_cmap']
-            self._plot_params['colorbar']['unflagged'] = show_colorbar # return value for interactive plot
+            colormap = style_params['unflagged_cmap']
+            plot_params['unflagged_colorbar'] = show_colorbar
 
         if xda[x_axis].size > 1 and xda[y_axis].size > 1:
             # Raster 2D data
-            return xda.hvplot.quadmesh(
+            plot = xda.hvplot.quadmesh(
                 x_axis,
                 y_axis,
-                clim=data_params['color_limits'],
+                clim=c_lim,
                 cmap=colormap,
                 clabel=c_label,
-                title=data_params['title'],
-                xlabel=data_params['axis_labels']['x']['label'],
-                ylabel=data_params['axis_labels']['y']['label'],
+                title=plot_params['title'],
+                xlabel=plot_params['axis_labels']['x']['label'],
+                ylabel=plot_params['axis_labels']['y']['label'],
                 xformatter=x_formatter,
                 yformatter=y_formatter,
-                xticks=data_params['axis_labels']['x']['ticks'],
-                yticks=data_params['axis_labels']['y']['ticks'],
+                xticks=plot_params['axis_labels']['x']['ticks'],
+                yticks=plot_params['axis_labels']['y']['ticks'],
                 rot=45, # angle for x axis labels
                 colorbar=show_colorbar,
+                responsive=True, # resize to fill browser window if True
+            )
+        else:
+            # Cannot raster 1D data, use scatter from pandas dataframe
+            df = xda.to_dataframe().reset_index() # convert x and y axis from index to column
+            plot = df.hvplot.scatter(
+                x=x_axis,
+                y=y_axis,
+                c=xda.name,
+                clim=plot_params['color_limits'],
+                cmap=colormap,
+                clabel=c_label,
+                title=plot_params['title'],
+                xlabel=plot_params['axis_labels']['x']['label'],
+                ylabel=plot_params['axis_labels']['y']['label'],
+                xformatter=x_formatter,
+                yformatter=y_formatter,
+                xticks=plot_params['axis_labels']['x']['ticks'],
+                yticks=plot_params['axis_labels']['y']['ticks'],
+                rot=45,
+                marker='s', # square
+                hover=True,
+                responsive=True,
             )
 
-        # Cannot raster 1D data, use scatter from pandas dataframe
-        df = xda.to_dataframe().reset_index() # convert x and y axis from index to column
-        return df.hvplot.scatter(
-            x=x_axis,
-            y=y_axis,
-            c=data_params['axis_labels']['c']['axis'],
-            clim=data_params['color_limits'],
-            cmap=colormap,
-            clabel=c_label,
-            title=data_params['title'],
-            xlabel=data_params['axis_labels']['x']['label'],
-            ylabel=data_params['axis_labels']['y']['label'],
-            xformatter=x_formatter,
-            yformatter=y_formatter,
-            xticks=data_params['axis_labels']['x']['ticks'],
-            yticks=data_params['axis_labels']['y']['ticks'],
-            rot=45,
-            marker='s', # square
-            hover=True,
-        )
-
-    def _add_data_range(self, xda):
-        ''' Add data min/max to plot params and set color limits to this range '''
-        data_min = xda.min().values.item()
-        data_max = xda.max().values.item()
-        self._plot_params['data']['data_min'] = data_min
-        self._plot_params['data']['data_max'] = data_max
-        if not self._plot_params['data']['color_limits']:
-            self._plot_params['data']['color_limits'] = (data_min, data_max)
+        if show_colorbar and not is_flagged:
+            plot = plot.opts(colorbar_position='left')
+        return plot

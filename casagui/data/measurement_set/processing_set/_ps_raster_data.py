@@ -37,8 +37,8 @@ def raster_data(ps, plot_inputs, logger):
     # Convert float time to datetime
     set_datetime_coordinate(raster_xds)
 
-    if plot_inputs['aggregator'] and plot_inputs['agg_axis']:
-        raster_xds = aggregate_data(raster_xds, plot_inputs, logger)
+    # Apply aggregator
+    raster_xds = aggregate_data(raster_xds, plot_inputs, logger)
 
     logger.debug(f"Plotting visibility data with shape: {raster_xds[correlated_data].shape}")
     return raster_xds
@@ -71,7 +71,7 @@ def _get_raster_selection_dims(plot_inputs):
         data_dims.remove(plot_inputs['x_axis'])
     if plot_inputs['y_axis'] in data_dims:
         data_dims.remove(plot_inputs['y_axis'])
-    if plot_inputs['agg_axis']:
+    if plot_inputs['aggregator'] and plot_inputs['agg_axis']:
         for axis in plot_inputs['agg_axis']:
             data_dims.remove(axis)
     return data_dims
@@ -113,6 +113,9 @@ def _add_index_dimensions(xds):
 
 def aggregate_data(xds, plot_inputs, logger):
     ''' Apply aggregator to agg axis list. '''
+    if not plot_inputs['aggregator']:
+        return xds
+
     aggregator = plot_inputs['aggregator']
     agg_axis = plot_inputs['agg_axis']
     agg_xds = xds

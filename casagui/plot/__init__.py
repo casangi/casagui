@@ -3,8 +3,6 @@
 from ._ms_plot import MsPlot
 
 from ._ms_plot_constants import (
-    PLOT_WIDTH,
-    PLOT_HEIGHT,
     SPECTRUM_AXIS_OPTIONS,
     UVW_AXIS_OPTIONS,
     VIS_AXIS_OPTIONS,
@@ -16,7 +14,7 @@ from ._ms_plot_constants import (
     DEFAULT_FLAGGED_CMAP,
 )
 
-from ._panel_selectors import (
+from ._ms_plot_selectors import (
     file_selector,
     title_selector,
     style_selector,

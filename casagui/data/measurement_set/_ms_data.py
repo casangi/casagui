@@ -45,7 +45,15 @@ class MsData:
         # ProcessingSet function
         if self._data_initialized:
             self._data.summary(columns)
+        else:
+            self._log_no_ms()
+
+    def get_ps_summary(self):
+        ''' Return Pandas DataFrame summary of ProcessingSet '''
+        if self._data_initialized:
+            return self._data.get_summary()
         self._log_no_ms()
+        return None
 
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
@@ -74,7 +82,7 @@ class MsData:
         if self._data_initialized:
             self._data.plot_phase_centers(label_all_fields, data_group)
         else:
-            self._logger.info("No MS set, cannot plot phase centers")
+            self._log_no_ms()
 
     def get_num_ms(self):
         ''' Returns number of MeasurementSets in data. '''

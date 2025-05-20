@@ -13,8 +13,8 @@ from pandas import to_datetime
 from casagui.bokeh.format import get_time_formatter
 from casagui.bokeh.state._palette import available_palettes
 from casagui.plot._ms_plot import MsPlot
-from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PLOT_WIDTH, PLOT_HEIGHT
-from casagui.plot._panel_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
+from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS
+from casagui.plot._ms_plot_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
 from casagui.plot._raster_plot_inputs import check_inputs
 from casagui.plot._raster_plot import RasterPlot
 
@@ -25,7 +25,7 @@ class MsRaster(MsPlot):
     Args:
         ms (str): path to MSv2 (.ms) or MSv4 (.zarr) file.
         log_level (str): logging threshold'. Options include "debug", "info", "warning", "error", "critical". Default "info".
-        interactive (bool): whether to launch interactive GUI in browser. Default False.
+        show_gui (bool): whether to launch interactive GUI for plot inputs in browser. Default False.
 
     Example:
         from casagui.plots import MsRaster
@@ -37,23 +37,28 @@ class MsRaster(MsPlot):
         msr.save() # saves as {ms name}_raster.png
     '''
 
-    def __init__(self, ms=None, log_level="info", interactive=False):
-        super().__init__(ms, log_level, interactive, "MsRaster")
+    def __init__(self, ms=None, log_level="info", show_gui=False):
+        super().__init__(ms, log_level, show_gui, "MsRaster")
         self._raster_plot = RasterPlot()
 
         # Calculations for color limits
         self._spw_stats = {}
         self._spw_color_limits = {}
 
-        if interactive:
+        if show_gui:
             # GUI based on panel widgets
             self._gui_layout = None
 
-            # Empty plot for gui DynamicMap when ms not set or plot fails
-            self._empty_plot = self._create_empty_plot()
-
-            # Return last plot for gui DynamicMap when no new plot created or iter Layout plot
+            # Check if plot inputs changed and new plot is needed.
+            # GUI can change subparams which do not change plot
+            self._last_plot_inputs = None
+            self._last_style_inputs = None
+            # Last plot when no new plot created (plot inputs same) or is iter Layout plot (opened in tab)
             self._last_gui_plot = None
+
+            # Return plot for gui DynamicMap:
+            # Empty plot when ms not set or plot fails
+            self._empty_plot = self._create_empty_plot()
 
             # Set default style and plot inputs to use when launching gui
             self.set_style_params()
@@ -68,7 +73,7 @@ class MsRaster(MsPlot):
         ''' Set MS path for current MsRaster '''
         ms_changed = super()._set_ms(ms)
         if ms_changed:
-            self._raster_plot.reset_data_params()
+            self._raster_plot.reset_plot_params()
             self._spw_color_limits = {}
         return ms_changed
 
@@ -76,7 +81,7 @@ class MsRaster(MsPlot):
         ''' List available colormap (Bokeh palettes). '''
         return available_palettes()
 
-    def set_style_params(self, unflagged_cmap='Viridis', flagged_cmap='Reds', show_colorbar=True):
+    def set_style_params(self, unflagged_cmap='Viridis', flagged_cmap='Reds', show_colorbar=True, show_flagged_colorbar=True):
         '''
             Set styling parameters for the plot, such as colormaps and whether to show colorbar.
             Placeholder for future styling such as fonts.
@@ -91,11 +96,11 @@ class MsRaster(MsPlot):
             raise ValueError(f"{unflagged_cmap} not in colormaps list: {cmaps}")
         if flagged_cmap not in cmaps:
             raise ValueError(f"{flagged_cmap} not in colormaps list: {cmaps}")
-        self._raster_plot.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar)
+        self._raster_plot.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar, show_flagged_colorbar)
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None,
-             iter_axis= None, iter_range=None, subplots=None, color_limits=None, title=None, clear_plots=True):
+             iter_axis= None, iter_range=None, subplots=None, color_mode=None, color_range=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -134,12 +139,15 @@ class MsRaster(MsPlot):
             subplots (None, tuple): set a grid of (rows, columns).  None = (1, 1) for single plot.
                 Use with iter_axis and iter_range, or clear_plots=False.
                 If used in multiple calls, the last subplots tuple will be used to determine grid to show or save.
-            color_limits (tuple): (min, max) of colorbar.  Default None is to autoscale.
-                When color_limits=None and vis_axis='amp', limits will be computed from statistics.
+            color_mode (None, str): Whether to limit range of colorbar.  Default None (no limit).
+                Options include None (use data limits), 'auto' (calculate limits for amplitude), and 'manual' (use range in color_range).
+                'auto' is equivalent to None if vis_axis is not 'amp'.
+                When subplots is set, the 'auto' or 'manual' range will be used for all plots.
+            color_range (tuple): (min, max) of colorbar to use if color_mode is 'Manual'.
             title (str): Plot title, default None (generate title from ms name and iter_axis value if any).
             clear_plots (bool): whether to clear list of plots. Default True.
 
-        If not interactive and plotting is successful, use show() or save() to view/save the plot only.
+        If not show_gui and plotting is successful, use show() or save() to view/save the plot only.
         '''
         inputs = locals() # collect arguments into dict (not unused as pylint complains!)
 
@@ -160,7 +168,7 @@ class MsRaster(MsPlot):
         if inputs['selection']:
             self._plot_inputs['selection'] = inputs['selection'].copy()
 
-        if not self._interactive:
+        if not self._show_gui:
             # Cannot plot if no MS
             if not self._data or not self._data.is_valid():
                 raise RuntimeError("Cannot plot MS: input MS path is invalid or missing.")
@@ -170,7 +178,7 @@ class MsRaster(MsPlot):
                 if self._plot_inputs['iter_axis']:
                     self._do_iter_plot(self._plot_inputs)
                 else:
-                    plot, _ = self._do_plot(self._plot_inputs)
+                    plot = self._do_plot(self._plot_inputs)
                     self._plots.append(plot)
             except RuntimeError as e:
                 error = f"Plot failed: {str(e)}"
@@ -179,7 +187,8 @@ class MsRaster(MsPlot):
             self._logger.debug("Plot elapsed time: %.2fs.", time.time() - start)
 # pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
 
-    def save(self, filename='', fmt='auto', export_range='one'):
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+    def save(self, filename='', fmt='auto', width=900, height=600, export_range='one'):
         '''
         Save plot to file.
 
@@ -194,10 +203,8 @@ class MsRaster(MsPlot):
         '''
         if not filename:
             filename = f"{self._ms_info['basename']}_raster.png"
-        super().save(filename, fmt, export_range)
-
-    def _get_colormaps(self, provider=None, category=None):
-        return hv.plotting.list_cmaps(provider=provider, category=category, reverse=False)
+        super().save(filename, fmt, width, height, export_range)
+# pylint: enable=too-many-arguments, too-many-positional-arguments
 
     def _do_plot(self, plot_inputs):
         ''' Create plot using plot inputs '''
@@ -207,13 +214,13 @@ class MsRaster(MsPlot):
         # Select vis_axis data to plot and update selection; returns xarray Dataset
         raster_data = self._data.get_raster_data(plot_inputs)
 
-        # Set params needed for plot
-        plot_inputs['color_limits'] = self._get_color_limits(plot_inputs) # update with calculated limits if not user-set
+        # Add params needed for plot: auto color range and ms name
+        self._set_auto_color_range(plot_inputs) # set calculated limits if auto mode
         ms_name = self._ms_info['basename'] # for title
-        self._raster_plot.set_data_params(raster_data, plot_inputs, ms_name)
+        self._raster_plot.set_plot_params(raster_data, plot_inputs, ms_name)
 
-        # Make plot. Return plot info if interactive GUI.
-        return self._raster_plot.raster_plot(raster_data, self._logger, self._interactive)
+        # Make plot. Add data min/max if GUI is shown to update color limits range.
+        return self._raster_plot.raster_plot(raster_data, self._logger, self._show_gui)
 
     def _do_iter_plot(self, plot_inputs):
         ''' Create one plot per iteration value in iter_range which fits into subplots '''
@@ -248,7 +255,7 @@ class MsRaster(MsPlot):
             value = iter_values[i]
             self._logger.info("Plot %s iteration index %s value %s", iter_axis, i, value)
             plot_inputs['selection'][iter_axis] = value
-            plot, _ = self._do_plot(plot_inputs)
+            plot = self._do_plot(plot_inputs)
             self._plots.append(plot)
 
     def _init_plot(self, plot_inputs):
@@ -261,7 +268,7 @@ class MsRaster(MsPlot):
         self._data.select_data(plot_inputs['selection'])
         self._select_first_spw(plot_inputs)
 
-        # Automatic or iter selection of unplotted dimensions
+        # Clear automatic or iter selection of unplotted dimensions
         if 'dim_selection' in self._plot_inputs:
             del self._plot_inputs['dim_selection']
 
@@ -278,28 +285,30 @@ class MsRaster(MsPlot):
             self._data.select_data({'spw_name': first_spw})
             plot_inputs['selection']['spw_name'] = first_spw
 
-    def _get_color_limits(self, plot_inputs):
-        ''' Calculate stats for color limits for non-interactive amplitude plots. '''
+    def _set_auto_color_range(self, plot_inputs):
+        ''' Calculate stats for color limits for non-gui amplitude plots. '''
+        color_mode = plot_inputs['color_mode']
         color_limits = None
-        if 'color_limits' in plot_inputs and plot_inputs['color_limits'] is not None:
-            return plot_inputs['color_limits']
 
-        if plot_inputs['vis_axis']=='amp' and not plot_inputs['aggregator']:
-            # For amplitude, limit colorbar range using ms stats
-            spw_name = plot_inputs['selection']['spw_name']
-            if spw_name in self._spw_color_limits:
-                color_limits = self._spw_color_limits[spw_name]
-            else:
-                # Select spw name and data group only
-                spw_data_selection = {'spw_name': spw_name, 'data_group': plot_inputs['selection']['data_group']}
-                color_limits = self._calc_amp_color_limits(spw_data_selection)
-                self._spw_color_limits[spw_name] = color_limits
+        if color_mode == 'auto':
+            if plot_inputs['vis_axis']=='amp' and not plot_inputs['aggregator']:
+                # For amplitude, limit colorbar range using stored per-spw ms stats
+                spw_name = plot_inputs['selection']['spw_name']
+                if spw_name in self._spw_color_limits:
+                    color_limits = self._spw_color_limits[spw_name]
+                else:
+                    # Select spw name and data group only
+                    spw_data_selection = {'spw_name': spw_name, 'data_group': plot_inputs['selection']['data_group']}
+                    color_limits = self._calc_amp_color_limits(spw_data_selection)
+                    self._spw_color_limits[spw_name] = color_limits
+        plot_inputs['auto_color_range'] = color_limits
 
         if color_limits:
-            self._logger.info("Setting colorbar limits: (%.4f, %.4f).", color_limits[0], color_limits[1])
+            self._logger.info("Setting amplitude color range: (%.4f, %.4f).", color_limits[0], color_limits[1])
+        elif color_mode is None:
+            self._logger.info("Autoscale color range")
         else:
-            self._logger.info("Autoscale colorbar limits")
-        return color_limits
+            self._logger.info("Using manual color range: %s", plot_inputs['color_range'])
 
     def _calc_amp_color_limits(self, selection):
         # Calculate colorbar limits from amplitude stats for unflagged data in selected spw
@@ -334,8 +343,8 @@ class MsRaster(MsPlot):
         # Reset selection in data and dim selection in plot inputs
         super().clear_selection()
 
-        # Reset data-related plot params
-        self._raster_plot.reset_data_params()
+        # Reset params set for last plot
+        self._raster_plot.reset_plot_params()
 
         self._plot_init = False
 
@@ -354,31 +363,31 @@ class MsRaster(MsPlot):
     def _launch_gui(self):
         ''' Use Holoviz Panel to create a dashboard for plot inputs. '''
         # Select MS
-        file_selectors = file_selector('MeasurementSet (ms or zarr) to plot', '~' , self._set_filename)
+        file_selectors = file_selector('Path to MeasurementSet (ms or zarr) for plot', '~' , self._set_filename)
 
         # Set title
-        title_input = title_selector()
+        title_input = title_selector(self._set_title)
 
         # Select style - colormaps, colorbar, color limits
-        style_selectors = style_selector()
+        style_selectors = style_selector(self._set_style_params, self._set_color_range)
 
         # Select x, y, and vis axis
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
         data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
-        axis_selectors = axis_selector(x_axis, y_axis, data_dims)
+        axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, self._set_axes)
 
         # Generic axis options, updated when ms is set
         axis_options = data_dims if data_dims else []
 
         # Select aggregator and axes to aggregate
-        agg_selectors = aggregation_selector(axis_options)
+        agg_selectors = aggregation_selector(axis_options, self._set_aggregation)
 
-        # Select iter_axis and iter_value
-        iter_selectors = iteration_selector(axis_options, self._set_iter_values)
+        # Select iter_axis and iter value or range
+        iter_selectors = iteration_selector(axis_options, self._set_iter_values, self._set_iteration)
 
         # Select from ProcessingSet and MeasurementSet
-        selection_selectors = selection_selector()
+        selection_selectors = selection_selector(self._set_ps_selection)
 
         # Put user input widgets in accordion with only one card active at a time
         selectors = pn.Accordion(
@@ -396,86 +405,72 @@ class MsRaster(MsPlot):
         init_plot = plot_starter(self._update_plot_spinner)
 
         # Connect plot to filename and selector widgets
-        dmap = hv.DynamicMap(pn.bind(
-            self._update_plot,
-            ms=file_selectors[0][0],
-            title=title_input,
-            unflagged_cmap=style_selectors[0][0],
-            flagged_cmap=style_selectors[0][1],
-            show_colorbar=style_selectors[0][2],
-            auto_color_limits=style_selectors[1][0],
-            color_limits=style_selectors[1][1],
-            x_axis=axis_selectors[0][0],
-            y_axis=axis_selectors[0][1],
-            vis_axis=axis_selectors[1],
-            aggregator=agg_selectors[0],
-            agg_axis=agg_selectors[1],
-            iter_axis=iter_selectors[0][0],
-            iter_value_type=iter_selectors[0][1],
-            iter_value=iter_selectors[1][0],
-            iter_range_start=iter_selectors[1][1][0][0],
-            iter_range_end=iter_selectors[1][1][0][1],
-            subplot_rows=iter_selectors[1][1][1][0],
-            subplot_columns=iter_selectors[1][1][1][1],
-            do_plot=init_plot[0],
-        )).opts(
-            width=PLOT_WIDTH, height=PLOT_HEIGHT
+        dmap = hv.DynamicMap(
+            pn.bind(
+                self._update_plot,
+                ms=file_selectors[0][0],
+                do_plot=init_plot[0],
+            ),
         )
-
 
         # Layout plot and input widgets in a row
         self._gui_layout = pn.Row(
-            dmap,                # [0]
+            pn.Column(           # [0]
+                dmap,
+                sizing_mode='stretch_width',
+            ),
             pn.Spacer(width=10), # [1]
-            pn.Column(
+            pn.Column(           # [2]
                 pn.Spacer(height=25), # [0]
                 selectors,            # [1]
                 init_plot,            # [2]
-            )
+                width_policy='min',
+                width=400,
+                sizing_mode='stretch_height',
+            ),
+            sizing_mode='stretch_height',
         )
 
         # Show gui
         # print("gui layout:", self._gui_layout) # for debugging
         self._gui_layout.show(title=self._app_name, threaded=True)
 
-# pylint: disable=too-many-locals
-    def _update_plot(self, **kwargs):
-        ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap.
-            See binding for DynamicMap to see function arguments. '''
-        gui_inputs = {**kwargs}
-        print("***** _update_plot: inputs=", gui_inputs)
-
+    ###
+    ### Main callback to create plot
+    ###
+    def _update_plot(self, ms, do_plot):
+        ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap. '''
         if self._toast:
             self._toast.destroy()
 
-        if not gui_inputs['ms']:
+        self._get_selector("selectors").active = []
+        if not ms:
             # Launched GUI with no MS
-            self._last_gui_plot = self._empty_plot
+            return self._empty_plot
+
+        # If not first plot, user has to click Plot button (do_plot=True).
+        first_plot = not self._last_gui_plot
+        if not do_plot and not first_plot:
+            # Not ready to update plot yet, return last plot.
             return self._last_gui_plot
 
-        if not gui_inputs['do_plot'] and self._last_gui_plot:
-            # Not ready to update plot yet, return last plot
-            return self._last_gui_plot
-
-        # Extract style params
-        self._set_style_params(gui_inputs)
-
-        # Extract plot params
-        plot_inputs = self._set_plot_inputs(gui_inputs)
-
-        # If ms changed, update GUI with ms info
-        if self._set_ms(gui_inputs['ms']) and self._data:
+        if (self._set_ms(ms) or first_plot) and self._data and self._data.is_valid():
+            # New MS set and is valid
+            self._plot_inputs['selection'] = None
             self._update_gui_axis_options()
 
-        # Do new plot
+        # Add ms path to detect change and make new plot
+        self._plot_inputs['ms'] = ms
+
+        # Do new plot or resend last plot
         self._reset_plot()
         gui_plot = None
 
-        if not self._last_gui_plot or self._inputs_changed(plot_inputs):
+        style_inputs = self._raster_plot.get_plot_params()['style']
+        if self._inputs_changed(style_inputs):
             # First plot or changed plot
             try:
                 # Check inputs from GUI then plot
-                self._plot_inputs = gui_inputs
                 self._plot_inputs['data_dims'] = self._ms_info['data_dims']
                 check_inputs(self._plot_inputs)
                 gui_plot = self._do_gui_plot()
@@ -491,39 +486,87 @@ class MsRaster(MsPlot):
             # Subparam values changed but not applied to plot
             gui_plot = self._last_gui_plot
 
-        self._last_gui_plot = gui_plot
-        self._update_plot_spinner(False)
-        return gui_plot
-# pylint: disable=too-many-locals
+        # Save inputs to see if changed
+        self._last_plot_inputs = self._plot_inputs.copy()
+        self._last_style_inputs = style_inputs.copy()
+        self._last_plot_inputs['selection'] = self._plot_inputs['selection'].copy()
+        if first_plot and not do_plot:
+            self._plot_inputs['selection'].clear()
 
+        # Save plot if no new plot
+        self._last_gui_plot = gui_plot
+
+        # Change plot button and stop spinner
+        self._update_plot_status(False)
+        self._update_plot_spinner(False)
+
+        return gui_plot
+
+    def _inputs_changed(self, style_inputs):
+        ''' Check if inputs changed and need new plot '''
+        if not self._last_plot_inputs:
+            return True
+
+        # Cannot use plot_inputs == self._plot_inputs until selection in GUI.
+        # Check inputs one by one
+        for key in self._plot_inputs:
+            if not self._values_equal(self._plot_inputs[key], self._last_plot_inputs[key]):
+                return True
+
+        for key in style_inputs:
+            if not self._values_equal(style_inputs[key], self._last_style_inputs[key]):
+                return True
+        return False
+
+    def _values_equal(self, val1, val2):
+        if val1 and val2: # both set
+            return val1 == val2
+
+        if not val1 and not val2: # both None
+            return True
+
+        return False # one set and other is None
+
+    ###
+    ### Create plot for DynamicMap
+    ###
     def _do_gui_plot(self):
         ''' Create plot based on gui plot inputs '''
         if self._data and self._data.is_valid():
-            plot = None
+            try:
+                if self._plot_inputs['iter_axis']:
+                    # Make iter plot (possibly with subplots layout)
+                    self._do_iter_plot(self._plot_inputs)
+                    subplots = self._plot_inputs['subplots']
+                    layout_plot, is_layout = super()._layout_plots(subplots)
 
-            # Make iter plot (possibly with subplots layout)
-            if self._plot_inputs['iter_axis']:
-                self._do_iter_plot(self._plot_inputs)
-                subplots = self._plot_inputs['subplots']
-                layout_plot, is_layout = super()._layout_plots(subplots)
+                    if is_layout:
+                        # Cannot show Layout in DynamicMap, show in new tab
+                        super().show()
+                        self._logger.info("Plot update complete")
+                        return self._last_gui_plot
+                    # Overlay raster plot for DynamicMap
+                    self._logger.info("Plot update complete")
+                    return layout_plot
 
-                if is_layout:
-                    # Cannot show Layout in DynamicMap
-                    super().show()
-                    return self._last_gui_plot
-                # Overlay raster plot for DynamicMap
-                return layout_plot
+                # Make single Overlay raster plot for DynamicMap
+                plot = self._do_plot(self._plot_inputs)
+                plot_params = self._raster_plot.get_plot_params()
 
-            # Make single Overlay raster plot for DynamicMap
-            plot, plot_params = self._do_plot(self._plot_inputs)
-            self._update_color_range(plot_params) # Update color limits in gui if calculated for plot
-            if plot_params['colorbar']['show']:   # Update colorbar titles with selected vis axis
-                plot.QuadMesh.I = self._set_colorbar(plot.QuadMesh.I, plot_params, "flagged")
-                plot.QuadMesh.II = self._set_colorbar(plot.QuadMesh.II, plot_params, "unflagged")
+                # Update color limits in gui with data range
+                self._update_color_range(plot_params)
 
-            return plot.opts(
-                hv.opts.QuadMesh(tools=['hover'])
-            )
+                # Update colorbar labels and limits
+                plot.QuadMesh.I = self._set_plot_colorbar(plot.QuadMesh.I, plot_params, "flagged")
+                plot.QuadMesh.II = self._set_plot_colorbar(plot.QuadMesh.II, plot_params, "unflagged")
+
+                self._logger.info("Plot update complete")
+                return plot.opts(
+                    hv.opts.QuadMesh(tools=['hover'])
+                )
+            except RuntimeError as e:
+                error = f"Plot failed: {str(e)}"
+                super()._notify(error, "error", 0)
 
         # Make single Overlay raster plot for DynamicMap
         return self._empty_plot
@@ -534,66 +577,68 @@ class MsRaster(MsPlot):
         plot = hv.Overlay(
             hv.QuadMesh([]).opts(
                 colorbar=False,
-                cmap=plot_params['flagged_cmap']
+                cmap=plot_params['style']['flagged_cmap']
             ) * hv.QuadMesh([]).opts(
-                colorbar=plot_params['colorbar']['show'],
-                cmap=plot_params['unflagged_cmap']
+                colorbar=plot_params['style']['show_colorbar'],
+                cmap=plot_params['style']['unflagged_cmap']
             )
         )
         return plot.opts(
             hv.opts.QuadMesh(tools=['hover'])
         )
 
-    def _set_colorbar(self, plot, plot_params, colorbar_key):
-        ''' Update colorbar with c_label for vis_axis '''
-        c_label = plot_params['data']['axis_labels']['c']['label']
-        color_limits = plot_params['data']['color_limits']
+    def _set_plot_colorbar(self, plot, plot_params, plot_type):
+        ''' Update plot colorbar labels and limits
+                plot_type is "unflagged" or "flagged"
+        '''
+        # Update colorbar labels if shown, else hide
+        colorbar_key = plot_type + '_colorbar'
+        if plot_params['plot'][colorbar_key]:
+            c_label = plot_params['plot']['axis_labels']['c']['label']
+            cbar_title = "Flagged " + c_label if plot_type == "flagged" else c_label
 
-        if plot_params['colorbar'][colorbar_key]:
-            title = "Flagged " + c_label if colorbar_key == "flagged" else c_label
             plot = plot.opts(
                 colorbar=True,
                 backend_opts={
-                    "colorbar.title": title,
+                    "colorbar.title": cbar_title,
                 }
             )
-            if color_limits:
-                plot = plot.opts(
-                    clim=color_limits,
-                )
         else:
             plot = plot.opts(
                 colorbar=False,
             )
-            if color_limits:
-                plot = plot.opts(
-                    clim=color_limits,
-                )
+
+        # Update plot color limits
+        color_limits = plot_params['plot']['color_limits']
+        if color_limits:
+            plot = plot.opts(
+                clim=color_limits,
+            )
+
         return plot
 
-    ###
-    ### Access selectors
-    ###
-    def _get_selector(self, name):
-        ''' Return selector group for name '''
-        selectors = self._gui_layout[2][1]
-        if name == "file":
-            return selectors[0]
-        if name == "title":
-            return selectors[1]
-        if name == "style":
-            return selectors[2]
-        if name == "axis":
-            return selectors[3]
-        if name == "agg":
-            return selectors[4]
-        if name == "iter":
-            return selectors[5]
-        raise ValueError(f"No selector for {name}")
+    def _update_color_range(self, plot_params):
+        ''' Set the start/end range on the colorbar to min/max of plot data '''
+        if self._gui_layout and 'data' in plot_params and 'data_range' in plot_params['data']:
+            # Update range slider start and end to data min and max
+            data_range = plot_params['data']['data_range']
+            style_selectors = self._get_selector('style')
+            range_slider = style_selectors[3][1]
+            range_slider.start = data_range[0]
+            range_slider.end = data_range[1]
 
     ###
     ### Update widget options based on MS
     ###
+    def _get_selector(self, name):
+        ''' Return selector group for name, for setting options '''
+        selectors = self._gui_layout[2][1]
+        selectors_index = {'file': 0, 'title': 1, 'style': 2, 'axis': 3, 'agg': 4, 'iter': 5, 'selection': 6}
+        if name == "selectors":
+            return selectors
+
+        return selectors[selectors_index[name]]
+
     def _update_gui_axis_options(self):
         ''' Set gui options from ms data '''
         if 'data_dims' in self._ms_info:
@@ -604,7 +649,7 @@ class MsRaster(MsPlot):
             axis_selectors.objects[0][0].options = data_dims
             axis_selectors.objects[0][1].options = data_dims
 
-            # Update options for vis_axis selector ([2])
+            # Update options for vis_axis selector
             if self._data.get_correlated_data('base') == 'SPECTRUM':
                 axis_selectors.objects[1].options = SPECTRUM_AXIS_OPTIONS
             else:
@@ -621,7 +666,7 @@ class MsRaster(MsPlot):
             iter_axis_selector.options.extend(data_dims)
 
     ###
-    ### Widgets which update other widgets
+    ### Callbacks for widgets which update other widgets
     ###
     def _set_filename(self, filename):
         ''' Set filename in text box from file selector value (list) '''
@@ -631,9 +676,15 @@ class MsRaster(MsPlot):
             # Collapse FileSelector card
             file_selectors[1].collapsed = True
 
+            # Change plot button color to indicate change unless ms path not set previously
+            filename_input = file_selectors[0][0]
+            if filename_input.value:
+                self._update_plot_status(True)
+
             # Set filename from last file in file selector (triggers _update_plot())
-            file_selectors[0][0].width = len(filename[-1])
-            file_selectors[0][0].value = filename[-1]
+            #filename_input.width = len(filename[-1])
+            filename_input.value = filename[-1]
+
 
     def _set_iter_values(self, iter_axis):
         ''' Set up player with values when iter_axis is selected '''
@@ -668,7 +719,7 @@ class MsRaster(MsPlot):
                 iter_range_inputs[0][1].value = 0
 
     def _get_datetime_values(self, float_times):
-        ''' Return list of float time values as list of datetime values '''
+        ''' Return list of float time values as list of datetime values for gui options '''
         time_attrs = self._data.get_dimension_attrs('time')
         datetime_values = []
         try:
@@ -677,117 +728,79 @@ class MsRaster(MsPlot):
             datetime_values = to_datetime(float_times, unit=time_attrs['units'][0], origin=time_attrs['format'])
         return list(datetime_values)
 
-    def _update_color_range(self, plot_params):
-        ''' Set the range on the colorbar to limits of plot '''
-        if self._gui_layout and 'data' in plot_params:
-            data_params = plot_params['data']
-            data_min = data_params['data_min'] if 'data_min' in data_params else None
-            data_max = data_params['data_max'] if 'data_max' in data_params else None
-            color_limits = data_params['color_limits'] if 'color_limits' in data_params else None
-
-            style_selectors = self._get_selector('style')
-            range_slider = style_selectors[1][1]
-
-            # Update range slider start and end if changed
-            if (data_min and data_min != range_slider.start) or (data_max and data_max != range_slider.end):
-                range_slider.start = data_min
-                range_slider.end = data_max
-
-            # Update range slider value if set else use min-max
-            if color_limits:
-                if color_limits != range_slider.value:
-                    range_slider.value = color_limits
-            else:
-                range_slider.value = (data_min, data_max)
-
-    def _update_plot_spinner(self, do_plot):
-        ''' Start spinner when plot button value is True. '''
+    def _update_plot_spinner(self, plot_clicked):
+        ''' Callback to start spinner when Plot button clicked. '''
         if self._gui_layout:
+            # Start spinner
             spinner = self._gui_layout[2][2][1]
-            spinner.value = do_plot
+            spinner.value = plot_clicked
+
+    def _update_plot_status(self, inputs_changed):
+        ''' Change button color when inputs change. '''
+        if self._gui_layout:
+            # Set button color
+            button = self._gui_layout[2][2][0]
+            button.button_style = 'solid' if inputs_changed else 'outline'
 
     ###
-    ### Process input values from widgets
+    ### Callbacks for widgets which update plot inputs
     ###
-    def _set_style_params(self, input_params):
-        ''' Extract style parameters from input parameters and set for plot '''
-        style_params = {}
-        style_params['unflagged_cmap'] = input_params.pop('unflagged_cmap')
-        style_params['flagged_cmap'] = input_params.pop('flagged_cmap')
-        style_params['show_colorbar'] = input_params.pop('show_colorbar')
-        self.set_style_params(**style_params)
+    def _set_title(self, title):
+        ''' Set title from gui text input '''
+        self._plot_inputs['title'] = title
+        self._update_plot_status(True) # Change plot button to solid
 
-    def _set_plot_inputs(self, gui_inputs):
-        ''' Set plot inputs (only) from gui inputs in expected format such as tuples '''
-        self._set_aggregation_inputs(gui_inputs)
-        self._set_iteration_inputs(gui_inputs)
+    def _set_style_params(self, unflagged_cmap, flagged_cmap, show_colorbar, show_flagged_colorbar):
+        self.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar, show_flagged_colorbar)
+        self._update_plot_status(True) # Change plot button to solid
 
-        # Set title to None if not set
-        title = gui_inputs['title']
-        gui_inputs['title'] = None if title == '' else title
+    def _set_color_range(self, color_mode, color_range):
+        ''' Set style params from gui '''
+        color_mode = color_mode.split()[0]
+        color_mode = None if color_mode == 'No' else color_mode
+        self._plot_inputs['color_mode'] = color_mode
+        self._plot_inputs['color_range'] = color_range
+        self._update_plot_status(True) # Change plot button to solid
 
-        # Set subplots tuple
-        rows = gui_inputs.pop('subplot_rows')
-        columns = gui_inputs.pop('subplot_columns')
-        gui_inputs['subplots'] = None if rows == 1 and columns ==1 else (rows, columns)
+    def _set_axes(self, x_axis, y_axis, vis_axis):
+        ''' Set plot axis params from gui '''
+        self._plot_inputs['x_axis'] = x_axis
+        self._plot_inputs['y_axis'] = y_axis
+        self._plot_inputs['vis_axis'] = vis_axis
+        self._update_plot_status(True) # Change plot button to solid
 
-        # If auto box checked, do not use gui color range
-        auto_color_limits = gui_inputs.pop('auto_color_limits')
-        if auto_color_limits:
-            gui_inputs['color_limits'] = None
+    def _set_aggregation(self, aggregator, agg_axes):
+        ''' Set aggregation params from gui '''
+        aggregator = None if aggregator== 'None' else aggregator
+        self._plot_inputs['aggregator'] = aggregator
+        self._plot_inputs['agg_axis'] = agg_axes # ignored if aggregator not set
+        self._update_plot_status(True) # Change plot button to solid
 
-        # Extract plot inputs
-        plot_inputs = {}
-        for key in gui_inputs:
-            if key in self._plot_inputs:
-                plot_inputs[key] = gui_inputs[key]
-        return plot_inputs
-
-    def _set_aggregation_inputs(self, inputs):
-        ''' Set aggregator and agg_axis to None if not set '''
-        aggregator = inputs['aggregator']
-        inputs['aggregator'] = None if aggregator == 'None' else aggregator
-
-        if aggregator:
-            agg_axis = inputs['agg_axis']
-            inputs['agg_axis'] = None if agg_axis == [] else agg_axis
-        else:
-            inputs['agg_axis'] = None
-
-    def _set_iteration_inputs(self, inputs):
-        ''' Set input iteration axis, and range if iter_axis is set. '''
-        iter_axis = inputs['iter_axis']
+# pylint: disable=too-many-arguments, too-many-positional-arguments
+    def _set_iteration(self, iter_axis, iter_value_type, iter_value, iter_start, iter_end, subplot_rows, subplot_columns):
+        ''' Set iteration params from gui '''
         iter_axis = None if iter_axis == 'None' else iter_axis
-        inputs['iter_axis'] = iter_axis
+        self._plot_inputs['iter_axis'] = iter_axis
+        self._plot_inputs['subplots'] = (subplot_rows, subplot_columns)
 
         if iter_axis:
-            iter_value_type = inputs['iter_value_type']
-
-            if iter_value_type == 'Value':
+            if iter_value_type == 'By Value':
                 # Use index of iter_value for tuple
-                iter_val = inputs.pop('iter_value')
-                if iter_val and self._data and self._data.is_valid():
+                if self._data and self._data.is_valid():
                     iter_values = self._data.get_dimension_values(iter_axis)
-                    iter_index = iter_values.index(iter_val)
-                    inputs['iter_range'] = (iter_index, iter_index)
+                    iter_index = iter_values.index(iter_value)
+                    self._plot_inputs['iter_range'] = (iter_index, iter_index)
             else:
-                # Use range start and end values for tuple
-                start = inputs.pop('iter_range_start')
-                end = inputs.pop('iter_range_end')
-                inputs['iter_range'] = (start, end)
+                # 'By Range': use range start and end values for tuple
+                self._plot_inputs['iter_range'] = (iter_start, iter_end)
         else:
-            inputs['iter_range'] = None
+            self._plot_inputs['iter_range'] = None
+        self._update_plot_status(True) # Change plot button to solid
+# pylint: enable=too-many-arguments, too-many-positional-arguments
 
-    def _inputs_changed(self, plot_inputs):
-        ''' Check if inputs changed and need new plot '''
-        # Cannot use plot_inputs == self._plot_inputs until selection in GUI
-        for key in plot_inputs:
-            if plot_inputs[key] and self._plot_inputs[key]: # Both set
-                if plot_inputs[key] != self._plot_inputs[key]:
-                    return True
-            elif not plot_inputs[key] and not self._plot_inputs[key]: # Both not set
-                continue
-            elif key != 'color_limits':
-                # One is None, other is set. Ignore color limits inequality since calculated when None.
-                return True
-        return False
+    def _set_ps_selection(self, query):
+        ''' Select ProcessingSet from gui using summary columns '''
+        if 'selection' not in self._plot_inputs or self._plot_inputs['selection'] is None:
+            self._plot_inputs['selection'] = {}
+        self._plot_inputs['selection']['query'] = query
+        self._update_plot_status(True) # Change plot button to solid
