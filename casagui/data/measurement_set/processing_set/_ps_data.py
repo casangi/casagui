@@ -49,6 +49,7 @@ class PsData:
         ''' Print full or selected summary of Processing Set metadata, optionally by msv4 '''
         pd.set_option("display.max_rows", len(self._ps))
         pd.set_option("display.max_columns", 12)
+        pd.set_option("display.max_colwidth", None)
         ps_summary = self._ps.summary()
 
         if columns is None:

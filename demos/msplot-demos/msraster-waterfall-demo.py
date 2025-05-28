@@ -61,7 +61,7 @@ def plot_ms_waterfall():
     }
 
     # Demo waterfall plots with baseline iteration
-    msr.plot(selection=selection, x_axis='frequency', iter_axis='baseline', iter_range=(0, -1), subplots=(4, 4))
+    msr.plot(selection=selection, x_axis='frequency', iter_axis='baseline', iter_range=(0, 5), subplots=(2, 3), color_mode=None)
     msr.show(title="waterfall plots")
     filename=os.path.join(plot_dir, "waterfall_plots.png")
     msr.save(filename)

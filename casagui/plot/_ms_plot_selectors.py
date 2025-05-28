@@ -294,7 +294,7 @@ def selection_selector(ps_callback):
     ps_selection.append(
         pn.widgets.TextInput(
             name="Query",
-            placeholder='Enter Pandas DataFrame query for summary columns',
+            placeholder='Enter query for summary columns',
             sizing_mode='stretch_width',
         )
     )
