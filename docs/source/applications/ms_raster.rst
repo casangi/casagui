@@ -15,7 +15,7 @@ spectrum data.
 Infrastructure
 ----------------------
 
-Like :ref:`Interactive Clean` <interactive_clean>`, MsRaster utilizes the :xref:`bokeh`
+Like :ref:`Interactive Clean <interactive_clean>`, MsRaster utilizes the :xref:`bokeh`
 backend for plotting.  Bokeh has built-in plot tools allowing the user to zoom, pan,
 select regions, inspect data values, and save the plot. Other libraries are
 used for data I/O, plotting, and interactive dashboards:
@@ -32,9 +32,13 @@ used for data I/O, plotting, and interactive dashboards:
   the raster plots
 
 .. image:: _static/xradio_logo.webp
+   :width: 100px
 .. image:: _static/hvplot.png
+   :width: 100px
 .. image:: _static/holoviews.png
+   :width: 100px
 .. image:: _static/panel.png
+   :width: 100px
 
 Implementation
 ---------------------
@@ -42,10 +46,11 @@ Implementation
 MsRaster gives the user flexibility to select data, plot styling, and plot layout.
 The app can be used in three different ways from Python:
 
-# to create plots exported to .png files
-# to create interactive Bokeh plots to show in a browser window or notebook
-# to create interactive Bokeh plots from a GUI dashboard in a browser window or notebook to
-  select plot parameters
+* to create plots exported to .png files
+
+* to create interactive Bokeh plots to show in a browser window or notebook
+
+* to create interactive Bokeh plots from a GUI dashboard in a browser window or notebook to select plot parameters
 
 Data Exploration
 ````````````````
