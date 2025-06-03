@@ -33,7 +33,7 @@ class MsData:
             return self._ms_path # path to ms v2
         return None
 
-    def summary(self, columns=None):
+    def summary(self, data_group='base', columns=None):
         ''' Print summary of Processing Set data.
                 columns (None, str, list): type of metadata to list.
                     None:      Print all summary columns in ProcessingSet.
@@ -44,7 +44,7 @@ class MsData:
         '''
         # ProcessingSet function
         if self._data_initialized:
-            self._data.summary(columns)
+            self._data.summary(data_group, columns)
         else:
             self._log_no_ms()
 
@@ -55,7 +55,7 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def get_data_groups(self):
+    def data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
         # ProcessingSet function
         if self._data_initialized:
@@ -63,13 +63,14 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def get_antennas(self, plot_positions=False):
+    def get_antennas(self, plot_positions=False, label_antennas=False):
         ''' Returns list of antenna names in data.
-                plot_positions (bool): Optionally show plot of antenna positions.
+                plot_positions (bool): show plot of antenna positions.
+                label_antennas (bool): label positions with antenna names.
         '''
         # Antenna positions plot is ProcessingSet function
         if self._data_initialized:
-            return self._data.get_antennas(plot_positions)
+            return self._data.get_antennas(plot_positions, label_antennas)
         self._log_no_ms()
         return None
 
@@ -94,7 +95,7 @@ class MsData:
     def get_max_data_dims(self):
         ''' Returns maximum length of dimensions in data. '''
         if self._data_initialized:
-            return self._data.get_ps_max_dims()
+            return self._data.get_max_dims()
         self._log_no_ms()
         return None
 

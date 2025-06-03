@@ -71,7 +71,7 @@ def plot_ms_raster():
     # Demo vis axis options
     for vis_axis in ['amp', 'phase', 'real', 'imag']:
         msr.plot(selection=intent_selection, vis_axis=vis_axis, color_mode='auto')
-        msr.show(title=vis_axis)
+        msr.show()
         filename=os.path.join(plot_dir, f"{vis_axis}.png")
         msr.save(filename)
 
@@ -81,16 +81,15 @@ def plot_ms_raster():
     # Set clear_plots=False after first plot
     for vis_axis in ['amp', 'phase', 'real', 'imag']:
         clear_plots = True if vis_axis == 'amp' else False
-        title = " ".join([ms_path, vis_axis])
         msr.plot(selection=intent_selection, vis_axis=vis_axis, subplots=(2, 2), color_mode='auto', clear_plots=clear_plots)
-    msr.show(title="vis axes in layout")
+    msr.show()
     filename=os.path.join(plot_dir, "vis_axis_layout.png")
     msr.save(filename)
 
     # ------------------------------------------------------------------
     # Demo dimension combinations for x and y axis
     axes = [
-        ('baseline', 'time'),
+        #('baseline', 'time'),
         ('frequency', 'time'), 
         ('polarization', 'time'),
         ('frequency', 'baseline'),
@@ -100,7 +99,7 @@ def plot_ms_raster():
     for xaxis, yaxis in axes:
         plot_axes = f"{yaxis}_vs_{xaxis}"
         msr.plot(selection=intent_selection, x_axis=xaxis, y_axis=yaxis, color_mode='auto')
-        msr.show(title=plot_axes)
+        msr.show()
         filename=os.path.join(plot_dir, f"{plot_axes}.png")
         msr.save(filename)
 
@@ -112,7 +111,7 @@ def plot_ms_raster():
         'baseline': 'DA48_A046 & DA49_A029'
     }
     msr.plot(x_axis='frequency', y_axis='time', selection=dim_selection, color_mode='auto')
-    msr.show(title="select dimensions")
+    msr.show()
     filename=os.path.join(plot_dir, "select_dims.png")
     msr.save(filename)
 
@@ -120,13 +119,13 @@ def plot_ms_raster():
     # Demo iter_axis: axis over which to iterate values for multiple plots.
     # Single plot starting at first iteration (XX) default iter_range (0, 0).
     msr.plot(selection=intent_selection, iter_axis='polarization', color_mode='auto')
-    msr.show(title="pol iter 0")
+    msr.show()
     filename=os.path.join(plot_dir, "iteration0.png")
     msr.save(filename)
 
     # Single plot starting at first iteration (XX) iter_range (1, 1).
     msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(1, 1), color_mode='auto')
-    msr.show(title="pol iter 1")
+    msr.show()
     filename=os.path.join(plot_dir, "iteration1.png")
     msr.save(filename)
 
@@ -139,13 +138,13 @@ def plot_ms_raster():
     # Layout multiple plots; export_range is ignored and only the layout is shown/saved.
     # Single row layout
     msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto')
-    msr.show(title="pol iter row layout")
+    msr.show()
     filename=os.path.join(plot_dir, "iter_row_layout.png")
     msr.save(filename)
 
     # Single column layout
     msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), subplots=(2, 1), color_mode='auto')
-    msr.show(title="pol iter column layout")
+    msr.show()
     filename=os.path.join(plot_dir, "iter_col_layout.png")
     msr.save(filename)
 
@@ -153,7 +152,7 @@ def plot_ms_raster():
     # Plot amp with polarization iteration, then phase, to form 2x2 layout. Do not clear plots on second plot.
     msr.plot(selection=intent_selection, vis_axis='amp', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto')
     msr.plot(selection=intent_selection, vis_axis='phase', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto', clear_plots=False)
-    msr.show(title="amp phase iter layout")
+    msr.show()
     filename=os.path.join(plot_dir, "amp_phase_iter.png")
     msr.save(filename)
 
@@ -163,25 +162,25 @@ def plot_ms_raster():
     #   agg_axis: dimension over which to aggregate.
     # Plot time vs baseline, averaged over frequency. Selects first polarization automatically.
     msr.plot(selection=intent_selection, aggregator='mean', agg_axis='frequency', color_mode='auto')
-    msr.show(title="mean frequency")
+    msr.show()
     filename=os.path.join(plot_dir, "agg_mean_frequency.png")
     msr.save(filename)
 
     # Plot time vs frequency, max across baselines. Selects first polarization automatically.
     msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', color_mode='auto')
-    msr.show(title="max baseline")
+    msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline.png")
     msr.save(filename)
 
-    # time vs frequency, max across baseline and polarization.
+    # time vs frequency, max across baseline and polarization (explicit).
     msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis=['baseline', 'polarization'], color_mode='auto')
-    msr.show(title="max baseline and polarization")
+    msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline_pol.png")
     msr.save(filename)
 
-    # time vs frequency, max across other two dimensions automatically by not setting agg_axis (same result as previous plot).
+    # time vs frequency, max across other two dimensions automatically by not setting agg_axis (implicit).
     msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', color_mode='auto')
-    msr.show(title="auto max baseline and polarization")
+    msr.show()
     filename=os.path.join(plot_dir, "agg_max_auto_baseline_pol.png")
     msr.save(filename)
 
@@ -189,7 +188,7 @@ def plot_ms_raster():
     # Demo combining aggregator, iteration, and subplots.
     # time vs frequency, max across baselines, with polarization iteration; layout in one row.
     msr.plot(selection=intent_selection, x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto')
-    msr.show(title="max baseline with pol iter")
+    msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline_pol_iter.png")
     msr.save(filename)
 

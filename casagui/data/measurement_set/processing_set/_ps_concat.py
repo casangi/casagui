@@ -4,16 +4,22 @@ Concat ProcessingSet xarray DataSets into single xds by time dimension (in order
 
 import xarray as xr
 
-def concat_ps_xds(ps, logger):
+from casagui.data.measurement_set.processing_set._ps_coords import set_coordinates
+
+def concat_ps_xdt(ps_xdt, logger):
     ''' Concatenate xarray Datasets in ProcessingSet by time dimension.
         Return concat xds. '''
-    ps_len = len(ps)
-    if ps_len == 0:
+    if len(ps_xdt) == 0:
         raise RuntimeError("Processing set empty after selection.")
 
-    if ps_len == 1:
+    ps = {}
+    for name, ms_xdt in ps_xdt.items():
+        # Set units to str not list and set baseline coordinate.  Returns xarray.Dataset
+        ps[name] = set_coordinates(ms_xdt)
+
+    if len(ps) == 1:
         logger.debug("Processing set contains one dataset, nothing to concat.")
-        return ps.get(0)
+        return list(ps.values())[0]
 
     # Split xds by time gaps
     sorted_times = _get_sorted_times(ps)
@@ -24,8 +30,8 @@ def concat_ps_xds(ps, logger):
         xds_list.extend(xdss)
         time_list.extend(times)
 
-    if len(xds_list) > ps_len:
-        logger.debug(f"Split {ps_len} datasets by time gap into {len(xds_list)} datasets.")
+    if len(xds_list) > len(ps_xdt):
+        logger.debug(f"Split {len(ps_xdt)} datasets by time gap into {len(xds_list)} datasets.")
 
     # Create sorted xds list using sorted times
     time_list.sort()

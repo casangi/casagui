@@ -2,7 +2,13 @@
     Module to access MeasurementSet data using xradio ProcessingSet.
 '''
 
+from ._ps_concat import (
+    concat_ps_xdt,
+)
+
 from ._ps_coords import (
+    set_coordinates,
+    set_datetime_coordinate,
     set_index_coordinates,
 )
 

@@ -19,19 +19,23 @@ except ImportError:
 
 from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data, get_axis_data
 
-def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
+def calculate_ps_stats(ps_xdt, ps_store, vis_axis, data_group, logger):
     '''
         Calculate stats for unflagged visibilities: min, max, mean, std
-        ps (msv4 processing set): visibility data with flags
-        ps_store (str): path to visibility file
-        vis_axis (str): component (amp, phase, real, imag) followed by optional type (corrected, model) e.g. amp_corrected
+        ps_xdt (xarray.DataTree): input MeasurementSet opened from zarr file
+        ps_store (str): path to visibility zarr file
+        vis_axis (str): complex component (amp, phase, real, imag)
         Returns: stats tuple (min, max, mean, stddev) or None if all data flagged (count=0)
     '''
     input_params = {}
     input_params['input_data_store'] = ps_store
-    input_params['data_group'] = data_group
-    input_params['correlated_data'] = get_correlated_data(ps.get(0), data_group)
+    input_params['xdt'] = ps_xdt
     input_params['vis_axis'] = vis_axis
+    input_params['data_group'] = data_group
+    for ms_xdt in ps_xdt.values():
+        if data_group in ms_xdt.attrs['data_groups']:
+            input_params['correlated_data'] = get_correlated_data(ms_xdt.ds, data_group)
+            break
 
     if _HAVE_TOOLVIPER:
         active_client = get_client() # could be None if not set up outside casagui
@@ -39,24 +43,24 @@ def calculate_ps_stats(ps, ps_store, vis_axis, data_group, logger):
         active_client = None
     n_threads = active_client.thread_info()['n_threads'] if active_client is not None else 4
     logger.debug(f"Setting {n_threads} n_chunks for parallel coords.")
-    mapping = _get_task_data_mapping(ps, n_threads)
+    mapping = _get_task_data_mapping(ps_xdt, n_threads)
 
-    data_min, data_max, data_mean = _calc_basic_stats(ps, mapping, input_params, logger)
+    data_min, data_max, data_mean = _calc_basic_stats(ps_xdt, mapping, input_params, logger)
     if np.isfinite(data_mean):
         input_params['mean'] = data_mean
-        data_stddev = _calc_stddev(ps, mapping, input_params, logger)
+        data_stddev = _calc_stddev(ps_xdt, mapping, input_params, logger)
         return data_min, data_max, data_mean, data_stddev
     return None
 
-def _get_task_data_mapping(ps, n_threads):
-    frequencies = ps.get_ps_freq_axis()
+def _get_task_data_mapping(ps_xdt, n_threads):
+    frequencies = ps_xdt.xr_ps.get_freq_axis()
     parallel_coords = {"frequency": make_parallel_coord(coord=frequencies, n_chunks=n_threads)}
-    return interpolate_data_coords_onto_parallel_coords(parallel_coords, ps)
+    return interpolate_data_coords_onto_parallel_coords(parallel_coords, ps_xdt)
 
-def _calc_basic_stats(ps, mapping, input_params, logger):
+def _calc_basic_stats(ps_xdt, mapping, input_params, logger):
     ''' Calculate min, max, mean using graph map/reduce '''
     graph = graph_map(
-        input_data=ps,
+        input_data=ps_xdt,
         node_task_data_mapping=mapping,
         node_task=_map_stats,
         input_params=input_params
@@ -72,14 +76,15 @@ def _calc_basic_stats(ps, mapping, input_params, logger):
     if data_count == 0.0:
         logger.debug("stats: no unflagged data")
         return (data_min, data_max, np.inf)
+
     data_mean = data_sum / data_count
     logger.debug(f"basic stats: min={data_min:.4f}, max={data_max:.4f}, sum={data_sum:.4f}, count={data_count} mean={data_mean:.4f}")
     return data_min, data_max, data_mean
 
-def _calc_stddev(ps, mapping, input_params, logger):
+def _calc_stddev(ps_xdt, mapping, input_params, logger):
     ''' Calculate stddev using graph map/reduce '''
     graph = graph_map(
-        input_data=ps,
+        input_data=ps_xdt,
         node_task_data_mapping=mapping,
         node_task=_map_variance,
         input_params=input_params
@@ -116,9 +121,9 @@ def _get_stats_xda(xds, vis_axis, data_group):
 
 def _map_stats(input_params):
     ''' Return min, max, sum, and count of data chunk '''
+    vis_axis = input_params['vis_axis']
     data_group = input_params['data_group']
     correlated_data = input_params['correlated_data']
-    vis_axis = input_params['vis_axis']
     min_vals = []
     max_vals = []
     sum_vals = []
@@ -127,8 +132,9 @@ def _map_stats(input_params):
     ps_iter = ProcessingSetIterator(
         input_params['data_selection'],
         input_params['input_data_store'],
-        input_params['input_data'],
-        data_variables=[correlated_data, 'FLAG'],
+        input_params['xdt'],
+        input_params['data_group'],
+        include_variables=[correlated_data, 'FLAG'],
         load_sub_datasets=False
     )
 
@@ -177,9 +183,9 @@ def _reduce_stats(graph_inputs, input_params):
 
 def _map_variance(input_params):
     ''' Return sum, count, of (xda - mean) squared '''
+    vis_axis = input_params['vis_axis']
     data_group = input_params['data_group']
     correlated_data = input_params['correlated_data']
-    vis_axis = input_params['vis_axis']
     mean = input_params['mean']
 
     sq_diff_sum = 0.0
@@ -188,8 +194,9 @@ def _map_variance(input_params):
     ps_iter = ProcessingSetIterator(
         input_params['data_selection'],
         input_params['input_data_store'],
-        input_params['input_data'],
-        data_variables=[correlated_data, 'FLAG'],
+        input_params['xdt'],
+        input_params['data_group'],
+        include_variables=[correlated_data, 'FLAG'],
         load_sub_datasets=False
     )
 

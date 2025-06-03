@@ -157,8 +157,12 @@ class MsRaster(MsPlot):
         self._reset_plot(clear_plots)
 
         # Get data dimensions if valid MS is set to check input axes
-        if self._data and self._data.is_valid():
-            inputs['data_dims'] = self._ms_info['data_dims']
+        if 'data_dims' in self._ms_info:
+            data_dims = self._ms_info['data_dims']
+            if 'baseline_id' in data_dims:
+                data_dims.remove('baseline_id')
+                data_dims.append('baseline')
+            inputs['data_dims'] = data_dims
 
         # Validate input arguments; data dims needed to check input and rename baseline dimension
         check_inputs(inputs)
@@ -298,7 +302,7 @@ class MsRaster(MsPlot):
                     color_limits = self._spw_color_limits[spw_name]
                 else:
                     # Select spw name and data group only
-                    spw_data_selection = {'spw_name': spw_name, 'data_group': plot_inputs['selection']['data_group']}
+                    spw_data_selection = {'spw_name': spw_name, 'data_group_name': plot_inputs['selection']['data_group_name']}
                     color_limits = self._calc_amp_color_limits(spw_data_selection)
                     self._spw_color_limits[spw_name] = color_limits
         plot_inputs['auto_color_range'] = color_limits
@@ -352,10 +356,14 @@ class MsRaster(MsPlot):
         ''' Add base data_group to plot inputs selection if not in user selection '''
         if 'selection' not in plot_inputs or not plot_inputs['selection']:
             plot_inputs['selection'] = {}
-        if 'data_group' not in plot_inputs['selection']:
-            plot_inputs['selection']['data_group'] = 'base'
+
+        data_group = 'base'
+        if 'data_group' in plot_inputs['selection']:
+            data_group = plot_inputs['selection'].pop('data_group')
+        plot_inputs['selection']['data_group_name'] = data_group
+
         if self._data and self._data.is_valid():
-            plot_inputs['correlated_data'] = self._data.get_correlated_data(plot_inputs['selection']['data_group'])
+            plot_inputs['correlated_data'] = self._data.get_correlated_data(data_group)
 
     ### -----------------------------------------------------------------------
     ### Interactive GUI

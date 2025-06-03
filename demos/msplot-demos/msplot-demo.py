@@ -40,22 +40,27 @@ def show_ms_plot_features():
     # Could also use MsScatter
     msr = MsRaster(ms_path)
 
-    # Demo xradio ProcessingSet info and plotting features
-    msr.summary()                                                 # ps summary is pandas dataframe, used for ps selection
-    msr.summary(['spw_name', 'start_frequency', 'end_frequency']) # select subset (str or list) of summary columns
-    msr.summary('by_msv4')                                        # organizes summary info by each MSv4 xarray Datasets
+    # Demo xradio ProcessingSet functions
+    # Default summary data group is 'base'
+    msr.summary(data_group='base')                                        # print pandas dataframe, used for ps selection
+    print("\n----- summary columns [spw_name, start_frequency, end_frequency]:")
+    msr.summary(columns=['spw_name', 'start_frequency', 'end_frequency']) # select subset (str or list) of summary columns
+    print("\n----- summary by_msv4:")
+    msr.summary(columns='by_msv4')                                        # organizes summary info by each MSv4 xarray Datasets
 
     # Get list of data/flag/weight/uvw group names (plot parameter)
     print("data groups:", msr.data_groups())
 
     # ProcessingSet plots
-    # Get list of antenna names, useful for baseline selection. Optionally plot their positions (default False).
-    print("Press 'q' to continue to next plot")
-    print("antenna_list for 'base' data group:", msr.antennas(plot_positions=True))
+    # Get list of antenna names, useful for baseline selection.
+    # Optionally plot their positions (default False) with antenna labels (default False).
+    print("antennas:", msr.antennas(plot_positions=True, label_antennas=True))
+    msr.antennas(plot_positions=True, label_antennas=False)
 
     # Plot phase centers and show field names for data group.
     # The field and source xds is an attribute of the correlated_data in the data group.
-    msr.plot_phase_centers(label_all_fields=True, data_group='base')
+    msr.plot_phase_centers(label_fields=True, data_group='base')
+    msr.plot_phase_centers(label_fields=False, data_group='base')
 
 if __name__ == '__main__':
     show_ms_plot_features()

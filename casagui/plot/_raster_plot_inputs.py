@@ -17,13 +17,12 @@ def _set_baseline_antenna_axis(inputs):
     ''' Set baseline axis to dimension in data_dims '''
     if 'data_dims' not in inputs:
         return
-    data_dims = inputs['data_dims']
-    baseline_dims = ['baseline', 'antenna_name']
-    for dim in data_dims:
-        if dim in baseline_dims:
-            baseline_dim = dim
-            break
 
+    data_dims = inputs['data_dims']
+    baseline_dim = 'antenna_name' if 'antenna_name' in data_dims else 'baseline'
+
+    # Convert baseline axis to existing baseline dimension
+    baseline_dims = ['baseline', 'antenna_name']
     for axis in ['x_axis', 'y_axis', 'iter_axis', 'agg_axis']:
         if inputs[axis] in baseline_dims:
             inputs[axis] = baseline_dim

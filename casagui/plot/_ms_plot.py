@@ -61,9 +61,10 @@ class MsPlot:
         self._ms_info = {}
         self._set_ms(ms)
 
-    def summary(self, columns=None):
+    def summary(self, data_group='base', columns=None):
         ''' Print ProcessingSet summary.
             Args:
+                data_group (str): data group to use for summary.
                 columns (None, str, list): type of metadata to list.
                     None:      Print all summary columns in ProcessingSet.
                     'by_msv4': Print formatted summary metadata by MSv4.
@@ -72,23 +73,25 @@ class MsPlot:
                                  'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
             Returns: list of unique values when single column is requested, else None
         '''
-        self._data.summary(columns)
+        self._data.summary(data_group, columns)
 
     def data_groups(self):
         ''' Returns set of data groups from all ProcessingSet ms_xds. '''
-        return self._data.get_data_groups()
+        return self._data.data_groups()
 
-    def antennas(self, plot_positions=False):
+    def antennas(self, plot_positions=False, label_antennas=False):
         ''' Returns list of antenna names in ProcessingSet antenna_xds.
-            Optionally show plot of antenna positions. '''
-        return self._data.get_antennas(plot_positions)
-
-    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
-        ''' Plot the phase center locations of all fields in the Processing Set and label central field.
-                label_all_fields (bool); label all fields on the plot
-                data_group (str); data group to use for processing.
+                plot_positions (bool): show plot of antenna positions.
+                label_antennas (bool): label positions with antenna names.
         '''
-        self._data.plot_phase_centers(label_all_fields, data_group)
+        return self._data.get_antennas(plot_positions, label_antennas)
+
+    def plot_phase_centers(self, label_fields=False, data_group='base'):
+        ''' Plot the phase center locations of all fields in the Processing Set and highlight central field.
+                label_fields (bool): label all fields on the plot if True, else label central field only
+                data_group (str): data group to use for field and source xds.
+        '''
+        self._data.plot_phase_centers(label_fields, data_group)
 
     def clear_plots(self):
         ''' Clear plot list '''
@@ -101,20 +104,15 @@ class MsPlot:
         if self._data:
             self._data.clear_selection()
 
-    def show(self, title=None):
+    def show(self):
         ''' 
         Show interactive Bokeh plots in a browser. Plot tools include pan, zoom, hover, and save.
-        Multiple plots can be shown in a grid using plot parameter `subplots`.  Default is to show a single plot.
-            title (str): browser tab title.  Default is "{app} {ms_name}".
         '''
         if not self._plots:
             raise RuntimeError("No plots to show.  Run plot() to create plot.")
 
         # Do not delete plot list until rendered
         self._plots_locked = True
-
-        if not title:
-            title = ' '.join([self._app_name, self._ms_info['basename']]) if not self._show_gui else self._app_name
 
         # Single plot or combine plots into layout using subplots (rows, columns)
         # Not layout if subplots is single plot (default if None) or if only one plot saved
@@ -219,9 +217,11 @@ class MsPlot:
     def _notify(self, message, level, duration=3000):
         ''' Log message. If show_gui, notify user with toast for duration in ms.
             Zero duration must be dismissed. '''
-        pn.state.notifications.position = 'top-center'
-        if self._toast:
-            self._toast.destroy()
+        if self._show_gui:
+            pn.state.notifications.position = 'top-center'
+            if self._toast:
+                self._toast.destroy()
+
         if level == "info":
             self._logger.info(message)
             if self._show_gui:
