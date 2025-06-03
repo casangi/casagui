@@ -585,10 +585,12 @@ class MsRaster(MsPlot):
         plot = hv.Overlay(
             hv.QuadMesh([]).opts(
                 colorbar=False,
-                cmap=plot_params['style']['flagged_cmap']
+                cmap=plot_params['style']['flagged_cmap'],
+                responsive=True,
             ) * hv.QuadMesh([]).opts(
                 colorbar=plot_params['style']['show_colorbar'],
-                cmap=plot_params['style']['unflagged_cmap']
+                cmap=plot_params['style']['unflagged_cmap'],
+                responsive=True,
             )
         )
         return plot.opts(
