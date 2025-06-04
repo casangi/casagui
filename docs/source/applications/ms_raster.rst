@@ -4,11 +4,6 @@ MsRaster
 
 .. currentmodule:: applications
 
-The visualization infrastructure of CASA will be built out by completing pathfinder
-applications. These applications will build team knowledge and expand our codebase
-as we encounter new opportunities and challenges. MsRaster is the second pathfinder
-application for the :ref:`terminal usage setting <design-terminal-usage>`.
-
 MsRaster is an application for 2-dimensional visualization and flagging of visibility and 
 spectrum data.
 
@@ -17,8 +12,8 @@ Infrastructure
 
 Like :ref:`Interactive Clean <interactive_clean>`, MsRaster utilizes the :xref:`bokeh`
 backend for plotting.  Bokeh has built-in plot tools allowing the user to zoom, pan,
-select regions, inspect data values, and save the plot. Other libraries are
-used for data I/O, plotting, and interactive dashboards:
+select regions, inspect data values, and save the plot. Additional libraries are
+used in MsRaster for data I/O, plotting, and interactive dashboards:
 
 * :xref:`xradio` (Xarray Radio Astronomy Data I/O), which implements the MeasurementSet
   v4.0.0 schema using :xref:`Xarray` to provide an interface for radio astronomy data
@@ -31,14 +26,18 @@ used for data I/O, plotting, and interactive dashboards:
 * Holoviz library :xref:`panel` streamlines the development of apps and dashboards for
   the raster plots
 
-.. image:: _static/xradio_logo.webp
-   :width: 100px
-.. image:: _static/hvplot.png
-   :width: 100px
-.. image:: _static/holoviews.png
-   :width: 100px
-.. image:: _static/panel.png
-   :width: 100px
+.. list-table::
+   :class: borderless
+   :align: center
+
+   * - .. image:: _static/xradio_logo.webp
+          :width: 100
+     - .. image:: _static/hvplot.png
+          :width: 60
+     - .. image:: _static/holoviews.png
+          :width: 100
+     - .. image:: _static/panel.png
+          :width: 100
 
 Implementation
 ---------------------
@@ -50,15 +49,16 @@ The app can be used in three different ways from Python:
 
 * to create interactive Bokeh plots to show in a browser window or notebook
 
-* to create interactive Bokeh plots from a GUI dashboard in a browser window or notebook to select plot parameters
+* to select plot parameters in a GUI dashboard in a browser window or notebook to create interactive 
+  Bokeh plots
 
 Data Exploration
 ````````````````
 
-MsRaster includes an interface to explore the data with a summary of its metadata, list data
-groups and antennas to aid in selection, and make plots of antenna positions and phase center
-locations of all fields. These features are available in :xref:`xradio` and are exposed to the
-user in this application.
+:xref:`xradio` allows the user to explore the data with a summary of its metadata and 
+to make plots of antenna positions and phase center locations of all fields. These 
+features are exposed to the user in MsRaster, as well as listing data groups and
+antenna names to aid in selection.
 
 Plot Parameters
 ```````````````
