@@ -12,15 +12,6 @@ Subpackages
 Submodules
 ----------
 
-casagui.resources module
-------------------------
-
-.. automodule:: casagui.resources
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
 casagui.utils module
 --------------------
 

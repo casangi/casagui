@@ -84,7 +84,7 @@ the scenes* connections to make all of the elements (*that are in use*) interact
 update in response to user input.
 
 Spectra (Z-Axis) Display
-====================
+========================
 Another useful component included in ``CubeMask`` is the spectra display. This display
 shows the image spectra along the z-axis of the image cube. As with ``slider`` above
 the spectra display is accessed with the ``spectra`` member function::
@@ -114,7 +114,7 @@ same parameters supported by the underlying Bokeh components. In this case, the 
 is specified.
 
 Integration with Bokeh
-====================
+======================
 While we have already seen some integration with Bokeh models, e.g. ``layout`` above,
 It is also possible to include reactive models. The ``js_obj`` member function provides
 access to control elements of the ``CubeMask`` components. This example shows how this
