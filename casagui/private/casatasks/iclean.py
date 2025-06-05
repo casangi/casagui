@@ -36,7 +36,7 @@ from casatools.errors import create_error_string
 from casatasks.private.task_logging import start_log as _start_log
 from casatasks.private.task_logging import end_log as _end_log
 from casatasks.private.task_logging import except_log as _except_log
-from ...apps import InteractiveClean
+from casagui.apps import InteractiveClean
 
 def _iclean_t( *args, **kwargs ):
     ic = InteractiveClean( *args, **kwargs )

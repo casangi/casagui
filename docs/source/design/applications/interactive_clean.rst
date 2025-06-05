@@ -5,9 +5,9 @@ Interactive Clean Design
 
 .. currentmodule:: design
 
-The interactive clean prototype is based upon the `Bokeh <https://docs.bokeh.org/en/latest/>`_
-framework. This framework allow for the development of sophisticated plotting applications
-in `pure-Python <https://stackoverflow.com/a/52461357>`_. Bokeh's Python libraries generate
+The interactive clean prototype is based upon the :xref:`bokeh` framework. This framework
+allows for the development of sophisticated plotting applications in
+`pure-Python <https://stackoverflow.com/a/52461357>`_. Bokeh's Python libraries generate
 JavaScript applications which are then displayed in a web browser. The approach allows for
 the same GUIs to be used, with minor changes, in `Jupyter Notebooks <https://jupyter.org/>`_,
 traditional web sites, and in desktop applications via `Electron <https://www.electronjs.org/>`_.
@@ -299,7 +299,7 @@ point that the `asyncio <https://docs.python.org/3/library/asyncio.html>`_ event
 started. This eventloop processes the events that are used to update the GUI, control the
 :code:`tclean` invocations and finally stop and return control to the user.
 
-When the `Bokeh <https://bokeh.org/>`_ framework is used for scripting from the Python prompt
+When the :xref:`bokeh` framework is used for scripting from the Python prompt
 it creates a GUI with all of the interactions that can be predefined at build time, but updates
 from Python that cannot be predetermined (without, for example, loading in the whole image cube)
 must be handled outside of Bokeh. Interactions that fall into this category are things like
@@ -316,7 +316,7 @@ happens via two websockets:
 
 These are two separate websockets to ensure that _control_ messages are not delayed due
 to convergence information updates from :code:`tclean` executions. More information about
-:code:`CubeMask` is available in the :doc:`its design document <../components/cube_mask`.
+:code:`CubeMask` is available in the :doc:`its design document <../components/cube_mask>`.
 
 In response to control commands from the interactive clean GUI, :code:`tclean` is called
 in Python when the websocket events are received. The results are then transferred to the

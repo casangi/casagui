@@ -78,7 +78,7 @@ interactive clean app uses :xref:`numpy` arrays to represent the images which ar
 within :xref:`bokeh`.
 
 Example - Interactive Clean
-----------------
+---------------------------
 
 A first version of an interactive clean application is being designed as follows.
 ( This initial release

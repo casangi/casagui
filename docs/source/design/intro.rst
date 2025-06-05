@@ -56,13 +56,13 @@ Terminal
 
 The terminal setting is the typical Python usage setting. In this case, the user interacts
 with Python interactively, e.g. with IPython, or by running Python scripts from a terminal.
-A display is available, but no other support processes are available. The user has installed
-the casagui package into their python environment using something like pip, but because we
-want to avoid OS specific binary applications all casagui functionality in this setting is
-implemented in Python, and the frameworks which can be leveraged in the implementation are
-also implemented in Python. These individual frameworks may provide OS specific
-implementations, but casagui Python package is isolated from the incompatibilities which
-such implementations entail.
+A display is available, but no other support processes are available. The user installs
+the casagui package into their python environment using something like pip.  Because we
+want to avoid OS specific binary applications, all casagui functionality in this setting is
+implemented in Python, and the frameworks which are leveraged in the implementation are
+also in Python. These individual frameworks may provide OS-specific implementations, but
+the casagui Python package is isolated from the incompatibilities which such implementations
+entail.
 
 In the terminal setting, the user’s web browser is the best display option. It is (hopefully)
 compatible with the casagui application framework, and the user already has a browser that
@@ -79,29 +79,29 @@ Application
            :width: 180px
 
 The application setting is in some respects a new setting for CASA. Although CASA has had
-applications in the past, e.g. casaviewer, casaplotms, etc., these have been purpose built
-applications that were implemented separately from the main CASA Python application. Typically
-these applications would leverage some portion of the C++ code that underlies the
-implementation of the casatools. This implementational separation from Python made it
-difficult to implement a Python scripting interface for the purpose built, stand-alone
-applications. The casagui system takes a different approach. The casagui Python package is
-leveraged, along with an application framework, to create a platform for hosting all of the
-visualization applications created as part of the casagui system. All of these applications
-will be hosted by a single, running instance of the application framework. This is possible
-because the framework is built on Chromium, the same application framework that underlies the
-Google Chrome browser. This application framework is called Electron.
+applications in the past, for example casaviewer, casaplotms, etc., these have been
+purpose-built applications that were implemented separately from the main CASA Python
+application. Typically, these applications leveraged some portion of the C++ code that
+underlies the implementation of the casatools. This implementational separation from Python
+made it difficult to implement a Python scripting interface for the purpose-built, stand-alone
+applications.
+
+The casagui system takes a different approach. The casagui Python package and its application
+framework, Electron, are leveraged to create a platform for hosting all of the visualization
+applications in the casagui system. All of these applications will be hosted by a single, running
+instance of the application framework. This is possible because the framework is built on Chromium,
+the same application framework that underlies the Google Chrome browser.
 
 In the application setting, we have much more flexibility and control than in any of the other
 settings. Here we leverage the Jupyter Protocol and the IPython kernel that goes along with it.
 The **same** casagui python package used in the other settings is imported into the IPython
-kernel and generates the visualization elements that go into producing standalone applications
-like plotms. These applications are too complex to be implemented using currently available
-python frameworks, but by using Electron and the tools that are available in
-TypeScript/JavaScript the same plots that are available to users in the other settings can be
-incorporated into much more capable and wide ranging applications in this setting. A plot that
-is generated in the headless setting for saving to a raster file will be identical to the same
-plot displayed in our Electron application, and they will use the same Python implementation
-to do it.
+kernel and generates the visualization elements that go into producing standalone applications.
+These applications are too complex to be implemented using currently available python frameworks.
+By using Electron and the tools that are available in TypeScript/JavaScript, the same plots
+that are available to users in the other settings can be incorporated into much more capable and
+wide ranging applications in this setting. A plot that is generated in the headless setting for
+saving to a raster file will be identical to the plot displayed in our Electron application, since
+they use the same casagui Python implementation.
 
 Notebook
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -111,7 +111,7 @@ Notebook
            :width: 180px
 
 The GUI elements available in the notebook setting will be a subset of those available in the
-application setting. However because our application framework and Jupyter notebooks share the
+application setting. However, because our application framework and Jupyter notebooks share the
 same underlying protocol, many of the plots generated by the common casagui Python package will
 just automatically work in the notebook setting. While notebooks are very useful for collaboration
 and documentation, this is the least important of the usage settings we are targeting, but we
