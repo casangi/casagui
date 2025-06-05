@@ -12,11 +12,11 @@ from pandas import to_datetime
 
 from casagui.bokeh.format import get_time_formatter
 from casagui.bokeh.state._palette import available_palettes
-from casagui.plot._ms_plot import MsPlot
-from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS
-from casagui.plot._ms_plot_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
-from casagui.plot._raster_plot_inputs import check_inputs
-from casagui.plot._raster_plot import RasterPlot
+from casagui.plot.ms_plot._ms_plot import MsPlot
+from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS
+from casagui.plot.ms_plot._ms_plot_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
+from casagui.plot.ms_plot._raster_plot_inputs import check_inputs
+from casagui.plot.ms_plot._raster_plot import RasterPlot
 
 class MsRaster(MsPlot):
     '''

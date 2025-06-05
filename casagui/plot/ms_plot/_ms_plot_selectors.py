@@ -5,7 +5,7 @@ Create panel widgets for various functions
 import panel as pn
 
 from casagui.bokeh.state._palette import available_palettes
-from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
+from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
 
 def file_selector(description, start_dir, callback):
     ''' Return a layout for file selection with input description and start directory.

@@ -1,4 +1,4 @@
-''' Classes to support MS plotting '''
+''' This module contains classes and utilities to support MS plotting '''
 
 from ._ms_plot import MsPlot
 

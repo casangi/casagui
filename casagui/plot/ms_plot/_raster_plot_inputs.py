@@ -2,7 +2,7 @@
 Check inputs to MsRaster plot() or its GUI
 '''
 
-from casagui.plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS
+from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS
 
 def check_inputs(inputs):
     ''' Check plot input types, and axis input values. '''

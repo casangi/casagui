@@ -1,5 +1,5 @@
 '''
-    Module to access MeasurementSet data using xradio ProcessingSet.
+    Module to access MeasurementSet data using xradio ProcessingSetXdt and Xarray objects.
 '''
 
 from ._ps_concat import (

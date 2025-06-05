@@ -12,7 +12,7 @@ import hvplot.pandas
 
 from casagui.bokeh.format import get_time_formatter
 from casagui.data.measurement_set.processing_set._ps_coords import set_index_coordinates
-from casagui.plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels, get_coordinate_labels
+from casagui.plot.ms_plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels, get_coordinate_labels
 
 class RasterPlot:
     '''

@@ -4,7 +4,7 @@ from astropy import constants
 import numpy as np
 import xarray as xr
 
-from casagui.plot._ms_plot_constants import SPECTRUM_AXIS_OPTIONS, UVW_AXIS_OPTIONS, VIS_AXIS_OPTIONS, WEIGHT_AXIS_OPTIONS
+from casagui.plot.ms_plot._ms_plot_constants import SPECTRUM_AXIS_OPTIONS, UVW_AXIS_OPTIONS, VIS_AXIS_OPTIONS, WEIGHT_AXIS_OPTIONS
 
 def get_correlated_data(xds, data_group):
     ''' Return correlated_data value in data_group dict '''
