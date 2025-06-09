@@ -70,7 +70,7 @@ from ..utils import DocEnum
 
 from ._interactiveclean_wrappers import SharedWidgets
 
-USE_MULTIPLE_GCLEAN_HACK=True
+USE_MULTIPLE_GCLEAN_HACK=False
 
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
@@ -1899,19 +1899,20 @@ class InteractiveClean:
         return cmd
 
     def _residual_path( self, gclean, imid ):
-        ###
-        ### imid  -- should be REMOVED after gclean supports retrieving the image/residual path etc.
-        ###
-        if self._init_values["deconvolver"] == 'mtmfs':
-            return ("%s.residual.tt0" % imid) if gclean.has_next( ) else (gclean.finalize()['image'])
-        else:
-            return ("%s.residual" % imid) if gclean.has_next( ) else (gclean.finalize()['image'])
+        if self._clean['gclean_paths'] is None:
+            raise RuntimeError( f'''gclean paths are not available for {imid}''' )
+        for p in self._clean['gclean_paths']:
+            if p['name'] == imid:
+                return f"{p['imagepath']}/{p['residualname']}"
+        raise RuntimeError( f'''gclean residual path not found for {imid}''' )
 
     def _mask_path( self, gclean, imid ):
-        ###
-        ### imid  -- should be REMOVED after gclean supports retrieving the image/residual path etc.
-        ###
-        return "%s.mask" % imid
+        if self._clean['gclean_paths'] is None:
+            raise RuntimeError( f'''gclean paths are not available for {imid}''' )
+        for p in self._clean['gclean_paths']:
+            if p['name'] == imid:
+                return f"{p['imagepath']}/{p['maskname']}"
+        raise RuntimeError( f'''gclean mask path not found for {imid}''' )
 
     def __init__( self, vis, imagename, selectdata=True, field='', spw='', timerange='', uvrange='', antenna='', scan='', observation='', intent='', datacolumn='corrected', imsize=[ int(100) ], cell=[  ], phasecenter='', stokes='I', projection='SIN', startmodel='', specmode='mfs', reffreq='', nchan=int(-1), start='', width='', outframe='LSRK', veltype='radio', restfreq=[  ], interpolation='linear', perchanweightdensity=True, gridder='standard', facets=int(1), psfphasecenter='', wprojplanes=int(1), vptable='', mosweight=True, aterm=True, psterm=False, wbawp=True, conjbeams=False, cfcache='', usepointing=False, computepastep=float(360.0), rotatepastep=float(360.0), pointingoffsetsigdev=[  ], pblimit=float(0.2), normtype='flatnoise', deconvolver='hogbom', scales=[  ], nterms=int(2), smallscalebias=float(0.0), fusedthreshold=float(0.0), largestscale=int(-1), restoration=True, restoringbeam=[  ], pbcor=False, outlierfile='', weighting='natural', robust=float(0.5), noise='1.0Jy', npixels=int(0), uvtaper=[ '' ], niter=int(0), gain=float(0.1), threshold=float(0.0), nsigma=float(0.0), cycleniter=int(-1), cyclefactor=float(1.0), minpsffraction=float(0.05), maxpsffraction=float(0.8), nmajor=int(-1), usemask='user', mask='', pbmask=float(0.0), sidelobethreshold=float(3.0), noisethreshold=float(5.0), lownoisethreshold=float(1.5), negativethreshold=float(0.0), smoothfactor=float(1.0), minbeamfrac=float(0.3), cutthreshold=float(0.01), growiterations=int(75), dogrowprune=True, minpercentchange=float(-1.0), verbose=False, fastnoise=True, restart=True, savemodel='none', calcres=True, calcpsf=True, psfcutoff=float(0.35), parallel=False, iclean_backend="PROD" ):
 
@@ -2014,9 +2015,11 @@ class InteractiveClean:
         self._clean = { 'converge': { 'state': { } }, 'last-success': None }
 
         self._clean_targets = { imagename: { 'args': {'vis': vis, 'selectdata': selectdata, 'field': field, 'spw': spw, 'timerange': timerange, 'uvrange': uvrange, 'antenna': antenna, 'scan': scan, 'observation': observation, 'intent': intent, 'datacolumn': datacolumn, 'imagename': imagename, 'imsize': imsize, 'cell': cell, 'phasecenter': phasecenter, 'stokes': stokes, 'projection': projection, 'startmodel': startmodel, 'specmode': specmode, 'reffreq': reffreq, 'nchan': nchan, 'start': start, 'width': width, 'outframe': outframe, 'veltype': veltype, 'restfreq': restfreq, 'interpolation': interpolation, 'perchanweightdensity': perchanweightdensity, 'gridder': gridder, 'facets': facets, 'psfphasecenter': psfphasecenter, 'wprojplanes': wprojplanes, 'vptable': vptable, 'mosweight': mosweight, 'aterm': aterm, 'psterm': psterm, 'wbawp': wbawp, 'conjbeams': conjbeams, 'cfcache': cfcache, 'usepointing': usepointing, 'computepastep': computepastep, 'rotatepastep': rotatepastep, 'pointingoffsetsigdev': pointingoffsetsigdev, 'pblimit': pblimit, 'normtype': normtype, 'deconvolver': deconvolver, 'scales': scales, 'nterms': nterms, 'smallscalebias': smallscalebias, 'fusedthreshold': fusedthreshold, 'largestscale': largestscale, 'restoration': restoration, 'restoringbeam': restoringbeam, 'pbcor': pbcor, 'outlierfile': outlierfile, 'weighting': weighting, 'robust': robust, 'noise': noise, 'npixels': npixels, 'uvtaper': uvtaper, 'niter': niter, 'gain': gain, 'threshold': threshold, 'nsigma': nsigma, 'cycleniter': cycleniter, 'cyclefactor': cyclefactor, 'minpsffraction': minpsffraction, 'maxpsffraction': maxpsffraction, 'nmajor': nmajor, 'usemask': usemask, 'mask': mask, 'pbmask': pbmask, 'sidelobethreshold': sidelobethreshold, 'noisethreshold': noisethreshold, 'lownoisethreshold': lownoisethreshold, 'negativethreshold': negativethreshold, 'smoothfactor': smoothfactor, 'minbeamfrac': minbeamfrac, 'cutthreshold': cutthreshold, 'growiterations': growiterations, 'dogrowprune': dogrowprune, 'minpercentchange': minpercentchange, 'verbose': verbose, 'fastnoise': fastnoise, 'restart': restart, 'savemodel': savemodel, 'calcres': calcres, 'calcpsf': calcpsf, 'psfcutoff': psfcutoff, 'parallel': parallel} } }
+        self._initial_clean_params = { }
+
         self._parameters = ImagerParameters( **{ k:v for k,v in self._clean_targets[imagename]['args'].items( )
                                                  if k in ImagerParameters.__init__.__code__.co_varnames[1:] } )
-        if USE_MULTIPLE_GCLEAN_HACK: self._clean_targets[imagename]['args']['outlierfile'] = ''
+
         ###
         ### For 6.6.5, outliers are not yet completely implemented so the
         ### 'outlierfile' parameter may not be present.
@@ -2049,6 +2052,7 @@ class InteractiveClean:
                                                      'cyclethreshold': {} } }   ### __init__( ) and _setup( )
 
         self._clean['gclean'] = None
+        self._clean['gclean_paths'] = None
         self._clean['imid'] = [ ]
         self._clean['gclean_rest'] = [ ]
         for imid, imdetails in self._clean_targets.items( ):
@@ -2061,14 +2065,10 @@ class InteractiveClean:
             if self._clean['gclean'] is None:
 
                 self._clean['gclean'] = self._gclean_module.gclean( **imdetails['args'] )
+                self._clean['gclean_paths'] = self._clean['gclean'].image_products( )
+
                 imdetails['path']['residual'] = self._residual_path(self._clean['gclean'],imid)
                 imdetails['path']['mask'] = self._mask_path(self._clean['gclean'],imid)
-
-            elif USE_MULTIPLE_GCLEAN_HACK:
-
-                self._clean['gclean_rest'].append(self._gclean_module.gclean( **imdetails['args'] ) )
-                imdetails['path']['residual'] = self._residual_path(self._clean['gclean_rest'][-1],imid)
-                imdetails['path']['mask'] = self._mask_path(self._clean['gclean_rest'][-1],imid)
 
             else:
 
@@ -2239,29 +2239,16 @@ class InteractiveClean:
 
                 clean_cmds = self._clean['gclean'].cmds( )
 
-                if len(self._convergence_data['chan']) == 0 or stopcode[0] == -1:
-                    ### stopcode[0] == -1 indicates an error condition within gclean
-                    return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
-                                 convergence=None, majordone=majordone,
-                                 majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
+                for key, value in self._convergence_data.items( ):
 
-                convergence_state['convergence'][self._clean['imid'][0]] = self._convergence_data['chan']
-                convergence_state['cyclethreshold'][self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
+                    if len(value['chan']) == 0 or stopcode[0] == -1:
+                        ### stopcode[0] == -1 indicates an error condition within gclean
+                        return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
+                                     convergence=None, majordone=majordone,
+                                     majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
 
-                if USE_MULTIPLE_GCLEAN_HACK:
-                    for g in zip(self._clean['imid'][1:],self._clean['gclean_rest']):
-                        e,em = g[1].update( dict( **msg['value']['iteration'],
-                                                  **msg['value']['automask'] ) )
-                        sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
-
-                        clean_cmds = clean_cmds + g[1].cmds( )
-
-                        if len(cvg['chan']) == 0 or scode == -1:
-                            convergence_state['convergence'][g[0]] = { }
-                            convergence_state['cyclethreshold'][g[0]] = { }
-                        else:
-                            convergence_state['convergence'][g[0]] = cvg['chan']
-                            convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
+                    convergence_state['convergence'][key] = value['chan']
+                    convergence_state['cyclethreshold'][key] = value['major']['cyclethreshold']
 
                 ### stopcode[0] != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
@@ -2368,13 +2355,13 @@ class InteractiveClean:
 
             self._create_convergence_gui( imdetails, orient='horizontal', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
 
-            imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % imdetails['params']['it']['nmajor'], width=90 )
-            imdetails['gui']['params']['iteration']['niter'] = icw.niter( title='niter', value="%s" % imdetails['params']['it']['niter'], width=90 )
-            imdetails['gui']['params']['iteration']['cycleniter'] = icw.cycleniter( title="cycleniter", value="%s" % imdetails['params']['it']['cycleniter'], width=90 )
-            imdetails['gui']['params']['iteration']['threshold'] = icw.threshold( title="threshold", value="%s" % imdetails['params']['it']['threshold'], width=90 )
-            imdetails['gui']['params']['iteration']['cyclefactor'] = icw.cyclefactor( value="%s" % imdetails['params']['it']['cyclefactor'], title="cyclefactor", width=90 )
-            imdetails['gui']['params']['iteration']['gain'] = icw.gain( title='gain', value="%s" % imdetails['params']['it']['gain'], width=90 )
-            imdetails['gui']['params']['iteration']['nsigma'] = icw.nsigma( title='nsigma', value="%s" % imdetails['params']['it']['nsigma'], width=90 )
+            imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % self._initial_clean_params['nmajor'], width=90 )
+            imdetails['gui']['params']['iteration']['niter'] = icw.niter( title='niter', value="%s" % self._initial_clean_params['niter'], width=90 )
+            imdetails['gui']['params']['iteration']['cycleniter'] = icw.cycleniter( title="cycleniter", value="%s" % self._initial_clean_params['cycleniter'], width=90 )
+            imdetails['gui']['params']['iteration']['threshold'] = icw.threshold( title="threshold", value="%s" % self._initial_clean_params['threshold'], width=90 )
+            imdetails['gui']['params']['iteration']['cyclefactor'] = icw.cyclefactor( value="%s" % self._initial_clean_params['cyclefactor'], title="cyclefactor", width=90 )
+            imdetails['gui']['params']['iteration']['gain'] = icw.gain( title='gain', value="%s" % self._initial_clean_params['gain'], width=90 )
+            imdetails['gui']['params']['iteration']['nsigma'] = icw.nsigma( title='nsigma', value="%s" % self._initial_clean_params['nsigma'], width=90 )
 
             if imdetails['params']['am']['usemask'] == 'auto-multithresh':
                 ###
@@ -2580,9 +2567,6 @@ class InteractiveClean:
         ### browser tab that is running interactive clean
         ###
         initial_log = self._clean['gclean'].cmds( )
-        if USE_MULTIPLE_GCLEAN_HACK:
-            for g in self._clean['gclean_rest']:
-                initial_log = initial_log + g.cmds( )
 
         self._pipe['control'].init_script=CustomJS( args=dict( ctrl_pipe=self._pipe['control'],
                                                                ids=self._clean_ids,
@@ -2750,7 +2734,10 @@ class InteractiveClean:
 
         def initialize_tclean( imid, gclean ):
             imdetails = self._clean_targets[imid]
-            stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(gclean)
+            stopdesc, stopcode, majordone, majorleft, iterleft, converge = next(gclean)
+
+            for key, value in converge.items( ):
+                self._clean_targets[key]['converge'] = value
 
             if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0 or \
                 imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
@@ -2763,14 +2750,13 @@ class InteractiveClean:
 
             self._clean['cmds'].extend(self._clean['gclean'].cmds( ))
 
-            imdetails['params']['it'] = { }
-            imdetails['params']['it']['nmajor'] = majorleft
-            imdetails['params']['it']['niter'] = iterleft
-            imdetails['params']['it']['cycleniter'] = self._init_values["cycleniter"]
-            imdetails['params']['it']['threshold'] = self._init_values["threshold"]
-            imdetails['params']['it']['cyclefactor'] = self._init_values["cyclefactor"]
-            imdetails['params']['it']['gain'] = self._init_values["gain"]
-            imdetails['params']['it']['nsigma'] = self._init_values["nsigma"]
+            self._initial_clean_params['nmajor'] = majorleft
+            self._initial_clean_params['niter'] = iterleft
+            self._initial_clean_params['cycleniter'] = self._init_values["cycleniter"]
+            self._initial_clean_params['threshold'] = self._init_values["threshold"]
+            self._initial_clean_params['cyclefactor'] = self._init_values["cyclefactor"]
+            self._initial_clean_params['gain'] = self._init_values["gain"]
+            self._initial_clean_params['nsigma'] = self._init_values["nsigma"]
 
             self._init_values["convergence_state"]['convergence'][imid] = imdetails['converge']['chan']
             self._init_values["convergence_state"]['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
@@ -2871,9 +2857,6 @@ class InteractiveClean:
             raise RuntimeError( 'no interactive clean result is available' )
 
         self._clean['gclean'].restore( )
-        if USE_MULTIPLE_GCLEAN_HACK:
-            for g in self._clean['gclean_rest']:
-                g.restore( )
 
         return self.__result_future.result( )
 
