@@ -59,6 +59,9 @@ Installation
 
 casagui is available `from PyPI <https://pypi.org/project/casagui/>`_.
 
+Interactive Clean
+-----------------
+
 Requirements
 ````````````
 
@@ -89,7 +92,7 @@ Caveats
 - :code:`node.js` version 14.0.0 or higher is required
 
 Simple Usage Example
---------------------
+````````````````````
 
 A simple example of the use of interactive clean is::
 
@@ -113,3 +116,20 @@ the object as a separate statement::
   CASA <2>: ic( )
   CASA <3>: print(ic.masks( ))
 
+Visibility Plotting: MsRaster
+-----------------------------
+
+Install
+```````
+
+See https://casagui.readthedocs.io/en/latest/applications/ms_raster.html
+
+Simple Usage Example
+````````````````````
+
+A simple example of the use of MsRaster to create visibility raster plots::
+
+  >>> from casagui.apps import MsRaster
+  >>> msr = MsRaster(ms=myms)
+  >>> msr.plot() # default time vs. baseline plot
+  >>> msr.show() # open plot in browser tab

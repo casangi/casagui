@@ -39,4 +39,6 @@ sys.modules[__name__].__class__ = ImportProtectedModule( __name__, { 'plotants':
                                                                      'InteractiveClean': '._interactiveclean',
                                                                      'iclean': '..private.casatasks.iclean',
                                                                      'createmask': '..private.casatasks.createmask',
-                                                                     'createregion': '..private.casatasks.createregion' } )
+                                                                     'createregion': '..private.casatasks.createregion',
+                                                                     'MsRaster': '._ms_raster',
+                                                                   } )

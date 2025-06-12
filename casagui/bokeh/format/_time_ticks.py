@@ -1,6 +1,6 @@
 ########################################################################
 #
-# Copyright (C) 2023
+# Copyright (C) 2025
 # Associated Universities, Inc. Washington DC, USA.
 #
 # This script is free software; you can redistribute it and/or modify it
@@ -25,7 +25,20 @@
 #                        Charlottesville, VA 22903-2475 USA
 #
 ########################################################################
-'''Implementation of Bokeh formatting extensions provided by ``casagui``'''
 
-from ._time_ticks import get_time_formatter
-from ._wcs_ticks import WcsTicks
+''' Format time ticks for consistency at various zoom levels '''
+
+from bokeh.models.formatters import DatetimeTickFormatter
+
+def get_time_formatter():
+    ''' Tick formatter which includes H:M:S in most ticks '''
+    return DatetimeTickFormatter(
+        context_which = 'all',
+        microseconds='%fus',
+        milliseconds='%H:%M:%S %3Nms',
+        seconds='%H:%M:%S',
+        minsec='%H:%M:%S',
+        minutes='%H:%M:%S',
+        hourmin='%H:%M:%S',
+        hours='%H:%M:%S',
+        days='%F')
