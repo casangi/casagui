@@ -122,7 +122,7 @@ Visibility Plotting: MsRaster
 Install
 ```````
 
-See https://casagui.readthedocs.io/en/latest/applications/ms_raster.html
+See https://casagui.readthedocs.io/en/latest/applications/ms_raster.html#installation
 
 Simple Usage Example
 ````````````````````
