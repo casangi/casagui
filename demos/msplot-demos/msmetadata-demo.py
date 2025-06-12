@@ -45,8 +45,8 @@ def show_ms_plot_features():
     msr.summary(data_group='base')                                        # print pandas dataframe, used for ps selection
     print("\n----- summary columns [spw_name, start_frequency, end_frequency]:")
     msr.summary(columns=['spw_name', 'start_frequency', 'end_frequency']) # select subset (str or list) of summary columns
-    print("\n----- summary by_msv4:")
-    msr.summary(columns='by_msv4')                                        # organizes summary info by each MSv4 xarray Datasets
+    print("\n----- summary by_ms:")
+    msr.summary(columns='by_ms')                                        # organizes summary info by each MSv4 xarray Datasets
 
     # Get list of data/flag/weight/uvw group names (plot parameter)
     print("data groups:", msr.data_groups())

@@ -14,7 +14,8 @@ from casagui.bokeh.format import get_time_formatter
 from casagui.bokeh.state._palette import available_palettes
 from casagui.plot.ms_plot._ms_plot import MsPlot
 from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS
-from casagui.plot.ms_plot._ms_plot_selectors import file_selector, title_selector, style_selector, axis_selector, aggregation_selector, iteration_selector, selection_selector, plot_starter
+from casagui.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector, axis_selector,
+aggregation_selector, iteration_selector, selection_selector, plot_starter)
 from casagui.plot.ms_plot._raster_plot_inputs import check_inputs
 from casagui.plot.ms_plot._raster_plot import RasterPlot
 
@@ -23,15 +24,15 @@ class MsRaster(MsPlot):
     Plot MeasurementSet data as raster plot.
 
     Args:
-        ms (str): path to MSv2 (.ms) or MSv4 (.zarr) file.
-        log_level (str): logging threshold'. Options include "debug", "info", "warning", "error", "critical". Default "info".
-        show_gui (bool): whether to launch interactive GUI for plot inputs in browser. Default False.
+        ms (str): path to MSv2 (.ms) or MSv4 (.zarr) file. Required when show_gui=False.
+        log_level (str): logging threshold. Options include 'debug', 'info', 'warning', 'error', 'critical'. Default 'info'.
+        show_gui (bool): whether to launch the interactive GUI in a browser tab. Default False.
 
     Example:
         from casagui.plots import MsRaster
         msr = MsRaster(ms='myvis.ms')
         msr.summary()
-        msr.set_style_params(unflagged_cmap='Plasma', flagged_cmap='Greys', colorbar=True)
+        msr.set_style_params(unflagged_cmap='Plasma', flagged_cmap='Greys', show_colorbar=True)
         msr.plot(x_axis='frequency', y_axis='time', vis_axis='amp', data_group='base')
         msr.show()
         msr.save() # saves as {ms name}_raster.png
@@ -69,15 +70,7 @@ class MsRaster(MsPlot):
             if 'ms' in self._ms_info and self._ms_info['ms']:
                 self._set_filename([self._ms_info['ms']]) # function expects list
 
-    def set_ms(self, ms):
-        ''' Set MS path for current MsRaster '''
-        ms_changed = super()._set_ms(ms)
-        if ms_changed:
-            self._raster_plot.reset_plot_params()
-            self._spw_color_limits = {}
-        return ms_changed
-
-    def get_colormaps(self):
+    def colormaps(self):
         ''' List available colormap (Bokeh palettes). '''
         return available_palettes()
 
@@ -91,7 +84,7 @@ class MsRaster(MsPlot):
                 flagged_cmap (str): colormap to use for flagged data.
                 show_colorbar (bool): Whether to show colorbar with plot.  Default True.
         '''
-        cmaps = self.get_colormaps()
+        cmaps = self.colormaps()
         if unflagged_cmap not in cmaps:
             raise ValueError(f"{unflagged_cmap} not in colormaps list: {cmaps}")
         if flagged_cmap not in cmaps:
@@ -100,7 +93,7 @@ class MsRaster(MsPlot):
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None,
-             iter_axis= None, iter_range=None, subplots=None, color_mode=None, color_range=None, title=None, clear_plots=True):
+             iter_axis=None, iter_range=None, subplots=None, color_mode=None, color_range=None, title=None, clear_plots=True):
         '''
         Create a raster plot of vis_axis data in the data_group after applying selection.
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
@@ -112,10 +105,10 @@ class MsRaster(MsPlot):
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
                 Call data_groups() to see options.
             selection (dict): selected data to plot. Options include:
-                Processing Set selection: by summary column names. Call summary() to see options.
+                ProcessingSet selection: by summary column names. Call summary() to see options.
                     'query': for pandas query of summary() columns.
                     Default: select first spw (by id).
-                MeasurementSetXds selection:
+                MeasurementSet selection:
                     'data_group': name for correlated data, flags, weights, and uvw. Default value 'base'.
                         Use data_groups() to get data group names.
                     Dimensions:
@@ -131,7 +124,7 @@ class MsRaster(MsPlot):
                 Options include one or more dimensions.
                 If agg_axis is None and aggregator is set, aggregates over all non-axis dimensions.
                 If one agg_axis is selected, the non-agg dimension will be selected.
-            iter_axis (str): dimension over which to iterate values (starting at layout start).
+            iter_axis (str): dimension over which to iterate values (using iter_range).
             iter_range (tuple): (start, end) inclusive index values for iteration plots.
                 Default (0, 0) (first iteration only). Use (0, -1) for all iterations.
                 If subplots is a grid, the range is limited by the grid size.
@@ -143,8 +136,9 @@ class MsRaster(MsPlot):
                 Options include None (use data limits), 'auto' (calculate limits for amplitude), and 'manual' (use range in color_range).
                 'auto' is equivalent to None if vis_axis is not 'amp'.
                 When subplots is set, the 'auto' or 'manual' range will be used for all plots.
-            color_range (tuple): (min, max) of colorbar to use if color_mode is 'Manual'.
-            title (str): Plot title, default None (generate title from ms name and iter_axis value if any).
+            color_range (tuple): (min, max) of colorbar to use if color_mode is 'manual'.
+            title (str): Plot title, default None (no title)
+                Set title='ms' to generate title from ms name and iter_axis value, if any.
             clear_plots (bool): whether to clear list of plots. Default True.
 
         If not show_gui and plotting is successful, use show() or save() to view/save the plot only.
@@ -191,24 +185,26 @@ class MsRaster(MsPlot):
             self._logger.debug("Plot elapsed time: %.2fs.", time.time() - start)
 # pylint: enable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments
-    def save(self, filename='', fmt='auto', width=900, height=600, export_range='one'):
+    def save(self, filename='', fmt='auto', width=900, height=600):
         '''
         Save plot to file.
 
         Args:
-            filename (str): Name of file to save. Default '': see below.
-            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif'). Default 'auto': inferred from filename.
-            export_range(str): 'one' or 'all' for iteration plots when subplots is a single-plot grid. Ignored otherwise. 
+            filename (str): Name of file to save. Default '': the plot will be saved as {ms}_raster.{ext}.
+                If fmt is not set for extension, plot will be saved as .png.
+            fmt (str): Format of file to save ('png', 'svg', 'html', or 'gif').
+                Default 'auto': inferred from filename extension.
+            width (int): width of exported plot.
+            height (int): height of exported plot.
 
-        If filename is set and fmt='auto', the plot will be exported in the format of the filename extension.
-        If filename is not set, the plot will be saved as a PNG with name {vis}_raster.{ext}.
-        When exporting 'all' iteration plots, the plot index will be appended to the filename: {filename}_{index}.{ext}.
+        If iteration plots were created:
+            If subplots is a grid, the layout plot will be saved to a single file.
+            If subplots is a single plot, iteration plots will be saved individually,
+                with a plot index appended to the filename: {filename}_{index}.{ext}.
         '''
         if not filename:
             filename = f"{self._ms_info['basename']}_raster.png"
-        super().save(filename, fmt, width, height, export_range)
-# pylint: enable=too-many-arguments, too-many-positional-arguments
+        super().save(filename, fmt, width, height)
 
     def _do_plot(self, plot_inputs):
         ''' Create plot using plot inputs '''
@@ -263,7 +259,7 @@ class MsRaster(MsPlot):
             self._plots.append(plot)
 
     def _init_plot(self, plot_inputs):
-        ''' Apply selection and set colorbar limits '''
+        ''' Apply automatic selection '''
         # Apply user + data_group selection, then select first spw
         # Set data group and name of its correlated data
         self._set_data_group(plot_inputs)
@@ -373,17 +369,20 @@ class MsRaster(MsPlot):
         # Select MS
         file_selectors = file_selector('Path to MeasurementSet (ms or zarr) for plot', '~' , self._set_filename)
 
-        # Set title
-        title_input = title_selector(self._set_title)
-
         # Select style - colormaps, colorbar, color limits
         style_selectors = style_selector(self._set_style_params, self._set_color_range)
+
+        # Set title
+        title_input = title_selector(self._set_title)
 
         # Select x, y, and vis axis
         x_axis = self._plot_inputs['x_axis']
         y_axis = self._plot_inputs['y_axis']
         data_dims = self._ms_info['data_dims'] if 'data_dims' in self._ms_info else None
         axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, self._set_axes)
+
+        # Select from ProcessingSet and MeasurementSet
+        selection_selectors = selection_selector(self._set_ps_selection)
 
         # Generic axis options, updated when ms is set
         axis_options = data_dims if data_dims else []
@@ -394,18 +393,15 @@ class MsRaster(MsPlot):
         # Select iter_axis and iter value or range
         iter_selectors = iteration_selector(axis_options, self._set_iter_values, self._set_iteration)
 
-        # Select from ProcessingSet and MeasurementSet
-        selection_selectors = selection_selector(self._set_ps_selection)
-
         # Put user input widgets in accordion with only one card active at a time
         selectors = pn.Accordion(
             ("Select file", file_selectors),    # [0]
-            ("Plot title", title_input),        # [1]
-            ("Plot style", style_selectors),    # [2]
-            ("Plot axes", axis_selectors),      # [3]
+            ("Plot style", style_selectors),    # [1]
+            ("Plot axes", axis_selectors),      # [2]
+            ("Selection", selection_selectors), # [3]
             ("Aggregation", agg_selectors),     # [4]
             ("Iteration", iter_selectors),      # [5]
-            ("Selection", selection_selectors), # [6]
+            ("Plot title", title_input),        # [6]
         )
         selectors.toggle = True
 
@@ -643,10 +639,9 @@ class MsRaster(MsPlot):
     def _get_selector(self, name):
         ''' Return selector group for name, for setting options '''
         selectors = self._gui_layout[2][1]
-        selectors_index = {'file': 0, 'title': 1, 'style': 2, 'axis': 3, 'agg': 4, 'iter': 5, 'selection': 6}
+        selectors_index = {'file': 0, 'style': 1, 'axes': 2, 'selection': 3, 'agg': 4, 'iter': 5, 'title': 6}
         if name == "selectors":
             return selectors
-
         return selectors[selectors_index[name]]
 
     def _update_gui_axis_options(self):
@@ -655,7 +650,7 @@ class MsRaster(MsPlot):
             data_dims = self._ms_info['data_dims']
 
             # Update options for x_axis and y_axis selectors
-            axis_selectors = self._get_selector('axis')
+            axis_selectors = self._get_selector('axes')
             axis_selectors.objects[0][0].options = data_dims
             axis_selectors.objects[0][1].options = data_dims
 

@@ -74,7 +74,7 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def plot_phase_centers(self, label_all_fields=False, data_group='base'):
+    def plot_phase_centers(self, data_group='base', label_all_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
                 label_all_fields (bool); label all fields on the plot
                 data_group (str); data group to use for processing.

@@ -69,7 +69,7 @@ class MsPlot:
                     None:      Print all summary columns in ProcessingSet.
                     'by_msv4': Print formatted summary metadata by MSv4.
                     str, list: Print a subset of summary columns in ProcessingSet.
-                        Options: 'name', 'intents', 'shape', 'polarization', 'scan_number', 'spw_name',
+                        Options: 'name', 'intents', 'shape', 'polarization', 'scan_name', 'spw_name',
                                  'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
             Returns: list of unique values when single column is requested, else None
         '''
@@ -86,12 +86,12 @@ class MsPlot:
         '''
         return self._data.get_antennas(plot_positions, label_antennas)
 
-    def plot_phase_centers(self, label_fields=False, data_group='base'):
+    def plot_phase_centers(self, data_group='base', label_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set and highlight central field.
-                label_fields (bool): label all fields on the plot if True, else label central field only
                 data_group (str): data group to use for field and source xds.
+                label_fields (bool): label all fields on the plot if True, else label central field only
         '''
-        self._data.plot_phase_centers(label_fields, data_group)
+        self._data.plot_phase_centers(data_group, label_fields)
 
     def clear_plots(self):
         ''' Clear plot list '''
@@ -131,9 +131,13 @@ class MsPlot:
         show(plot)
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-    def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600, export_range='one'):
+    def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
-        Save plot to file with filename and format. If iteration plots, export 'one' or 'all'.
+        Save plot to file with filename, format, and size.
+        If iteration plots were created:
+            If subplots is a grid, the layout plot will be saved to a single file.
+            If subplots is a single plot, iteration plots will be saved individually,
+                with a plot index appended to the filename: {filename}_{index}.{ext}.
         '''
         if not self._plots:
             raise RuntimeError("No plot to save.  Run plot() to create plot.")
@@ -151,7 +155,7 @@ class MsPlot:
             self._logger.info("Saved plot to %s.", filename)
         else:
             # Save plots individually, with index appended if exprange='all' and multiple plots.
-            if self._plot_inputs['iter_axis'] is None or export_range=='one':
+            if self._plot_inputs['iter_axis'] is None:
                 hvplot.save(layout_plot.opts(width=width, height=height), filename=filename, fmt=fmt)
                 self._logger.info("Saved plot to %s.", filename)
             else:

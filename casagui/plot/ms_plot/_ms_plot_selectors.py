@@ -40,20 +40,6 @@ def file_selector(description, start_dir, callback):
         width_policy='min',
     )
 
-def title_selector(callback):
-    ''' Return a layout for title input using TextInput '''
-    title_input = pn.widgets.TextInput(
-        name="Title",
-        placeholder='Enter title for plot',
-        sizing_mode='stretch_width',
-    )
-    select_title = pn.bind(callback, title_input)
-    return pn.Row(
-        title_input,
-        select_title,
-        width_policy='min',
-    )
-
 def style_selector(style_callback, color_range_callback):
     ''' Return a layout for style parameters.
         Currently supports colormaps, colorbar, and color limits.
@@ -111,6 +97,20 @@ def style_selector(style_callback, color_range_callback):
             color_range_slider,  # [1]
         ),
         select_color_range, # [4]
+        width_policy='min',
+    )
+
+def title_selector(callback):
+    ''' Return a layout for title input using TextInput '''
+    title_input = pn.widgets.TextInput(
+        name="Title",
+        placeholder="Enter title for plot ('ms' to use MS name)",
+        sizing_mode='stretch_width',
+    )
+    select_title = pn.bind(callback, title_input)
+    return pn.Row(
+        title_input,
+        select_title,
         width_policy='min',
     )
 

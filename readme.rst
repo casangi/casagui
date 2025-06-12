@@ -137,7 +137,7 @@ Requirements
 Install
 ```````
 
-You may want to use the conda environment manager from `miniforge <https://github.com/conda-forge/miniforge>`_ to create a clean, self-contained runtime where the casagui and all its dependencies can be installed::
+You may want to use the conda environment manager from `miniforge <https://github.com/conda-forge/miniforge>`_ to create a clean, self-contained runtime where casagui and the MsRaster dependencies can be installed::
 
   conda create --name casagui python=3.12 --no-default-packages
   conda activate casagui
@@ -155,7 +155,7 @@ To install **xradio** with **python-casacore** for MSv2 conversion::
 Simple Usage Example
 ````````````````````
 
-A simple example of the use of MsRaster to create visibility raster plots is::
+A simple example of the use of MsRaster to create visibility raster plots::
 
   >>> from casagui.apps import MsRaster
   >>> msr = MsRaster(ms=myms)

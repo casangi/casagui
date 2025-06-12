@@ -39,8 +39,6 @@ def select_ps(ps_xdt, selection, logger):
 
     if ps_selection:
         selected_ps_xdt = ps_xdt.xr_ps.query(**ps_selection)
-        if 'query' in selection:
-            selected_ps_xdt = selected_ps_xdt.xr_ps.query(selection['query'])
         if len(selected_ps_xdt) == 0:
             raise RuntimeError("Selection failed: ps selection yielded empty processing set.")
     else:

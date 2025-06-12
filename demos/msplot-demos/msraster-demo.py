@@ -55,7 +55,7 @@ def plot_ms_raster():
 
     # ProcessingSet selection using summary column name and value, or MeasurementSetXds coordinates.
     # For PS selection options: msr.summary()
-    intent_selection = {'intents': ['OBSERVE_TARGET#ON_SOURCE']}
+    intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
 
     # ------------------------------------------------------------------
     # Demo default plot: x_axis="baseline", y_axis="time", vis_axis="amp" selecting data_group "base" in first spw.
@@ -129,15 +129,16 @@ def plot_ms_raster():
     filename=os.path.join(plot_dir, "iteration1.png")
     msr.save(filename)
 
-    # All plots saved individually, starting at first plot, with filename suffix _0, _1, etc.
-    # show() would only show first iteration plot using default subplots=(1, 1).
+    # iter_range with all iterations and single-plot layout:
+    # Save all plots individually, starting at first plot, with filename suffix _0, _1, etc.
+    # Note: show() would only show first iteration plot using default subplots=(1, 1).
     msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), color_mode='auto')
     filename=os.path.join(plot_dir, "iterations.png")
-    msr.save(filename, export_range='all')
+    msr.save(filename)
 
-    # Layout multiple plots; export_range is ignored and only the layout is shown/saved.
-    # Single row layout
-    msr.plot(selection=intent_selection, iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto')
+    # iter_range with all iterations and 2x2 layout: only first 4 iterations plotted.
+    # Show and save only the layout.
+    msr.plot(selection=intent_selection, iter_axis='frequency', iter_range=(0, -1), subplots=(2, 2), color_mode='auto')
     msr.show()
     filename=os.path.join(plot_dir, "iter_row_layout.png")
     msr.save(filename)

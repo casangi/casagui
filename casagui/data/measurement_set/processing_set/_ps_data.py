@@ -41,7 +41,7 @@ class PsData:
         return self._zarr_path
 
     def summary(self, data_group='base', columns=None):
-        ''' Print full or selected summary of Processing Set metadata, optionally by msv4 '''
+        ''' Print full or selected summary of Processing Set metadata, optionally by ms '''
         ps_summary = self._ps_xdt.xr_ps.summary(data_group=data_group)
         pd.set_option("display.max_rows", len(self._ps_xdt))
         pd.set_option("display.max_columns", len(ps_summary.columns))
@@ -49,7 +49,7 @@ class PsData:
 
         if columns is None:
             print(ps_summary)
-        elif columns == "by_msv4":
+        elif columns == "by_ms":
             for row in ps_summary.itertuples(index=False):
                 print(f"MSv4 name: {row[0]}")
                 print(f"intent: {row[1]}")

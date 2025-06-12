@@ -67,9 +67,13 @@ class RasterPlot:
 
         # Set title from user inputs or auto (ms name and iterator value)
         if plot_inputs['title']:
-            self._plot_params['plot']['title'] = plot_inputs['title']
+            title = plot_inputs['title']
+            if title in ['ms', "'ms'"]:
+                self._plot_params['plot']['title'] = self._get_plot_title(data, plot_inputs, ms_name)
+            else:
+                self._plot_params['plot']['title'] = title
         else:
-            self._plot_params['plot']['title'] = self._get_plot_title(data, plot_inputs, ms_name)
+            self._plot_params['plot']['title'] = ''
 
         # Set x, y, c axis labels and ticks
         self._set_axis_labels(data, plot_inputs)

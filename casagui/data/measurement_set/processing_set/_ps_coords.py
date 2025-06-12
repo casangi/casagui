@@ -42,9 +42,7 @@ def set_index_coordinates(ms_xds, coordinates):
             ms_xds["baseline"] = np.array(range(ms_xds.baseline.size))
         elif coordinate == "antenna_name":
             ms_xds = ms_xds.assign_coords({"antenna": (ms_xds.antenna_name.dims, ms_xds.antenna_name.values)})
-            all_ant_names = ms_xds.antenna_xds.antenna_name.values.tolist()
-            xds_ant_ids = [all_ant_names.index(ant_name) for ant_name in ms_xds.antenna_name.values]
-            ms_xds["antenna_name"] = np.array(xds_ant_ids)
+            ms_xds["antenna_name"] = np.array(range(ms_xds.antenna_name.size))
     return ms_xds
 
 def _set_frequency_unit(ms_xdt):
