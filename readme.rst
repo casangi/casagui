@@ -119,38 +119,10 @@ the object as a separate statement::
 Visibility Plotting: MsRaster
 -----------------------------
 
-Requirements
-````````````
-
-- Python 3.11 or greater
-
-- `xradio <https://github.com/casangi/xradio>`_
-
-  - optionally with `python-casacore <https://github.com/casacore/python-casacore>`_ to enable conversion from MSv2 to MSv4
-
-- `toolviper <https://github.com/casangi/toolviper>`_
-
-- `graphviper <https://github.com/casangi/graphviper>`_
-
-- `hvPlot <https://hvplot.holoviz.org/>`_
-
 Install
 ```````
 
-You may want to use the conda environment manager from `miniforge <https://github.com/conda-forge/miniforge>`_ to create a clean, self-contained runtime where casagui and the MsRaster dependencies can be installed::
-
-  conda create --name casagui python=3.12 --no-default-packages
-  conda activate casagui
-
-Install required packages::
-
-  pip install casagui xradio toolviper graphviper hvplot
-
-To install **xradio** with **python-casacore** for MSv2 conversion::
-
-  pip install "xradio[python-casacore]"
-
-- Note: On macOS it is required to pre-install python-casacore using ``conda install -c conda-forge python-casacore``.
+See https://casagui.readthedocs.io/en/latest/applications/ms_raster.html
 
 Simple Usage Example
 ````````````````````
