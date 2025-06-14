@@ -59,11 +59,11 @@ def _add_baseline_coordinate(ms_xdt):
         Replace "baseline_id" (int) with "baseline" (string) coordinate "ant1 & ant2".
         Baseline ids are not consistent across ms_xdts. 
     '''
-    if 'baseline_id' not in ms_xdt.coords:
-        return ms_xdt
-
     # Cannot assign coords to DataTree.
     baseline_ms_xdt = ms_xdt.to_dataset() # mutable Dataset
+
+    if 'baseline_id' not in baseline_ms_xdt.coords:
+        return baseline_ms_xdt
 
     ant1_names = ms_xdt.baseline_antenna1_name.values
     ant2_names = ms_xdt.baseline_antenna2_name.values

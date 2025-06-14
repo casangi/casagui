@@ -12,7 +12,7 @@ import numpy as np
 import panel as pn
 
 try:
-    from toolviper.utils.logger import setup_logger
+    from toolviper.utils.logger import get_logger, setup_logger
     _HAVE_TOOLVIPER = True
 except ImportError:
     _HAVE_TOOLVIPER = False
@@ -130,7 +130,6 @@ class MsPlot:
         self._plots_locked = False
         show(plot)
 
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     def save(self, filename='ms_plot.png', fmt='auto', width=900, height=600):
         '''
         Save plot to file with filename, format, and size.
@@ -170,7 +169,6 @@ class MsPlot:
                     plot_idx += 1
 
         self._logger.debug("Save elapsed time: %.2fs.", time.time() - start_time)
-# pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
 
     def _layout_plots(self, subplots):
         subplots = (1, 1) if subplots is None else subplots

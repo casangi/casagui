@@ -27,7 +27,7 @@ def select_ps(ps_xdt, selection, logger):
             ps_selection[key] = val
         if key in ms_selection_keys and selection[key]:
             ms_selection[key] = val
-        if 'antenna' in key:
+        if 'antenna1' in key or 'antenna2' in key:
             antenna_selection[key] = val
         elif key == 'baseline':
             ant1, ant2 = val.split('&')
@@ -72,6 +72,9 @@ def _select_ms_xdt(ps_xdt, ms_selection, antenna_selection, logger):
                 if ms_xdt.baseline_id.size == 1:
                     # Select baseline_id to remove dimension
                     ms_xdt = ms_xdt.sel(baseline_id=ms_xdt.baseline_id.item())
+                elif ms_xdt.baseline_id.size == 0:
+                    names_to_drop.append(name)
+                    continue
 
             ms_xdt = ms_xdt.xr_ms.sel(**ms_selection)
             ps_xdt[name] = ms_xdt
@@ -79,8 +82,8 @@ def _select_ms_xdt(ps_xdt, ms_selection, antenna_selection, logger):
             # selection not in this ms_xdt, do not include in returned ps_xdt
             names_to_drop.append(name)
 
-    for name in names_to_drop:
-        ps_xdt.drop_nodes(name)
+    if names_to_drop:
+        ps_xdt = ps_xdt.drop_nodes(names_to_drop)
 
     if len(ps_xdt) == 0:
         raise RuntimeError("Selection failed: ms selection yielded empty processing set.")

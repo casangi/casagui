@@ -234,6 +234,9 @@ class MsRaster(MsPlot):
         iter_range = (0, 0) if iter_range is None else iter_range
         start_idx, end_idx = iter_range
 
+        # Init plot before getting iter values
+        self._init_plot(plot_inputs)
+
         iter_values = self._data.get_dimension_values(iter_axis)
         n_iter = len(iter_values)
 
@@ -247,16 +250,17 @@ class MsRaster(MsPlot):
         num_iter_plots = min(num_iter_plots, num_subplots) if num_subplots > 1 else num_iter_plots
         end_idx = start_idx + num_iter_plots
 
-        # Init plot before selecting iter values
-        self._init_plot(plot_inputs)
-
         for i in range(start_idx, end_idx):
             # Select iteration value and make plot
             value = iter_values[i]
             self._logger.info("Plot %s iteration index %s value %s", iter_axis, i, value)
             plot_inputs['selection'][iter_axis] = value
-            plot = self._do_plot(plot_inputs)
-            self._plots.append(plot)
+            try:
+                plot = self._do_plot(plot_inputs)
+                self._plots.append(plot)
+            except RuntimeError as e:
+                self._logger.info("Iteration plot for value %s failed: %s", str(value), str(e))
+                continue
 
     def _init_plot(self, plot_inputs):
         ''' Apply automatic selection '''
