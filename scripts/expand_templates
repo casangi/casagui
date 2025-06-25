@@ -42,7 +42,7 @@ def generate_python( dest, template, xml, args=[], strip_control_lines=0 ):
     if exists(dest): chmod( dest, S_IWRITE )
     with open( dest, "w" ) as out:
         for line in python_source.splitlines( ):
-            if strip_control_lines > 0 and re.match( "^\#+\s*TASK XML\s*>\s*(\S+)(.*)", line ):
+            if strip_control_lines > 0 and re.match( r"^\#+\s*TASK XML\s*>\s*(\S+)(.*)", line ):
                 strip_control_lines -= 1
                 continue
             out.write( f'''{line.rstrip( )}\n''' )
@@ -56,7 +56,7 @@ for root, dirs, files in walk( join(dirname(dirname(realpath(__file__))),'casagu
     for file in files:
         if splitext(file)[1] == '.mustache':
             with open(join(root,file)) as f:
-                header = [ (m.group(1), m.group(2), m.group(0)) for m in [ re.match( "^\#+\s*TASK XML\s*>\s*(\S+)(.*)", next(f) ) for _ in range(XML_SEARCH_LINES) ] if m ]
+                header = [ (m.group(1), m.group(2), m.group(0)) for m in [ re.match( r"^\#+\s*TASK XML\s*>\s*(\S+)(.*)", next(f) ) for _ in range(XML_SEARCH_LINES) ] if m ]
                 if len(header) > 0:
                     ###
                     ### file details specified in mustache file
