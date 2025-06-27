@@ -4,6 +4,7 @@
 
 from casagui.data.measurement_set.processing_set._ps_data import PsData
 
+#pylint: disable=too-many-public-methods
 class MsData:
     '''
     Access and select MeasurementSet data.
@@ -26,12 +27,10 @@ class MsData:
         return path == self.get_path() or path == self._ms_path
 
     def get_path(self):
-        ''' Returns path of MS/zarr file or None if not set. '''
+        ''' Returns path of zarr file, MS file, or None if not set. '''
         if self._data_initialized:
             return self._data.get_path() # path to zarr file
-        if self._ms_path:
-            return self._ms_path # path to ms v2
-        return None
+        return self._ms_path # path to ms v2
 
     def summary(self, data_group='base', columns=None):
         ''' Print summary of Processing Set data.
@@ -85,6 +84,13 @@ class MsData:
         else:
             self._log_no_ms()
 
+    def time_strings(self):
+        ''' Returns list of time values as strings '''
+        if self._data_initialized:
+            return self._data.get_time_strings()
+        self._log_no_ms()
+        return None
+
     def get_num_ms(self):
         ''' Returns number of MeasurementSets in data. '''
         if self._data_initialized:
@@ -107,7 +113,7 @@ class MsData:
         return None
 
     def get_dimension_values(self, dim):
-        ''' Return values for dimension in current data.
+        ''' Returns values for dimension in current data.
                 dim (str): dimension name
         '''
         if self._data_initialized:
@@ -115,15 +121,8 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def time_strings(self):
-        ''' Return time values as strings '''
-        if self._data_initialized:
-            return self._data.get_time_strings()
-        self._log_no_ms()
-        return None
-
     def get_dimension_attrs(self, dim):
-        ''' Return dict of data attributes for dimension.
+        ''' Returns dict of data attributes for dimension.
                 dim (str): dimension name
         '''
         if self._data_initialized:
@@ -188,6 +187,7 @@ class MsData:
         return None
 
     def _log_no_ms(self):
+        ''' Standardized log message when path has not been set. '''
         self._logger.info("No MS path set, cannot access data")
 
     def _init_data(self, ms_path):
@@ -195,3 +195,4 @@ class MsData:
         if ms_path:
             self._data = PsData(ms_path, self._logger)
             self._data_initialized = True
+#pylint: enable=too-many-public-methods

@@ -108,7 +108,7 @@ class MsRaster(MsPlot):
             return self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
         return False
 
-    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs): 
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         '''
         Select MeasurementSetXdt data group and dimensions.
           data group may be selected with "data_group_name" (see data_groups()).
@@ -514,12 +514,8 @@ class MsRaster(MsPlot):
                 self._plot_inputs['data_dims'] = self._ms_info['data_dims']
                 check_inputs(self._plot_inputs)
                 print("********** do gui plot with inputs:", self._plot_inputs)
-                if 'ps_selection' in self._plot_inputs:
-                    if not self.select_ps(**self._plot_inputs['ps_selection']): 
-                        raise RuntimeError("PS selection failed: {self._plot_inputs['ps_selection']}")
-                if 'ms_selection' in self._plot_inputs:
-                    if not self.select_ms(**self._plot_inputs['ms_selection']):
-                        raise RuntimeError("MS selection failed: {self._plot_inputs['ms_selection']}")
+                if 'ps_selection' in self._plot_inputs or 'ms_selection' in self._plot_inputs:
+                    self._do_gui_selection()
                 gui_plot = self._do_gui_plot()
             except (ValueError, TypeError) as e:
                 # Clear plot, inputs invalid
@@ -571,6 +567,13 @@ class MsRaster(MsPlot):
         if not val1 and not val2: # both None
             return True
         return False # one set and other is None
+
+    def _do_gui_selection(self):
+        ''' Apply selections selected in GUI '''
+        if 'ps_selection' in self._plot_inputs and not self.select_ps(**self._plot_inputs['ps_selection']):
+            raise RuntimeError("PS selection failed: {self._plot_inputs['ps_selection']}")
+        if 'ms_selection' in self._plot_inputs and not self.select_ms(**self._plot_inputs['ms_selection']):
+            raise RuntimeError("MS selection failed: {self._plot_inputs['ms_selection']}")
 
     ###
     ### Create plot for DynamicMap
@@ -718,24 +721,25 @@ class MsRaster(MsPlot):
 
     def _update_ps_selection_options(self, ps_selectors):
         ''' Set ProcessingSet gui options from ms summary '''
-        if self._data:
+        if self._data and self._data.is_valid():
             summary = self._data.get_summary()
-            if summary is not None:
-                for selector in ps_selectors:
-                    if selector.name in PS_SELECTION_OPTIONS:
-                        options = []
-                        values = summary[PS_SELECTION_OPTIONS[selector.name]].values
-                        for value in values:
-                            if isinstance(value, list):
-                                for list_item in value:
-                                    options.append(str(list_item))
-                            else:
-                                options.append(str(value))
-                        selector.options = sorted(list(set(options)))
+            if summary is None:
+                return
+
+            for selector in ps_selectors:
+                if selector.name in PS_SELECTION_OPTIONS:
+                    options = []
+                    values = summary[PS_SELECTION_OPTIONS[selector.name]].values
+                    for value in values:
+                        if isinstance(value, list):
+                            options.extend(value)
+                        else:
+                            options.append(value)
+                    selector.options = sorted(list(set(options)))
 
     def _update_ms_selection_options(self, ms_selectors, data_dims):
         ''' Set MeasurementSet gui options from ms data '''
-        if self._data:
+        if self._data and self._data.is_valid():
             for selector in ms_selectors:
                 selection = MS_SELECTION_OPTIONS[selector.name] if selector.name in MS_SELECTION_OPTIONS else None
                 if selection == 'data_group':
@@ -879,26 +883,25 @@ class MsRaster(MsPlot):
         self._update_plot_status(True) # Change plot button to solid
 # pylint: enable=too-many-arguments, too-many-positional-arguments
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments, unused-argument
     def _set_ps_selection(self, query, name, intents, scan_name, spw_name, field_name, source_name, line_name):
         ''' Select ProcessingSet from gui using summary columns '''
         inputs = locals()
-        print("ps selection from gui:", inputs)
         ps_selection = {}
         for key, val in inputs.items():
             if key in PS_SELECTION_OPTIONS.values():
                 ps_selection[key] = val
         self._plot_inputs['ps_selection'] = ps_selection
-        print("***** Plot inputs with ps selection=", self._plot_inputs['ps_selection'])
         self._update_plot_status(True) # Change plot button to solid
 
-    def _set_ms_selection(self, data_group, time, baseline, antenna1, antenna2, frequency, polarization):
-        ''' Select ProcessingSet from gui using summary columns '''
+    def _set_ms_selection(self, data_group, datetime, baseline, antenna1, antenna2, frequency, polarization):
+        ''' Select MeasurementSet from gui using data group, dimensions, and coordinates '''
         inputs = locals()
-        print("ms selection from gui:", inputs)
+        inputs['time'] = inputs.pop('datetime')
         ms_selection = {}
         for key, val in inputs.items():
             if key in MS_SELECTION_OPTIONS.values():
                 ms_selection[key] = val
         self._plot_inputs['ms_selection'] = ms_selection
-        print("***** Plot inputs with ms selection=", self._plot_inputs['ms_selection'])
         self._update_plot_status(True) # Change plot button to solid
+# pylint: enable=too-many-arguments, too-many-positional-arguments, unused-argument
