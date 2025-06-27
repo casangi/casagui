@@ -1,91 +1,78 @@
 ''' Apply selection dict to ProcessingSet and MeasurementSetXds '''
 
-def select_ps(ps_xdt, selection, logger):
+import xarray as xr
+
+def select_ps(ps_xdt, logger, query=None, string_exact_match=False, **kwargs):
     '''
-        Apply selection dict to Processing Set.
-        Select Processing Set first (ps summary columns), then each MeasurementSetXds (data_group etc.).
-        Returns dict of selected name, ms_xdt.
-        Throws exception for empty Processing Set (null selection).
+        Apply selection query and kwargs to ProcessingSet using exact match or partial match.
+        See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+        Select Processing Set first (ps summary columns), then each MeasurementSetXds, where applicable.
+        Returns selected ProcessingSet DataTree (None if null selection).
     '''
-    if not selection:
-        return ps_xdt
-
-    # Separate PS selection and MS selection
-    ps_summary = ps_xdt.xr_ps.summary()
-    ps_selection_keys = list(ps_summary.columns.array)
-    ps_selection_keys.append('data_group')
-
-    first_ms = ps_summary['name'][0]
-    ms_selection_keys = list(ps_xdt[first_ms].coords.keys())
-
-    # Sort selections into categories
-    ps_selection = {}
-    ms_selection = {}
-    antenna_selection = {}
-    for key, val in selection.items():
-        if key in ps_selection_keys and selection[key]:
-            ps_selection[key] = val
-        if key in ms_selection_keys and selection[key]:
-            ms_selection[key] = val
-        if 'antenna1' in key or 'antenna2' in key:
-            antenna_selection[key] = val
-        elif key == 'baseline':
-            ant1, ant2 = val.split('&')
-            antenna_selection['antenna1'] = ant1.strip()
-            antenna_selection['antenna2'] = ant2.strip()
-
     # Do PSXdt selection
-    logger.debug(f"Applying selection to ProcessingSet: {ps_selection}")
+    logger.debug(f"Applying selection to ProcessingSet: query={query}, kwargs={kwargs}")
 
-    if ps_selection:
-        selected_ps_xdt = ps_xdt.xr_ps.query(**ps_selection)
-        if len(selected_ps_xdt) == 0:
-            raise RuntimeError("Selection failed: ps selection yielded empty processing set.")
-    else:
-        selected_ps_xdt = ps_xdt.copy()
+    try:
+        selected_ps_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
+        # TODO: select ms
+        return selected_ps_xdt
+    except RuntimeError as e:
+        return None
 
-    # Do MSXdt selection
-    return _select_ms_xdt(selected_ps_xdt, ms_selection, antenna_selection, logger)
-
-def _select_ms_xdt(ps_xdt, ms_selection, antenna_selection, logger):
-    ''' Apply selection to each MeasurementSetXds and return ProcessingSet.
-        Remove ms_xds which do not contain selection.
+def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+    ''' Apply selection to each MeasurementSetXdt.
+        See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
+        Return selected ProcessingSet DataTree.
     '''
-    # Done if no selection to apply
-    if not ms_selection and not antenna_selection:
-        return ps_xdt
+    logger.debug(f"Applying selection to MeasurementSet: {indexers_kwargs}")
 
-    logger.debug(f"Applying selection to measurement set: {ms_selection}, {antenna_selection}")
+    # Sort out selection by dim and coord; xr_ms can only select dim
+    data_dims = list(ps_xdt.xr_ps.get_max_dims().keys())
+    dim_selection = {}
+    coord_selection = {}
+    for key, val in indexers_kwargs.items():
+        if key in data_dims:
+            dim_selection[key] = val
+        else:
+            coord_selection[key] = val
 
-    # Drop ms_xdt where selection fails
-    names_to_drop = []
+    selected_ps_xdt = xr.DataTree() # return value
 
     for name, ms_xdt in ps_xdt.items():
-        try:
-            if antenna_selection:
-                for antenna, val in antenna_selection.items():
-                    if antenna == 'antenna1':
-                        ms_xdt = ms_xdt.sel(baseline_id=ms_xdt.baseline_antenna1_name==val)
-                    else:
-                        ms_xdt = ms_xdt.sel(baseline_id=ms_xdt.baseline_antenna2_name==val)
+        ms = ms_xdt
+        include_ms = True
 
-                if ms_xdt.baseline_id.size == 1:
-                    # Select baseline_id to remove dimension
-                    ms_xdt = ms_xdt.sel(baseline_id=ms_xdt.baseline_id.item())
-                elif ms_xdt.baseline_id.size == 0:
-                    names_to_drop.append(name)
+        if coord_selection:
+            for key, val in coord_selection.items():
+                if 'antenna' in key or 'baseline' in key:
+                    if key == 'antenna1':
+                        ms = ms.sel(baseline_id=ms.baseline_antenna1_name==val, drop=True)
+                    elif key == 'antenna2':
+                        ms = ms.sel(baseline_id=ms.baseline_antenna2_name==val, drop=True)
+                    elif key == 'baseline':
+                        ant1, ant2 = val.split('&')
+                        try:
+                            ms = ms.sel(baseline_id=ms.baseline_antenna1_name==ant1.strip(), drop=True)
+                            ms = ms.sel(baseline_id=ms.baseline_antenna2_name==ant2.strip(), drop=True)
+                        except KeyError:
+                            include_ms = False
+                            break
+                    if ms.baseline_id.size == 1: # Select baseline_id to remove dimension
+                        ms = ms.sel(baseline_id=ms.baseline_id.item())
+                    elif ms.baseline_id.size == 0:
+                        include_ms = False
+                        break
+                elif 'field_name' in key:
+                    ms = ms.sel(time=ms.field_name==val)
+                elif 'scan_name' in key:
+                    ms = ms.sel(time=ms.scan_name==val)
+
+        if include_ms:
+            if dim_selection:
+                try:
+                    ms = ms.xr_ms.sel(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **dim_selection)
+                except KeyError: # selection failed
                     continue
+            selected_ps_xdt[name] = ms
 
-            ms_xdt = ms_xdt.xr_ms.sel(**ms_selection)
-            ps_xdt[name] = ms_xdt
-        except KeyError:
-            # selection not in this ms_xdt, do not include in returned ps_xdt
-            names_to_drop.append(name)
-
-    if names_to_drop:
-        ps_xdt = ps_xdt.drop_nodes(names_to_drop)
-
-    if len(ps_xdt) == 0:
-        raise RuntimeError("Selection failed: ms selection yielded empty processing set.")
-
-    return ps_xdt
+    return selected_ps_xdt

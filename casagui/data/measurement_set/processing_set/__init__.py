@@ -24,6 +24,11 @@ from ._ps_raster_data import (
     raster_data,
 )
 
+from ._ps_select import (
+    select_ps,
+    select_ms,
+)
+
 from ._xds_data import (
     get_axis_data,
     get_correlated_data,

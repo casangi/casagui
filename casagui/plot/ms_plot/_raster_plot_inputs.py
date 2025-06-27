@@ -8,7 +8,6 @@ def check_inputs(inputs):
     ''' Check plot input types, and axis input values. '''
     _set_baseline_antenna_axis(inputs)
     _check_axis_inputs(inputs)
-    _check_selection_input(inputs)
     _check_agg_inputs(inputs)
     _check_color_inputs(inputs)
     _check_other_inputs(inputs)
@@ -48,14 +47,6 @@ def _check_axis_inputs(inputs):
     vis_axis = inputs['vis_axis']
     if vis_axis not in VIS_AXIS_OPTIONS:
         raise ValueError(f"Invalid parameter value: vis_axis {vis_axis} must be one of {VIS_AXIS_OPTIONS}")
-
-def _check_selection_input(inputs):
-    ''' Check selection type and data_group selection.  Make copy of user selection. '''
-    if 'selection' in inputs:
-        user_selection = inputs['selection']
-        if user_selection:
-            if not isinstance(user_selection, dict):
-                raise TypeError("Invalid parameter type: selection must be dictionary.")
 
 def _check_agg_inputs(inputs):
     ''' Check aggregator and agg_axis. Set agg_axis if not set. '''

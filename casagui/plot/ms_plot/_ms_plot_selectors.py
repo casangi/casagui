@@ -5,7 +5,7 @@ Create panel widgets for various functions
 import panel as pn
 
 from casagui.bokeh.state._palette import available_palettes
-from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
+from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, AGGREGATOR_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS, DEFAULT_UNFLAGGED_CMAP, DEFAULT_FLAGGED_CMAP
 
 def file_selector(description, start_dir, callback):
     ''' Return a layout for file selection with input description and start directory.
@@ -97,20 +97,6 @@ def style_selector(style_callback, color_range_callback):
             color_range_slider,  # [1]
         ),
         select_color_range, # [4]
-        width_policy='min',
-    )
-
-def title_selector(callback):
-    ''' Return a layout for title input using TextInput '''
-    title_input = pn.widgets.TextInput(
-        name="Title",
-        placeholder="Enter title for plot ('ms' to use MS name)",
-        sizing_mode='stretch_width',
-    )
-    select_title = pn.bind(callback, title_input)
-    return pn.Row(
-        title_input,
-        select_title,
         width_policy='min',
     )
 
@@ -285,9 +271,23 @@ def iteration_selector(axis_options, axis_callback, iter_callback):
         width_policy='min',
     )
 
-def selection_selector(ps_callback):
+def title_selector(callback):
+    ''' Return a layout for title input using TextInput '''
+    title_input = pn.widgets.TextInput(
+        name="Title",
+        placeholder="Enter title for plot ('ms' to use MS name)",
+        sizing_mode='stretch_width',
+    )
+    select_title = pn.bind(callback, title_input)
+    return pn.Row(
+        title_input,
+        select_title,
+        width_policy='min',
+    )
+
+def selection_selector(ps_callback, ms_callback):
     ''' Return layout of selectors for ProcessingSet and MSv4 selection. '''
-    # Create column of ps selectors; values added from PS summary later.
+    # Create column of ps selectors; values added from PS summary when ms path is set.
     ps_selection = pn.Column(
         height_policy='min',
     )
@@ -298,17 +298,26 @@ def selection_selector(ps_callback):
             sizing_mode='stretch_width',
         )
     )
-    select_ps = pn.bind(ps_callback, ps_selection[0])
+    _add_multi_choice(ps_selection, PS_SELECTION_OPTIONS) # 7 more options
+
+    select_ps = pn.bind(ps_callback, ps_selection[0], ps_selection[1], ps_selection[2], ps_selection[3], ps_selection[4], ps_selection[5], ps_selection[6], ps_selection[7])
     ps_selection.append(select_ps)
 
+    # Create column of ms selectors; values added from MS later.
+    ms_selection = pn.Column()
+    _add_multi_choice(ms_selection, MS_SELECTION_OPTIONS) # 7 options
+    select_ms = pn.bind(ms_callback, ms_selection[0], ms_selection[1], ms_selection[2], ms_selection[3], ms_selection[4], ms_selection[5], ms_selection[6])
+    ms_selection.append(select_ms)
+
     selection_cards = pn.Accordion(
-        ("Select ProcessingSet", ps_selection),  # [0]
+        ("Select ProcessingSet", ps_selection),  # [0] pn.Column
+        ("Select MeasurementSet", ms_selection), # [1] pn.Column
         toggle=True,
         sizing_mode='stretch_width',
     )
 
     return pn.Column(
-        selection_cards,
+        selection_cards, # [0] accordion
         width_policy='min',
     )
 
@@ -320,6 +329,7 @@ def _add_multi_choice(ps_selection, names):
         ps_selection.append(
             pn.widgets.MultiChoice(
                 name=name,
+                placeholder='Select option(s) from list',
                 sizing_mode='stretch_width',
             )
         )

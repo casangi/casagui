@@ -8,7 +8,7 @@ import pandas as pd
 try:
     from casagui.data.measurement_set.processing_set._ps_io import get_processing_set
     _HAVE_XRADIO = True
-    from casagui.data.measurement_set.processing_set._ps_select import select_ps
+    from casagui.data.measurement_set.processing_set._ps_select import select_ps, select_ms
     from casagui.data.measurement_set.processing_set._ps_stats import calculate_ps_stats
     from casagui.data.measurement_set.processing_set._ps_raster_data import raster_data
     from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data
@@ -135,6 +135,17 @@ class PsData:
                     dim_values.append(ms_xdt[dimension].values.item())
         return sorted(set(dim_values))
 
+    def get_time_strings(self):
+        ''' Return time values as string not float '''
+        times = []
+        ps_xdt = self._get_ps_xdt()
+        for ms_xdt in ps_xdt.values():
+            time_xda = ms_xdt.time
+            time_attrs = time_xda.attrs
+            date_strings = pd.to_datetime(time_xda, unit=time_attrs['units'][0], origin=time_attrs['format']).strftime("%d-%b-%Y %H:%M:%S").values
+            times.extend(date_strings.tolist())
+        return sorted(times)
+
     def get_dimension_attrs(self, dim):
         ''' Return attributes dict for input dimension in ProcessingSet. '''
         ps_xdt = self._get_ps_xdt()
@@ -158,28 +169,36 @@ class PsData:
         self._logger.info(f"Selecting first spw {first_spw_name} (id {first_spw_id}) with frequency range {start_freq:e} - {end_freq:e}")
         return first_spw_name
 
-    def select_data(self, selection):
-        ''' Apply selection dict to ProcessingSet to create selected ps_xdt.
-            If previous selection done, apply to selected ps_xdt.
-            Add selection to previous selections. '''
+    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+        ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+            Also applies selection to ms_xdt in ps.
+            Returns: bool (whether selection succeeded)
+        '''
         ps_xdt = self._get_ps_xdt()
-        self._selected_ps_xdt = select_ps(ps_xdt, selection, self._logger)
-        if self._selection:
-            self._selection |= selection
-        else:
-            self._selection = selection
+        self._selected_ps_xdt = select_ps(ps_xdt, self._logger, query=query, string_exact_match=string_exact_match, **kwargs)
+        return self._selected_ps_xdt is not None
+
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+        ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
+            Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
+            Returns: bool (whether selection succeeded)
+        '''
+        ps_xdt = self._get_ps_xdt()
+        self._selected_ps_xdt = select_ms(ps_xdt, self._logger, indexers, method, tolerance, drop, **indexers_kwargs)
+        return self._selected_ps_xdt is not None
 
     def clear_selection(self):
         ''' Clear previous selections and use original ps_xdt '''
-        self._selection = None
         self._selected_ps_xdt = None
 
-    def get_vis_stats(self, selection, vis_axis):
+    def get_vis_stats(self, ps_selection, vis_axis):
         ''' Returns statistics (min, max, mean, std) for data selected by selection.
                 selection (dict): fields and values to select
         '''
-        stats_ps_xdt = select_ps(self._ps_xdt, selection, self._logger)
-        data_group = selection['data_group'] if 'data_group' in selection else 'base'
+        stats_ps_xdt = select_ps(self._ps_xdt, self._logger, query=None, string_exact_match=True, **ps_selection)
+        data_group = ps_selection['data_group_name'] if 'data_group_name' in ps_selection else 'base'
         return calculate_ps_stats(stats_ps_xdt, self._zarr_path, vis_axis, data_group, self._logger)
 
     def get_correlated_data(self, data_group):

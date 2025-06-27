@@ -8,7 +8,7 @@ from xradio.measurement_set._utils._utils.stokes_types import stokes_types
 
 from casagui.data.measurement_set.processing_set._ps_concat import concat_ps_xdt
 from casagui.data.measurement_set.processing_set._ps_coords import set_datetime_coordinate
-from casagui.data.measurement_set.processing_set._ps_select import select_ps
+from casagui.data.measurement_set.processing_set._ps_select import select_ms
 from casagui.data.measurement_set.processing_set._xds_data import get_axis_data
 
 def raster_data(ps_xdt, plot_inputs, logger):
@@ -31,7 +31,7 @@ def raster_data(ps_xdt, plot_inputs, logger):
     # Set complex component of vis data
     raster_xds[correlated_data] = get_axis_data(raster_xds,
         plot_inputs['vis_axis'],
-        plot_inputs['selection']['data_group_name']
+        plot_inputs['data_group_name'],
     )
 
     # Convert float time to datetime
@@ -46,7 +46,7 @@ def raster_data(ps_xdt, plot_inputs, logger):
 def _select_raster_ps_xdt(ps_xdt, plot_inputs, logger):
     ''' Select default dimensions if needed for raster data '''
     # Determine which dims must be selected, add to selection, and do selection
-    input_selection = plot_inputs['selection']
+    ms_selection = plot_inputs['ms_selection'] if 'ms_selection' in plot_inputs else None
     dims_to_select = _get_raster_selection_dims(plot_inputs)
     dim_selection = {} # return value
 
@@ -54,13 +54,13 @@ def _select_raster_ps_xdt(ps_xdt, plot_inputs, logger):
         for dim in dims_to_select:
             # Select first value (by index) and add to dim selection, or apply iter_axis value
             # (user selection would have been applied previously)
-            if dim not in input_selection:
+            if not ms_selection or dim not in ms_selection:
                 dim_selection[dim] = _get_first_dim_value(ps_xdt, dim, plot_inputs, logger)
             elif dim == plot_inputs['iter_axis']:
-                dim_selection[dim] = input_selection[dim]
+                dim_selection[dim] = ms_selection[dim]
         if dim_selection:
             logger.info(f"Applying raster plane selection (using first index or iter value): {dim_selection}")
-            return select_ps(ps_xdt, dim_selection, logger), dim_selection
+            return select_ms(ps_xdt, logger, **dim_selection), dim_selection
     return ps_xdt, dim_selection
 
 def _get_raster_selection_dims(plot_inputs):
@@ -82,8 +82,8 @@ def _get_first_dim_value(ps_xdt, dim, plot_inputs, logger):
     iter_axis = plot_inputs['iter_axis'] if 'iter_axis' in plot_inputs else None
     iter_ps = ps_xdt
     if iter_axis:
-        iter_selection = {iter_axis: plot_inputs['selection'][iter_axis]}
-        iter_ps = select_ps(ps_xdt, iter_selection, logger)
+        iter_selection = {iter_axis: plot_inputs['ms_selection'][iter_axis]}
+        iter_ps = select_ms(ps_xdt, logger, **iter_selection)
 
     values = []
     if dim == "polarization":

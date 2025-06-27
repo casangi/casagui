@@ -13,7 +13,7 @@ from pandas import to_datetime
 from casagui.bokeh.format import get_time_formatter
 from casagui.bokeh.state._palette import available_palettes
 from casagui.plot.ms_plot._ms_plot import MsPlot
-from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS
+from casagui.plot.ms_plot._ms_plot_constants import VIS_AXIS_OPTIONS, SPECTRUM_AXIS_OPTIONS, PS_SELECTION_OPTIONS, MS_SELECTION_OPTIONS
 from casagui.plot.ms_plot._ms_plot_selectors import (file_selector, title_selector, style_selector, axis_selector,
 aggregation_selector, iteration_selector, selection_selector, plot_starter)
 from casagui.plot.ms_plot._raster_plot_inputs import check_inputs
@@ -91,23 +91,56 @@ class MsRaster(MsPlot):
             raise ValueError(f"{flagged_cmap} not in colormaps list: {cmaps}")
         self._raster_plot.set_style_params(unflagged_cmap, flagged_cmap, show_colorbar, show_flagged_colorbar)
 
+    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+        '''
+        Select a subset of ProcessingSet MeasurementSets using summary column names or data group name.
+        See summary() and data_groups() for options (use keyword "data_group_name").
+        For explanation and examples, see:
+        https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+        The selection will also be applied to the subset of MeasurementSets.
+        Selections are cumulative until clear_selection() is called.
+        Returns: bool (True if selection succeeded)
+        '''
+        if 'data_group_name' in kwargs:
+            self._plot_inputs['data_group_name'] = kwargs['data_group_name']
+
+        if self._data:
+            return self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+        return False
+
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs): 
+        '''
+        Select MeasurementSetXdt data group and dimensions.
+          data group may be selected with "data_group_name" (see data_groups()).
+          "baseline" may be selected as "ant1 & ant2", or you may select "antenna1" and/or "antenna2" (see antennas()).
+          "time" may be selected as datetime strings (see time_strings()).
+          Values may be a single value, a list, a slice, or anything supported by Pandas indexing.
+        For explanation and examples, see:
+        https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
+        See https://xarray.pydata.org/en/stable/generated/xarray.Dataset.sel.html for parameter descriptions.
+        Selections are cumulative until clear_selection() is called.
+        Returns: bool (True if selection succeeded)
+        '''
+        if 'data_group_name' in indexers_kwargs:
+            self._plot_inputs['data_group_name'] = indexers_kwargs['data_group_name']
+
+        if self._data:
+            return self._data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
+        return False
+
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
-    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', selection=None, aggregator=None, agg_axis=None,
+    def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', aggregator=None, agg_axis=None,
              iter_axis=None, iter_range=None, subplots=None, color_mode=None, color_range=None, title=None, clear_plots=True):
         '''
-        Create a raster plot of vis_axis data in the data_group after applying selection.
+        Create a raster plot of vis_axis data after applying selection (see select_ps(), select_ms(), clear_selection()).
         Plot axes include data dimensions (time, baseline/antenna, frequency, polarization).
-        Dimensions not set as plot axes can be selected, else the first value will be used, unless aggregated.
+        The first spectral window (by id) and dimensions not set as plot axes (first value) will be automatically selected if no user selection has been made, unless aggregated.
 
         Args:
             x_axis (str): Plot x-axis. Default 'baseline' ('antenna_name' for spectrum data).
             y_axis (str): Plot y-axis. Default 'time'.
             vis_axis (str): Complex visibility component to plot (amp, phase, real, imag). Default 'amp'.
                 Call data_groups() to see options.
-            selection (dict): selected data to plot. Options include:
-                ProcessingSet selection: by summary column names. Call summary() to see options.
-                    'query': for pandas query of summary() columns.
-                    Default: select first spw (by id).
                 MeasurementSet selection:
                     'data_group': name for correlated data, flags, weights, and uvw. Default value 'base'.
                         Use data_groups() to get data group names.
@@ -161,10 +194,6 @@ class MsRaster(MsPlot):
         # Validate input arguments; data dims needed to check input and rename baseline dimension
         check_inputs(inputs)
         self._plot_inputs = inputs
-
-        # Copy user selection dict; selection will be modified for plot
-        if inputs['selection']:
-            self._plot_inputs['selection'] = inputs['selection'].copy()
 
         if not self._show_gui:
             # Cannot plot if no MS
@@ -250,11 +279,15 @@ class MsRaster(MsPlot):
         num_iter_plots = min(num_iter_plots, num_subplots) if num_subplots > 1 else num_iter_plots
         end_idx = start_idx + num_iter_plots
 
+        # Set each iter value in ms_selection
+        if 'ms_selection' not in plot_inputs:
+            plot_inputs['ms_selection'] = {}
+
         for i in range(start_idx, end_idx):
             # Select iteration value and make plot
             value = iter_values[i]
             self._logger.info("Plot %s iteration index %s value %s", iter_axis, i, value)
-            plot_inputs['selection'][iter_axis] = value
+            plot_inputs['ms_selection'][iter_axis] = value
             try:
                 plot = self._do_plot(plot_inputs)
                 self._plots.append(plot)
@@ -264,13 +297,15 @@ class MsRaster(MsPlot):
 
     def _init_plot(self, plot_inputs):
         ''' Apply automatic selection '''
-        # Apply user + data_group selection, then select first spw
         # Set data group and name of its correlated data
+        select_data_group = 'data_group_name' not in plot_inputs
         self._set_data_group(plot_inputs)
 
-        # Do selection and add spw
-        self._data.select_data(plot_inputs['selection'])
+        # Add spw and do selection
         self._select_first_spw(plot_inputs)
+        if select_data_group:
+            plot_inputs['ps_selection']['data_group_name'] = plot_inputs['data_group_name']
+        self.select_ps(**plot_inputs['ps_selection'])
 
         # Clear automatic or iter selection of unplotted dimensions
         if 'dim_selection' in self._plot_inputs:
@@ -284,10 +319,11 @@ class MsRaster(MsPlot):
 
     def _select_first_spw(self, plot_inputs):
         ''' Determine first spw if not in user selection '''
-        if 'spw_name' not in plot_inputs['selection']:
+        if 'ps_selection' not in plot_inputs:
+            plot_inputs['ps_selection'] = {}
+        if 'spw_name' not in plot_inputs['ps_selection']:
             first_spw = self._data.get_first_spw()
-            self._data.select_data({'spw_name': first_spw})
-            plot_inputs['selection']['spw_name'] = first_spw
+            plot_inputs['ps_selection']['spw_name'] = first_spw
 
     def _set_auto_color_range(self, plot_inputs):
         ''' Calculate stats for color limits for non-gui amplitude plots. '''
@@ -297,12 +333,13 @@ class MsRaster(MsPlot):
         if color_mode == 'auto':
             if plot_inputs['vis_axis']=='amp' and not plot_inputs['aggregator']:
                 # For amplitude, limit colorbar range using stored per-spw ms stats
-                spw_name = plot_inputs['selection']['spw_name']
+                spw_name = plot_inputs['ps_selection']['spw_name']
                 if spw_name in self._spw_color_limits:
                     color_limits = self._spw_color_limits[spw_name]
                 else:
                     # Select spw name and data group only
-                    spw_data_selection = {'spw_name': spw_name, 'data_group_name': plot_inputs['selection']['data_group_name']}
+                    data_group = plot_inputs['data_group_name'] if 'data_group_name' in plot_inputs else 'base'
+                    spw_data_selection = {'spw_name': spw_name, 'data_group_name': data_group}
                     color_limits = self._calc_amp_color_limits(spw_data_selection)
                     self._spw_color_limits[spw_name] = color_limits
         plot_inputs['auto_color_range'] = color_limits
@@ -344,7 +381,7 @@ class MsRaster(MsPlot):
         if clear_plots:
             super().clear_plots()
 
-        # Reset selection in data and dim selection in plot inputs
+        # Reset selected ProcessingSet
         super().clear_selection()
 
         # Reset params set for last plot
@@ -354,16 +391,11 @@ class MsRaster(MsPlot):
 
     def _set_data_group(self, plot_inputs):
         ''' Add base data_group to plot inputs selection if not in user selection '''
-        if 'selection' not in plot_inputs or not plot_inputs['selection']:
-            plot_inputs['selection'] = {}
-
-        data_group = 'base'
-        if 'data_group' in plot_inputs['selection']:
-            data_group = plot_inputs['selection'].pop('data_group')
-        plot_inputs['selection']['data_group_name'] = data_group
+        if 'data_group_name' not in plot_inputs:
+            plot_inputs['data_group_name'] = 'base'
 
         if self._data and self._data.is_valid():
-            plot_inputs['correlated_data'] = self._data.get_correlated_data(data_group)
+            plot_inputs['correlated_data'] = self._data.get_correlated_data(plot_inputs['data_group_name'])
 
     ### -----------------------------------------------------------------------
     ### Interactive GUI
@@ -386,7 +418,7 @@ class MsRaster(MsPlot):
         axis_selectors = axis_selector(x_axis, y_axis, data_dims, True, self._set_axes)
 
         # Select from ProcessingSet and MeasurementSet
-        selection_selectors = selection_selector(self._set_ps_selection)
+        selection_selectors = selection_selector(self._set_ps_selection, self._set_ms_selection)
 
         # Generic axis options, updated when ms is set
         axis_options = data_dims if data_dims else []
@@ -444,7 +476,7 @@ class MsRaster(MsPlot):
         self._gui_layout.show(title=self._app_name, threaded=True)
 
     ###
-    ### Main callback to create plot
+    ### Main callback to create plot if inputs changed
     ###
     def _update_plot(self, ms, do_plot):
         ''' Create plot with inputs from GUI.  Must return plot, even if empty plot, for DynamicMap. '''
@@ -481,6 +513,13 @@ class MsRaster(MsPlot):
                 # Check inputs from GUI then plot
                 self._plot_inputs['data_dims'] = self._ms_info['data_dims']
                 check_inputs(self._plot_inputs)
+                print("********** do gui plot with inputs:", self._plot_inputs)
+                if 'ps_selection' in self._plot_inputs:
+                    if not self.select_ps(**self._plot_inputs['ps_selection']): 
+                        raise RuntimeError("PS selection failed: {self._plot_inputs['ps_selection']}")
+                if 'ms_selection' in self._plot_inputs:
+                    if not self.select_ms(**self._plot_inputs['ms_selection']):
+                        raise RuntimeError("MS selection failed: {self._plot_inputs['ms_selection']}")
                 gui_plot = self._do_gui_plot()
             except (ValueError, TypeError) as e:
                 # Clear plot, inputs invalid
@@ -497,9 +536,11 @@ class MsRaster(MsPlot):
         # Save inputs to see if changed
         self._last_plot_inputs = self._plot_inputs.copy()
         self._last_style_inputs = style_inputs.copy()
-        self._last_plot_inputs['selection'] = self._plot_inputs['selection'].copy()
+        self._last_plot_inputs['ps_selection'] = self._plot_inputs['ps_selection'].copy()
+        self._last_plot_inputs['ms_selection'] = self._plot_inputs['ms_selection'].copy()
         if first_plot and not do_plot:
-            self._plot_inputs['selection'].clear()
+            self._plot_inputs['ps_selection'].clear()
+            self._plot_inputs['ms_selection'].clear()
 
         # Save plot if no new plot
         self._last_gui_plot = gui_plot
@@ -515,8 +556,6 @@ class MsRaster(MsPlot):
         if not self._last_plot_inputs:
             return True
 
-        # Cannot use plot_inputs == self._plot_inputs until selection in GUI.
-        # Check inputs one by one
         for key in self._plot_inputs:
             if not self._values_equal(self._plot_inputs[key], self._last_plot_inputs[key]):
                 return True
@@ -529,10 +568,8 @@ class MsRaster(MsPlot):
     def _values_equal(self, val1, val2):
         if val1 and val2: # both set
             return val1 == val2
-
         if not val1 and not val2: # both None
             return True
-
         return False # one set and other is None
 
     ###
@@ -643,7 +680,7 @@ class MsRaster(MsPlot):
     def _get_selector(self, name):
         ''' Return selector group for name, for setting options '''
         selectors = self._gui_layout[2][1]
-        selectors_index = {'file': 0, 'style': 1, 'axes': 2, 'selection': 3, 'agg': 4, 'iter': 5, 'title': 6}
+        selectors_index = {'file': 0, 'style': 1, 'axes': 2, 'sel': 3, 'agg': 4, 'iter': 5, 'title': 6}
         if name == "selectors":
             return selectors
         return selectors[selectors_index[name]]
@@ -664,6 +701,11 @@ class MsRaster(MsPlot):
             else:
                 axis_selectors.objects[1].options = VIS_AXIS_OPTIONS
 
+            # Update options for selection selector
+            selection_selectors = self._get_selector('sel')
+            self._update_ps_selection_options(selection_selectors[0][0])
+            self._update_ms_selection_options(selection_selectors[0][1], data_dims)
+
             # Update options for agg axes selector
             agg_selectors = self._get_selector('agg')
             agg_selectors[1].options = data_dims
@@ -674,6 +716,36 @@ class MsRaster(MsPlot):
             iter_axis_selector.options = ['None']
             iter_axis_selector.options.extend(data_dims)
 
+    def _update_ps_selection_options(self, ps_selectors):
+        ''' Set ProcessingSet gui options from ms summary '''
+        if self._data:
+            summary = self._data.get_summary()
+            if summary is not None:
+                for selector in ps_selectors:
+                    if selector.name in PS_SELECTION_OPTIONS:
+                        options = []
+                        values = summary[PS_SELECTION_OPTIONS[selector.name]].values
+                        for value in values:
+                            if isinstance(value, list):
+                                for list_item in value:
+                                    options.append(str(list_item))
+                            else:
+                                options.append(str(value))
+                        selector.options = sorted(list(set(options)))
+
+    def _update_ms_selection_options(self, ms_selectors, data_dims):
+        ''' Set MeasurementSet gui options from ms data '''
+        if self._data:
+            for selector in ms_selectors:
+                selection = MS_SELECTION_OPTIONS[selector.name] if selector.name in MS_SELECTION_OPTIONS else None
+                if selection == 'data_group':
+                    selector.options = list(super().data_groups())
+                elif selection == 'time':
+                    selector.options = self._data.time_strings()
+                elif selection in data_dims:
+                    selector.options = self._data.get_dimension_values(selection)
+                elif selection in ['antenna1', 'antenna2']:
+                    selector.options = super().antennas()
     ###
     ### Callbacks for widgets which update other widgets
     ###
@@ -807,9 +879,26 @@ class MsRaster(MsPlot):
         self._update_plot_status(True) # Change plot button to solid
 # pylint: enable=too-many-arguments, too-many-positional-arguments
 
-    def _set_ps_selection(self, query):
+    def _set_ps_selection(self, query, name, intents, scan_name, spw_name, field_name, source_name, line_name):
         ''' Select ProcessingSet from gui using summary columns '''
-        if 'selection' not in self._plot_inputs or self._plot_inputs['selection'] is None:
-            self._plot_inputs['selection'] = {}
-        self._plot_inputs['selection']['query'] = query
+        inputs = locals()
+        print("ps selection from gui:", inputs)
+        ps_selection = {}
+        for key, val in inputs.items():
+            if key in PS_SELECTION_OPTIONS.values():
+                ps_selection[key] = val
+        self._plot_inputs['ps_selection'] = ps_selection
+        print("***** Plot inputs with ps selection=", self._plot_inputs['ps_selection'])
+        self._update_plot_status(True) # Change plot button to solid
+
+    def _set_ms_selection(self, data_group, time, baseline, antenna1, antenna2, frequency, polarization):
+        ''' Select ProcessingSet from gui using summary columns '''
+        inputs = locals()
+        print("ms selection from gui:", inputs)
+        ms_selection = {}
+        for key, val in inputs.items():
+            if key in MS_SELECTION_OPTIONS.values():
+                ms_selection[key] = val
+        self._plot_inputs['ms_selection'] = ms_selection
+        print("***** Plot inputs with ms selection=", self._plot_inputs['ms_selection'])
         self._update_plot_status(True) # Change plot button to solid

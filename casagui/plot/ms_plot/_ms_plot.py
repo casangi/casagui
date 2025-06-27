@@ -73,18 +73,33 @@ class MsPlot:
                                  'field_name', 'source_name', 'field_coords', 'start_frequency', 'end_frequency'
             Returns: list of unique values when single column is requested, else None
         '''
-        self._data.summary(data_group, columns)
+        if self._data:
+            self._data.summary(data_group, columns)
+        print("Error: MS path has not been set")
 
     def data_groups(self):
         ''' Returns set of data groups from all ProcessingSet ms_xds. '''
-        return self._data.data_groups()
+        if self._data:
+            return self._data.data_groups()
+        print("Error: MS path has not been set")
+        return None
 
     def antennas(self, plot_positions=False, label_antennas=False):
         ''' Returns list of antenna names in ProcessingSet antenna_xds.
                 plot_positions (bool): show plot of antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        return self._data.get_antennas(plot_positions, label_antennas)
+        if self._data:
+            return self._data.get_antennas(plot_positions, label_antennas)
+        print("Error: MS path has not been set")
+        return None
+
+    def time_strings(self):
+        ''' Returns list of times in ProcessingSet as datetime strings. '''
+        if self._data:
+            return self._data.time_strings()
+        print("Error: MS path has not been set")
+        return None
 
     def plot_phase_centers(self, data_group='base', label_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set and highlight central field.
@@ -100,7 +115,7 @@ class MsPlot:
         self._plots.clear()
 
     def clear_selection(self):
-        ''' Clear selection in data and restore to original '''
+        ''' Clear data selection and restore original ProcessingSet '''
         if self._data:
             self._data.clear_selection()
 
@@ -190,7 +205,7 @@ class MsPlot:
         return layout, is_layout
 
     def _set_ms(self, ms):
-        ''' Update ms info for input ms filepath (MSv2 or zarr), or None in show_gui mode.
+        ''' Set MsData and update ms info for input ms filepath (MSv2 or zarr), if set.
             Return whether ms changed (false if ms is None). '''
         self._ms_info['ms'] = ms
         ms_error = ""

@@ -48,7 +48,7 @@ class MsData:
         else:
             self._log_no_ms()
 
-    def get_ps_summary(self):
+    def get_summary(self):
         ''' Return Pandas DataFrame summary of ProcessingSet '''
         if self._data_initialized:
             return self._data.get_summary()
@@ -115,6 +115,13 @@ class MsData:
         self._log_no_ms()
         return None
 
+    def time_strings(self):
+        ''' Return time values as strings '''
+        if self._data_initialized:
+            return self._data.get_time_strings()
+        self._log_no_ms()
+        return None
+
     def get_dimension_attrs(self, dim):
         ''' Return dict of data attributes for dimension.
                 dim (str): dimension name
@@ -131,14 +138,26 @@ class MsData:
         self._log_no_ms()
         return None
 
-    def select_data(self, selection):
-        ''' Apply selection in data.
-                selection (dict): fields and values to select
+    def select_ps(self, query=None, string_exact_match=True, **kwargs):
+        ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
+            Returns: bool (whether selection succeeded)
         '''
         if self._data_initialized:
-            self._data.select_data(selection)
-        else:
-            self._log_no_ms()
+            return self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+        self._log_no_ms()
+        return False
+
+    def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
+        ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
+            https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
+            Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
+            Returns: bool (whether selection succeeded)
+        '''
+        if self._data_initialized:
+            return self._data.select_ms(indexers, method, tolerance, drop, **indexers_kwargs)
+        self._log_no_ms()
+        return False
 
     def clear_selection(self):
         ''' Clears selection dict and selected data. '''

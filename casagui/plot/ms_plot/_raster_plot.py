@@ -196,7 +196,7 @@ class RasterPlot:
 
     def _get_c_axis_labels(self, data, plot_inputs):
         ''' Set axis and label for c axis using input data xArray Dataset. '''
-        data_group = plot_inputs['selection']['data_group_name']
+        data_group = plot_inputs['data_group_name']
         correlated_data = plot_inputs['correlated_data']
         vis_axis = plot_inputs['vis_axis']
         aggregator = plot_inputs['aggregator']

@@ -31,7 +31,7 @@ def concat_ps_xdt(ps_xdt, logger):
         time_list.extend(times)
 
     if len(xds_list) > len(ps_xdt):
-        logger.debug(f"Split {len(ps_xdt)} datasets by time gap into {len(xds_list)} datasets.")
+        logger.debug(f"Split {len(ps_xdt)} datasets by time gap into {len(xds_list)} datasets for concat.")
 
     # Create sorted xds list using sorted times
     time_list.sort()
@@ -40,7 +40,7 @@ def concat_ps_xdt(ps_xdt, logger):
     for xds in xds_list:
         try:
             first_xds_time = xds.time.values[0]
-        except IndexError: # only one value
+        except IndexError: # one value selected
             first_xds_time = xds.time.values
 
         for idx, value in enumerate(time_list):

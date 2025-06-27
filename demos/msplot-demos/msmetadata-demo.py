@@ -48,8 +48,11 @@ def show_ms_plot_features():
     print("\n----- summary by_ms:")
     msr.summary(columns='by_ms')                                        # organizes summary info by each MSv4 xarray Datasets
 
-    # Get list of data/flag/weight/uvw group names (plot parameter)
+    # Get list of data/flag/weight/uvw group names
     print("data groups:", msr.data_groups())
+
+    # Get list of time strings
+    print("times:", msr.time_strings())
 
     # ProcessingSet plots
     # Get list of antenna names, useful for baseline selection.
