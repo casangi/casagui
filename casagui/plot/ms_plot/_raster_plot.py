@@ -12,6 +12,7 @@ import hvplot.pandas
 
 from casagui.bokeh.format import get_time_formatter
 from casagui.data.measurement_set.processing_set._ps_coords import set_index_coordinates
+from casagui.data.measurement_set.processing_set._xds_data import get_correlated_data
 from casagui.plot.ms_plot._xds_plot_axes import get_axis_labels, get_vis_axis_labels, get_coordinate_labels
 
 class RasterPlot:
@@ -54,7 +55,10 @@ class RasterPlot:
             data (xarray Dataset): selected dataset of MSv4 data to plot
             plot_inputs (dict): user inputs to plot.
         '''
-        self._plot_params['data']['correlated_data'] = plot_inputs['correlated_data']
+        data_group = plot_inputs['selection']['data_group_name'] if ('selection' in plot_inputs and 'data_group_name' in plot_inputs['selection']) \
+            else plot_inputs['auto_data_group']
+        self._plot_params['data']['data_group'] = data_group
+        self._plot_params['data']['correlated_data'] = get_correlated_data(data, data_group)
         self._plot_params['data']['aggregator'] = plot_inputs['aggregator']
 
         color_mode = plot_inputs['color_mode']
@@ -122,66 +126,24 @@ class RasterPlot:
             hv.opts.QuadMesh(tools=['hover'])
         )
 
-    def _get_plot_title(self, data, plot_inputs, ms_name, include_selections=False):
+    def _get_plot_title(self, data, plot_inputs, ms_name):
         ''' Form string containing ms name and selected values using data (xArray Dataset) '''
         title = f"{ms_name}\n"
 
-        if include_selections:
-            # TBD: include complete selection?
-            title = self._add_title_selections(data, title, plot_inputs)
-        else:
-            # Add iter_axis selection only
-            iter_axis = plot_inputs['iter_axis']
-            if iter_axis:
-                iter_label = get_coordinate_labels(data, iter_axis)
-                title += f"{iter_axis} {iter_label}"
-        return title
+        # Add iter_axis selection
+        iter_axis = plot_inputs['iter_axis']
+        if iter_axis:
+            iter_label = get_coordinate_labels(data, iter_axis)
+            title += f"{iter_axis} {iter_label} "
 
-    def _add_title_selections(self, data, title, plot_inputs):
-        ''' Add ProcessingSet and data dimension selections to title '''
-        selection = plot_inputs['selection'] if 'selection' in plot_inputs else None
-        dim_selection = plot_inputs['dim_selection'] if 'dim_selection' in plot_inputs else None
-        data_dims = plot_inputs['data_dims'] if 'data_dims' in plot_inputs else None
-
-        ps_selections = []
-        dim_selections = []
-
-        for key in selection:
-            # Add processing set selection: spw, field, source, and intent
-            # TBD: add data group?
-            if key == 'spw_name':
-                spw_selection = f"spw: {selection[key]}"
-                if 'frequency' in data:
-                    spw_selection += f" ({data.frequency.spectral_window_id})"
-                ps_selections.append(spw_selection)
-            elif key == 'field_name':
-                ps_selections.append(f"field: {selection[key]}")
-            elif key == 'source_name':
-                ps_selections.append(f"source: {selection[key]}")
-            elif key == 'intents':
-                ps_selections.append(f"intents: {selection[key]}")
-            elif key in data_dims:
-                # Add user-selected dimensions to title: name (index)
-                label = get_coordinate_labels(data, key)
-                index = selection[key] if isinstance(selection[key], int) else None
-                selected_dim = f"{key}: {label}"
-                if index is not None:
-                    index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
-                    selected_dim += index_label
-                dim_selections.append(selected_dim)
-
-        for key in dim_selection:
-            # Add auto- or iter-selected dimensions to title: name (index)
-            label = get_coordinate_labels(data, key)
-            index = dim_selection[key] if isinstance(dim_selection[key], int) else None
-            selected_dim = f"{key}: {label}"
-            if index is not None:
-                index_label = f" (ch {index}) " if key == 'frequency' else f" ({index}) "
-                selected_dim += index_label
-            dim_selections.append(selected_dim)
-
-        title += '\n'.join(ps_selections) + '\n'
-        title += '  '.join(dim_selections)
+        # Add agg_axis
+        if 'aggregator' in plot_inputs and plot_inputs['aggregator']:
+            agg_axis = plot_inputs['agg_axis']
+            if isinstance(agg_axis, list) and len(agg_axis) == 1:
+                agg_axis = agg_axis[0]
+            else:
+                agg_axis = ', '.join(agg_axis)
+            title += f"aggregation: {agg_axis}"
         return title
 
     def _set_axis_labels(self, data, plot_inputs):
@@ -196,10 +158,10 @@ class RasterPlot:
 
     def _get_c_axis_labels(self, data, plot_inputs):
         ''' Set axis and label for c axis using input data xArray Dataset. '''
-        data_group = plot_inputs['data_group_name']
-        correlated_data = plot_inputs['correlated_data']
         vis_axis = plot_inputs['vis_axis']
         aggregator = plot_inputs['aggregator']
+        data_group = self._plot_params['data']['data_group']
+        correlated_data = self._plot_params['data']['correlated_data']
 
         axis, label = get_vis_axis_labels(data, data_group, correlated_data, vis_axis)
         if aggregator:

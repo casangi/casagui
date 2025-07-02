@@ -53,11 +53,6 @@ def plot_ms_raster():
     # logging levels are 'debug', 'info' , 'warning', 'error', 'critical'
     msr = MsRaster(ms=ms_path, show_gui=False, log_level='info')
 
-    # ProcessingSet selection using summary column name and value
-    # For PS selection options: msr.summary()
-    intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
-    msr.select_ps(**intent_selection)
-
     # ------------------------------------------------------------------
     # Demo default plot: x_axis="baseline", y_axis="time", vis_axis="amp" selecting data_group "base" in first spw.
     # The unplotted dimensions "frequency" and "polarization" are also automatically selected by first index.
@@ -69,7 +64,10 @@ def plot_ms_raster():
     msr.save(filename=os.path.join(plot_dir, "default_plot.png"))
 
     # ------------------------------------------------------------------
-    # Demo vis axis options
+    # Demo vis axis options for observe target intent
+    intent_selection = {'intents': 'OBSERVE_TARGET#ON_SOURCE'}
+    msr.select_ps(**intent_selection)
+
     for vis_axis in ['amp', 'phase', 'real', 'imag']:
         msr.plot(vis_axis=vis_axis, color_mode='auto')
         msr.show()
@@ -99,7 +97,6 @@ def plot_ms_raster():
     ]
     for xaxis, yaxis in axes:
         plot_axes = f"{yaxis}_vs_{xaxis}"
-        print("*********************************", plot_axes)
         msr.plot(x_axis=xaxis, y_axis=yaxis, color_mode='auto')
         msr.show()
         filename=os.path.join(plot_dir, f"{plot_axes}.png")
@@ -120,78 +117,89 @@ def plot_ms_raster():
 
     # ------------------------------------------------------------------
     # Demo iter_axis: axis over which to iterate values for multiple plots.
+    # Set title='ms' to show ms name and iteration value as plot title.
     # Single plot starting at first iteration (XX) default iter_range (0, 0).
-    msr.plot(iter_axis='polarization', color_mode='auto')
+    # Saved as pol_iteration_0.png
+    msr.plot(iter_axis='polarization', color_mode='auto', title='ms')
     msr.show()
-    filename=os.path.join(plot_dir, "iteration0.png")
+    filename=os.path.join(plot_dir, "pol_iteration.png")
     msr.save(filename)
 
     # Single plot starting at first iteration (XX) iter_range (1, 1).
-    msr.plot(iter_axis='polarization', iter_range=(1, 1), color_mode='auto')
+    # Saved as pol_iteration_1.png
+    msr.plot(iter_axis='polarization', iter_range=(1, 1), color_mode='auto', title='ms')
     msr.show()
-    filename=os.path.join(plot_dir, "iteration1.png")
+    filename=os.path.join(plot_dir, "pol_iteration.png")
     msr.save(filename)
 
     # iter_range with all iterations and single-plot layout:
     # Save all plots individually, starting at first plot, with filename suffix _0, _1, etc.
     # Note: show() would only show first iteration plot using default subplots=(1, 1).
-    msr.plot(iter_axis='polarization', iter_range=(0, -1), color_mode='auto')
-    filename=os.path.join(plot_dir, "iterations.png")
+    msr.plot(iter_axis='polarization', iter_range=(0, -1), color_mode='auto', title='ms')
+    filename=os.path.join(plot_dir, "pol_iterations.png")
     msr.save(filename)
 
-    # iter_range with all iterations and 2x2 layout: only first 4 iterations plotted.
-    # Show and save only the layout.
-    msr.plot(iter_axis='frequency', iter_range=(0, -1), subplots=(2, 2), color_mode='auto')
+    # Single row layout
+    msr.plot(iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "iter_row_layout.png")
     msr.save(filename)
 
     # Single column layout
-    msr.plot(iter_axis='polarization', iter_range=(0, -1), subplots=(2, 1), color_mode='auto')
+    msr.plot(iter_axis='polarization', iter_range=(0, -1), subplots=(2, 1), color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "iter_col_layout.png")
     msr.save(filename)
 
+    # iter_range with all iterations and 2x2 layout: only first 4 iterations plotted.
+    # Show and save only the layout.
+    msr.plot(iter_axis='frequency', iter_range=(0, -1), subplots=(2, 2), color_mode='auto', title='ms')
+    msr.show()
+    filename=os.path.join(plot_dir, "freq_iteration_layout.png")
+    msr.save(filename)
+
     # Demo combining iteration and layout of separate plots.
     # Plot amp with polarization iteration, then phase, to form 2x2 layout. Do not clear plots on second plot.
-    msr.plot(vis_axis='amp', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto')
-    msr.plot(vis_axis='phase', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto', clear_plots=False)
+    msr.plot(vis_axis='amp', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto', title='ms')
+    msr.plot(vis_axis='phase', iter_axis='polarization', iter_range=(0, -1), subplots=(2, 2), color_mode='auto', title='ms', clear_plots=False)
     msr.show()
-    filename=os.path.join(plot_dir, "amp_phase_iter.png")
+    filename=os.path.join(plot_dir, "amp_phase_pol_iter.png")
     msr.save(filename)
 
     # ------------------------------------------------------------------
     # Demo data aggregation:
     #   aggregator: options include max, mean, median, min, std, sum, var.
     #   agg_axis: dimension over which to aggregate.
+    # Set title='ms' to show ms name and aggregator axis as plot title.
     # Plot time vs baseline, averaged over frequency. Selects first polarization automatically.
-    msr.plot(aggregator='mean', agg_axis='frequency', color_mode='auto')
+    msr.plot(aggregator='mean', agg_axis='frequency', color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "agg_mean_frequency.png")
     msr.save(filename)
 
     # Plot time vs frequency, max across baselines. Selects first polarization automatically.
-    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', color_mode='auto')
+    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline.png")
     msr.save(filename)
 
     # time vs frequency, max across baseline and polarization (explicit).
-    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis=['baseline', 'polarization'], color_mode='auto')
+    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis=['baseline', 'polarization'], color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline_pol.png")
     msr.save(filename)
 
     # time vs frequency, max across other two dimensions automatically by not setting agg_axis (implicit).
-    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', color_mode='auto')
+    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "agg_max_auto_baseline_pol.png")
     msr.save(filename)
 
     # ------------------------------------------------------------------
     # Demo combining aggregator, iteration, and subplots.
+    # Set title='ms' to show ms name, iteration value, and aggregator axis as plot title.
     # time vs frequency, max across baselines, with polarization iteration; layout in one row.
-    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto')
+    msr.plot(x_axis='frequency', y_axis='time', aggregator='max', agg_axis='baseline', iter_axis='polarization', iter_range=(0, -1), subplots=(1, 2), color_mode='auto', title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "agg_max_baseline_pol_iter.png")
     msr.save(filename)

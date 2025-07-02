@@ -49,7 +49,7 @@ class MsPlot:
             self._toast = None # for destroy() with new plot or new notification
 
         # Initialize plot inputs and params
-        self._plot_inputs = {}
+        self._plot_inputs = {'selection': {}}
 
         # Initialize plots
         self._plot_init = False
@@ -75,38 +75,44 @@ class MsPlot:
         '''
         if self._data:
             self._data.summary(data_group, columns)
-        print("Error: MS path has not been set")
+        else:
+            self._logger.error("Error: MS path has not been set")
 
     def data_groups(self):
         ''' Returns set of data groups from all ProcessingSet ms_xds. '''
         if self._data:
             return self._data.data_groups()
-        print("Error: MS path has not been set")
+        self._logger.error("Error: MS path has not been set")
         return None
 
-    def antennas(self, plot_positions=False, label_antennas=False):
-        ''' Returns list of antenna names in ProcessingSet antenna_xds.
-                plot_positions (bool): show plot of antenna positions.
+    def get_dimension_values(self, dimension):
+        ''' Returns sorted list of unique dimension values in ProcessingSet (with previous selection applied, if any).
+            Dimension options include 'time', 'baseline' (for visibility data), 'antenna' (for spectrum data), 'antenna1',
+                'antenna2', 'frequency', 'polarization'.
+        '''
+        if self._data:
+            return self._data.get_dimension_values(dimension)
+        self._logger.error("Error: MS path has not been set")
+        return None
+
+    def plot_antennas(self, label_antennas=False):
+        ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
         if self._data:
-            return self._data.get_antennas(plot_positions, label_antennas)
-        print("Error: MS path has not been set")
-        return None
-
-    def time_strings(self):
-        ''' Returns list of times in ProcessingSet as datetime strings. '''
-        if self._data:
-            return self._data.time_strings()
-        print("Error: MS path has not been set")
-        return None
+            self._data.plot_antennas(label_antennas)
+        else:
+            self._logger.error("Error: MS path has not been set")
 
     def plot_phase_centers(self, data_group='base', label_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set and highlight central field.
                 data_group (str): data group to use for field and source xds.
                 label_fields (bool): label all fields on the plot if True, else label central field only
         '''
-        self._data.plot_phase_centers(data_group, label_fields)
+        if self._data:
+            self._data.plot_phase_centers(data_group, label_fields)
+        else:
+            self._logger.error("Error: MS path has not been set")
 
     def clear_plots(self):
         ''' Clear plot list '''
@@ -118,6 +124,12 @@ class MsPlot:
         ''' Clear data selection and restore original ProcessingSet '''
         if self._data:
             self._data.clear_selection()
+
+        self._plot_inputs['selection'] = {}
+        try:
+            del self._plot_inputs['data_group_name']
+        except KeyError:
+            pass
 
     def show(self):
         ''' 
@@ -178,7 +190,7 @@ class MsPlot:
                 plot_idx = 0 if iter_range is None else iter_range[0]
 
                 for plot in self._plots:
-                    exportname = f"{name}_{plot_idx}.{ext}"
+                    exportname = f"{name}_{plot_idx}{ext}"
                     hvplot.save(plot.opts(width=width, height=height), filename=exportname, fmt=fmt)
                     self._logger.info("Saved plot to %s.", exportname)
                     plot_idx += 1

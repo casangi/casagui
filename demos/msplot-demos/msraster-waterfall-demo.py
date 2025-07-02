@@ -59,7 +59,8 @@ def plot_ms_waterfall():
     msr.select_ms(antenna1='DA42_A050')
 
     # Demo waterfall plots with baseline iteration
-    msr.plot(x_axis='frequency', iter_axis='baseline', iter_range=(0, 5), subplots=(2, 3), color_mode=None)
+    # Use title='ms' to label plots with ms name and baseline value
+    msr.plot(x_axis='frequency', iter_axis='baseline', iter_range=(0, 5), subplots=(2, 3), color_mode=None, title='ms')
     msr.show()
     filename=os.path.join(plot_dir, "waterfall_plots.png")
     msr.save(filename)

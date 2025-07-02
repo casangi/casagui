@@ -56,40 +56,29 @@ class MsData:
 
     def data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
-        # ProcessingSet function
         if self._data_initialized:
             return self._data.get_data_groups()
         self._log_no_ms()
         return None
 
-    def get_antennas(self, plot_positions=False, label_antennas=False):
-        ''' Returns list of antenna names in data.
-                plot_positions (bool): show plot of antenna positions.
+    def plot_antennas(self, label_antennas=False):
+        ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        # Antenna positions plot is ProcessingSet function
         if self._data_initialized:
-            return self._data.get_antennas(plot_positions, label_antennas)
-        self._log_no_ms()
-        return None
+            self._data.plot_antennas(label_antennas)
+        else:
+            self._log_no_ms()
 
     def plot_phase_centers(self, data_group='base', label_all_fields=False):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
                 label_all_fields (bool); label all fields on the plot
                 data_group (str); data group to use for processing.
         '''
-        # ProcessingSet function
         if self._data_initialized:
             self._data.plot_phase_centers(label_all_fields, data_group)
         else:
             self._log_no_ms()
-
-    def time_strings(self):
-        ''' Returns list of time values as strings '''
-        if self._data_initialized:
-            return self._data.get_time_strings()
-        self._log_no_ms()
-        return None
 
     def get_num_ms(self):
         ''' Returns number of MeasurementSets in data. '''

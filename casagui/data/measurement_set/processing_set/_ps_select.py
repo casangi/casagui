@@ -2,7 +2,7 @@
 
 import xarray as xr
 
-def select_ps(ps_xdt, logger, query=None, string_exact_match=False, **kwargs):
+def select_ps(ps_xdt, logger, query=None, string_exact_match=True, **kwargs):
     '''
         Apply selection query and kwargs to ProcessingSet using exact match or partial match.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
@@ -11,20 +11,21 @@ def select_ps(ps_xdt, logger, query=None, string_exact_match=False, **kwargs):
     '''
     # Do PSXdt selection
     logger.debug(f"Applying selection to ProcessingSet: query={query}, kwargs={kwargs}")
-    ps_selection = kwargs
-
     try:
-        selected_ps_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **ps_selection)
+        selected_ps_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
     except RuntimeError:
         logger.error("ProcessingSet selection failed")
         return xr.DataTree()
 
-    ms_selection = {}
-    for key, val in ps_selection:
-        if key in ['polarization', 'scan_name', 'field_name']:
-            ms_selection[key] = val
-    if ms_selection:
-        selected_ps_xdt = select_ms(selected_ps_xdt, logger, **ms_selection)
+    if kwargs:
+        ms_selection = {}
+        for key, val in kwargs.items():
+            if key in ['polarization', 'scan_name', 'field_name']:
+                ms_selection[key] = val
+        if ms_selection:
+            selected_ps_xdt = select_ms(selected_ps_xdt, logger, **ms_selection)
+
+    selected_ps_xdt.attrs = ps_xdt.attrs
     return selected_ps_xdt
 
 #pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -34,30 +35,35 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
         Return selected ProcessingSet DataTree.
     '''
     selected_ps_xdt = xr.DataTree() # return value
-    ms_selection = indexers_kwargs
     dim_selection = None
     coord_selection = None
 
-    if ms_selection:
+    if indexers_kwargs:
         # Sort out selection by dim and coord; xr_ms can only select dim
-        logger.debug(f"Applying selection to MeasurementSet: {ms_selection}")
-        dim_selection, coord_selection = get_dim_coord_selections(ps_xdt, ms_selection)
+        logger.debug(f"Applying selection to MeasurementSet: {indexers_kwargs}")
+        dim_selection, coord_selection = get_dim_coord_selections(ps_xdt, indexers_kwargs)
 
     for name, ms_xdt in ps_xdt.items():
         ms = ms_xdt
         include_ms = True
 
         if coord_selection:
+            logger.debug(f"Applying coordinate selection {coord_selection} to MS {name}")
             ms, include_ms = select_coords(ms, logger, coord_selection)
 
         if include_ms:
             if dim_selection:
+                logger.debug(f"Applying dimension selection {dim_selection} to MS {name}")
                 try:
                     ms = ms.xr_ms.sel(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **dim_selection)
                 except KeyError: # selection failed, go to next MS
-                    logger.error(f"MeasurementSet dimension selection {dim_selection} failed")
+                    logger.error(f"MeasurementSet dimension selection failed for ms {name}")
                     continue
+
             selected_ps_xdt[name] = ms
+        else:
+            logger.error(f"MeasurementSet coordinate selection failed for ms {name}")
+    selected_ps_xdt.attrs = ps_xdt.attrs
     return selected_ps_xdt
 #pylint: enable=too-many-arguments, too-many-positional-arguments
 
@@ -75,6 +81,7 @@ def get_dim_coord_selections(ps_xdt, ms_selection):
 
 def select_coords(ms, logger, coord_selection):
     ''' Select coordinates which are not dimensions '''
+    include_ms = False
     for key, val in coord_selection.items():
         try:
             if 'antenna' in key or 'baseline' in key:
@@ -98,8 +105,8 @@ def select_coords(ms, logger, coord_selection):
                 ms = ms.sel(time=ms.scan_name==val)
             else:
                 raise KeyError(f"Invalid ms selection key {key}")
+            include_ms = True
         except KeyError:
-            logger.error(f"MeasurementSet {key} selection {val} failed")
-            include_ms = False
-            break
+            logger.debug(f"MeasurementSet {key} selection {val} failed")
+            continue
     return ms, include_ms

@@ -86,14 +86,11 @@ class PsData:
             data_groups.extend(list(self._ps_xdt[ms_xdt_name].data_groups))
         return set(data_groups)
 
-    def get_antennas(self, plot_positions=False, label_antennas=False):
-        ''' Returns list of antenna names in ProcessingSet antenna_xds.
-                plot_positions (bool): show plot of antenna positions.
+    def plot_antennas(self, label_antennas=False):
+        ''' Plot antenna positions.
                 label_antennas (bool): label positions with antenna names.
         '''
-        if plot_positions:
-            self._ps_xdt.xr_ps.plot_antenna_positions(label_antennas)
-        return self._ps_xdt.xr_ps.get_combined_antenna_xds().antenna_name.values.tolist()
+        self._ps_xdt.xr_ps.plot_antenna_positions(label_antennas)
 
     def plot_phase_centers(self, label_all_fields=False, data_group='base'):
         ''' Plot the phase center locations of all fields in the Processing Set (original or selected) and label central field.
@@ -119,32 +116,41 @@ class PsData:
         return dims
 
     def get_dimension_values(self, dimension):
-        ''' Return sorted list of unique values for input dimension in ProcessingSet. '''
+        ''' Return sorted list of unique values for input dimension in ProcessingSet.
+            For 'time', returns datetime strings.
+        '''
         ps_xdt = self._get_ps_xdt()
         dim_values = []
-        for ms_xdt in ps_xdt.values():
-            if dimension == 'baseline':
-                ant1_names = ms_xdt.baseline_antenna1_name.values
-                ant2_names = ms_xdt.baseline_antenna2_name.values
-                for baseline_id in ms_xdt.baseline_id:
-                    dim_values.append(f"{ant1_names[baseline_id]} & {ant2_names[baseline_id]}")
-            else:
-                try:
-                    dim_values.extend([value.item() for value in ms_xdt[dimension].values])
-                except TypeError:
-                    dim_values.append(ms_xdt[dimension].values.item())
+
+        if dimension == 'time':
+            dim_values = self._get_time_strings(ps_xdt)
+        else:
+            for ms_xdt in ps_xdt.values():
+                if dimension == 'baseline':
+                    ant1_names = ms_xdt.baseline_antenna1_name.values
+                    ant2_names = ms_xdt.baseline_antenna2_name.values
+                    for baseline_id in ms_xdt.baseline_id:
+                        dim_values.append(f"{ant1_names[baseline_id]} & {ant2_names[baseline_id]}")
+                else:
+                    if dimension == 'antenna1':
+                        dimension = 'baseline_antenna1_name'
+                    elif dimension == 'antenna2':
+                        dimension = 'baseline_antenna2_name'
+                    try:
+                        dim_values.extend([value.item() for value in ms_xdt[dimension].values])
+                    except TypeError:
+                        dim_values.append(ms_xdt[dimension].values.item())
         return sorted(set(dim_values))
 
-    def get_time_strings(self):
+    def _get_time_strings(self, ps):
         ''' Return time values as string not float '''
         times = []
-        ps_xdt = self._get_ps_xdt()
-        for ms_xdt in ps_xdt.values():
+        for ms_xdt in ps.values():
             time_xda = ms_xdt.time
             time_attrs = time_xda.attrs
             date_strings = pd.to_datetime(time_xda, unit=time_attrs['units'][0], origin=time_attrs['format']).strftime("%d-%b-%Y %H:%M:%S").values
             times.extend(date_strings.tolist())
-        return sorted(times)
+        return times
 
     def get_dimension_attrs(self, dim):
         ''' Return attributes dict for input dimension in ProcessingSet. '''
