@@ -35,6 +35,7 @@ class PsData:
         self._logger = logger
         self._selection = {}
         self._selected_ps_xdt = None # cumulative selection
+        self._data_group = 'base'    # default until selected
 
     def get_path(self):
         ''' Return path to zarr file (input or converted from msv2) '''
@@ -77,7 +78,7 @@ class PsData:
 
     def get_summary(self):
         ''' Return summary of original ps '''
-        return self._ps_xdt.xr_ps.summary()
+        return self._ps_xdt.xr_ps.summary(self._data_group)
 
     def get_data_groups(self):
         ''' Returns set of data group names in Processing Set data. '''
@@ -158,42 +159,35 @@ class PsData:
         return ps_xdt.get(0)[dim].attrs
 
     def get_first_spw(self):
-        ''' Return first spw name by id '''
-        spw_id_names = {}
-        ps_xdt = self._get_ps_xdt()
-        for ms_xdt in ps_xdt.values():
-            freq_xds = ms_xdt.frequency
-            spw_id_names[freq_xds.spectral_window_id] = freq_xds.spectral_window_name
-
-        first_spw_id = min(spw_id_names)
-        first_spw_name = spw_id_names[first_spw_id]
-
-        summary = self.get_summary()
-        spw_df = summary[summary['spw_name'] == first_spw_name]
-        start_freq = spw_df.at[spw_df.index[0], 'start_frequency']
-        end_freq = spw_df.at[spw_df.index[0], 'end_frequency']
-        self._logger.info(f"Selecting first spw {first_spw_name} (id {first_spw_id}) with frequency range {start_freq:e} - {end_freq:e}")
-        return first_spw_name
+        ''' Return first spw name in selected ps summary '''
+        spw_names = self.get_summary()['spw_name']
+        return spw_names[0]
 
     def select_ps(self, query=None, string_exact_match=True, **kwargs):
         ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
             Also applies selection to ms_xdt in ps.
-            Returns: bool (whether selection succeeded)
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
         '''
         ps_xdt = self._get_ps_xdt()
         self._selected_ps_xdt = select_ps(ps_xdt, self._logger, query=query, string_exact_match=string_exact_match, **kwargs)
-        return self._selected_ps_xdt is not None
+        if 'data_group_name' in kwargs:
+            self._data_group = kwargs['data_group_name']
 
     def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
             Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
-            Returns: bool (whether selection succeeded)
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
         '''
         ps_xdt = self._get_ps_xdt()
         self._selected_ps_xdt = select_ms(ps_xdt, self._logger, indexers, method, tolerance, drop, **indexers_kwargs)
-        return self._selected_ps_xdt is not None
+        if 'data_group_name' in indexers_kwargs:
+            self._data_group = indexers_kwargs['data_group_name']
 
     def clear_selection(self):
         ''' Clear previous selections and use original ps_xdt '''

@@ -7,15 +7,12 @@ def select_ps(ps_xdt, logger, query=None, string_exact_match=True, **kwargs):
         Apply selection query and kwargs to ProcessingSet using exact match or partial match.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
         Select Processing Set first (ps summary columns), then each MeasurementSetXds, where applicable.
-        Returns selected ProcessingSet DataTree (may be empty).
+        Returns selected ProcessingSet DataTree.
+        Throws exception if selection fails.
     '''
     # Do PSXdt selection
     logger.debug(f"Applying selection to ProcessingSet: query={query}, kwargs={kwargs}")
-    try:
-        selected_ps_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
-    except RuntimeError:
-        logger.error("ProcessingSet selection failed")
-        return xr.DataTree()
+    selected_ps_xdt = ps_xdt.xr_ps.query(query=query, string_exact_match=string_exact_match, **kwargs)
 
     if kwargs:
         ms_selection = {}
@@ -33,6 +30,7 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
     ''' Apply selection to each MeasurementSetXdt.
         See https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
         Return selected ProcessingSet DataTree.
+        Throws exception if selection fails.
     '''
     selected_ps_xdt = xr.DataTree() # return value
     dim_selection = None
@@ -56,13 +54,9 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
                 logger.debug(f"Applying dimension selection {dim_selection} to MS {name}")
                 try:
                     ms = ms.xr_ms.sel(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **dim_selection)
-                except KeyError: # selection failed, go to next MS
-                    logger.error(f"MeasurementSet dimension selection failed for ms {name}")
-                    continue
-
-            selected_ps_xdt[name] = ms
-        else:
-            logger.error(f"MeasurementSet coordinate selection failed for ms {name}")
+                    selected_ps_xdt[name] = ms
+                except KeyError:
+                    pass
     selected_ps_xdt.attrs = ps_xdt.attrs
     return selected_ps_xdt
 #pylint: enable=too-many-arguments, too-many-positional-arguments
@@ -70,6 +64,7 @@ def select_ms(ps_xdt, logger, indexers=None, method=None, tolerance=None, drop=F
 def get_dim_coord_selections(ps_xdt, ms_selection):
     ''' Sort selection by dimension and coordinate '''
     data_dims = list(ps_xdt.xr_ps.get_max_dims().keys())
+    data_dims.append('data_group_name')
     dim_selection = {}
     coord_selection = {}
     for key, val in ms_selection.items():

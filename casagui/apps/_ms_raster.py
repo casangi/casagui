@@ -102,14 +102,17 @@ class MsRaster(MsPlot):
         https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
         The selection will also be applied to the subset of MeasurementSets where needed.
         Selections are cumulative until clear_selection() is called.
-        Returns: bool (True if selection succeeded)
+        Raises exception with message if selection failed.
         '''
         if self._data and self._data.is_valid():
-            self._plot_inputs['selection'] |= kwargs
-            return self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
-
-        self._logger.error("Cannot select PS: input MS path is invalid or missing.")
-        return False
+            try:
+                self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+                self._plot_inputs['selection'] |= kwargs
+            except KeyError as ke:
+                error = f"ProcessingSet selection failed: {str(ke)}. Run clear_selection() to select original ProcessingSet."
+                raise KeyError(error) from ke
+        else:
+            raise RuntimeError("Cannot select ProcessingSet: input MS path is invalid or missing.")
 
     def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         '''
@@ -122,13 +125,17 @@ class MsRaster(MsPlot):
         https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel
         See https://xarray.pydata.org/en/stable/generated/xarray.Dataset.sel.html for parameter descriptions.
         Selections are cumulative until clear_selection() is called.
-        Returns: bool (True if selection succeeded)
+        Raises exception with message if selection failed.
         '''
         if self._data and self._data.is_valid():
-            self._plot_inputs['selection'] |= indexers_kwargs
-            return self._data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
-        self._logger.error("Cannot select MS: input MS path is invalid or missing.")
-        return False
+            try:
+                self._data.select_ms(indexers=indexers, method=method, tolerance=tolerance, drop=drop, **indexers_kwargs)
+                self._plot_inputs['selection'] |= indexers_kwargs
+            except KeyError as ke:
+                error = f"MeasurementSet selection failed: {str(ke)}. Run clear_selection() to select original ProcessingSet."
+                raise KeyError(error) from ke
+        else:
+            raise RuntimeError("Cannot select MeasurementSet: input MS path is invalid or missing.")
 
 # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, unused-argument
     def plot(self, x_axis='baseline', y_axis='time', vis_axis='amp', aggregator=None, agg_axis=None,
@@ -179,6 +186,8 @@ class MsRaster(MsPlot):
         If not show_gui and plotting is successful, use show() or save() to view/save the plot only.
         '''
         inputs = locals() # collect arguments into dict (not unused as pylint complains!)
+        if self._plot_inputs['selection']:
+            self._logger.info("Create raster plot with selection: %s", self._plot_inputs['selection'])
 
         start = time.time()
 
@@ -316,7 +325,7 @@ class MsRaster(MsPlot):
 
         # Automatically select data group and spw name if not user-selected
         auto_selection = {}
-        if 'data_group_name' not in plot_inputs:
+        if 'selection' not in plot_inputs or 'data_group_name' not in plot_inputs['selection']:
             auto_selection['data_group_name'] = 'base'
             plot_inputs['auto_data_group'] = 'base'
         if 'selection' not in plot_inputs or 'spw_name' not in plot_inputs['selection']:
@@ -326,6 +335,7 @@ class MsRaster(MsPlot):
 
         if auto_selection:
             # Do selection and save to plot inputs
+            self._logger.info("Automatic selection of data group and/or spw: %s", auto_selection)
             self._data.select_ps(query=None, string_exact_match=True, **auto_selection)
 
         # Print data info for spw selection

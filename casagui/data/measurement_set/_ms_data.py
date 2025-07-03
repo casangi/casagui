@@ -129,23 +129,27 @@ class MsData:
     def select_ps(self, query=None, string_exact_match=True, **kwargs):
         ''' Apply data group and summary column selection to ProcessingSet. See ProcessingSetXdt query().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.ProcessingSetXdt.query
-            Returns: bool (whether selection succeeded)
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
         '''
         if self._data_initialized:
-            return self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
-        self._log_no_ms()
-        return False
+            self._data.select_ps(query=query, string_exact_match=string_exact_match, **kwargs)
+        else:
+            self._log_no_ms()
 
     def select_ms(self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs):
         ''' Apply dimension and data group selection to MeasurementSet. See MeasurementsSetXdt sel().
             https://xradio.readthedocs.io/en/latest/measurement_set/schema_and_api/measurement_set_api.html#xradio.measurement_set.MeasurementSetXdt.sel.
             Additional supported selection besides dimensions include "baseline", "antenna1", "antenna2".
-            Returns: bool (whether selection succeeded)
+            Selections are cumulative until clear_selection() is called.
+            Saves selected ProcessingSet internally.
+            Throws exception if selection fails.
         '''
         if self._data_initialized:
-            return self._data.select_ms(indexers, method, tolerance, drop, **indexers_kwargs)
-        self._log_no_ms()
-        return False
+            self._data.select_ms(indexers, method, tolerance, drop, **indexers_kwargs)
+        else:
+            self._log_no_ms()
 
     def clear_selection(self):
         ''' Clears selection dict and selected data. '''

@@ -24,7 +24,7 @@ def raster_data(ps_xdt, plot_inputs, logger):
     # Create xds from concat ms_xds in ps
     raster_xds = concat_ps_xdt(raster_xdt, logger)
 
-    data_group = plot_inputs['data_group_name'] if 'data_group_name' in plot_inputs else plot_inputs['auto_data_group']
+    data_group = plot_inputs['selection']['data_group_name'] if ('selection' in plot_inputs and 'data_group_name' in plot_inputs['selection']) else plot_inputs['auto_data_group']
     correlated_data = get_correlated_data(raster_xds, data_group)
     if raster_xds[correlated_data].count() == 0:
         raise RuntimeError("Plot failed: raster plane selection yielded data with all nan values.")

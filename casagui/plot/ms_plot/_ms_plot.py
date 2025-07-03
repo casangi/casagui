@@ -126,10 +126,6 @@ class MsPlot:
             self._data.clear_selection()
 
         self._plot_inputs['selection'] = {}
-        try:
-            del self._plot_inputs['data_group_name']
-        except KeyError:
-            pass
 
     def show(self):
         ''' 
