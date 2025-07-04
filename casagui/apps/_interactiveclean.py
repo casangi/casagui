@@ -2090,6 +2090,7 @@ class InteractiveClean:
                                                                                   name=imid ),
                                                                        code='''document._casa_convergence_data = initial_convergence_state''' )
                                                              if idx == 0 else None )
+
             ###
             ### Auto Masking Parameters
             ###
@@ -2313,6 +2314,7 @@ class InteractiveClean:
         ###
         icw = SharedWidgets( )
         for imid, imdetails in self._clean_targets.items( ):
+            imdetails['gui']['stats'] = imdetails['gui']['cube'].statistics( )
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
 
             status_line = imdetails['gui']['stopcode'] = imdetails['gui']['cube'].status_text( "<p>initial residual image</p>" if imdetails['image-channels'] > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230, reuse=status_line )
@@ -2446,6 +2448,7 @@ class InteractiveClean:
                                                                                     'automask': v['gui']['params']['automask'],
                                                                                     'iteration': v['gui']['params']['iteration'],
                                                                                     'img': v['gui']['image']['fig'],
+                                                                                    'src': v['gui']['cube'].js_obj( ),
                                                                                     'spectrum': v['gui']['spectrum'],
                                                                                     'src': v['gui']['image']['src'],
                                                                                     'flux': v['converge-data']['flux'],
@@ -2659,7 +2662,7 @@ class InteractiveClean:
                                         title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
                           [ TabPanel( child=self._create_colormap_adjust(imdetails),
                                       title='Colormap' ),
-                            TabPanel( child=imdetails['gui']['cube'].statistics( ),
+                            TabPanel( child=column( *imdetails['gui']['stats'] ),
                                       title='Statistics' ) ] + imdetails['gui']['auto-masking-panel'],
                      width=500, sizing_mode='stretch_height', tabs_location='below' )
 
@@ -2958,10 +2961,6 @@ class InteractiveClean:
                                                const itobj = Object.entries(images_state)[0][1].iteration
                                                let stokes = 0    // later we will receive the polarity
                                                                  // from some widget mechanism...
-                                               //img_src.refresh( msg => { if ( 'stats' in msg ) { //  -- this should happen within CubeMask
-                                               //                              stat_src.data = msg.stats
-                                               //                          }
-                                               //                        } )
                                                if ( clean_msg !== undefined ) {
                                                    if ( 'iterleft' in clean_msg ) {
                                                        itobj.niter.value = '' + clean_msg['iterleft']
@@ -2985,8 +2984,11 @@ class InteractiveClean:
                                                                                            cyclethreshold: clean_msg.cyclethreshold }
                                                    }
                                                }
+
                                                // All images must be updated... without this no images are updated
-                                               casalib.map( (im,state) => state.src.refresh( ), images_state )
+                                               casalib.map( (im,state) => state.src.refresh( msg => {
+                                                   if ( 'stats' in msg ) state.src.update_statistics( msg.stats )
+                                               } ), images_state )
                                                // Update convergence plot...
                                                update_convergence( )
                                            }''',
