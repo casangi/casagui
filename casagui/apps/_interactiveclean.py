@@ -2985,10 +2985,9 @@ class InteractiveClean:
                                                                                            cyclethreshold: clean_msg.cyclethreshold }
                                                    }
                                                }
-                                               // >>HERE>> still needed?
-                                               // >>HERE>> img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
-                                               // >>HERE>> AT LEAST needed for gclean before multi-field imaging >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                                               images_state[document._casa_image_name].src.refresh( )
+                                               // All images must be updated... without this no images are updated
+                                               casalib.map( (im,state) => state.src.refresh( ), images_state )
+                                               // Update convergence plot...
                                                update_convergence( )
                                            }''',
 
