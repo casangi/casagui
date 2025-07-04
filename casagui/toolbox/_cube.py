@@ -729,10 +729,9 @@ class CubeMask:
                                                   css_classes=['cg-btn-selector'] )
 
         if self._mask_path:
-            return column( self._statistics_mask,
-                           self._statistics )
+            return ( self._statistics_mask, self._statistics )
         else:
-            return self._statistics
+            return ( self._statistics, )
 
     def palette( self, reuse=None, **kw ):
         '''retrieve a Select widget which allow for changing the pseudocolor palette
@@ -1491,7 +1490,7 @@ class CubeMask:
                                                                       source.masks = ( ) => typeof collect_masks == 'function' ? collect_masks( ) : { masks: [], polys: [] }
                                                                       source.breadcrumbs = ( ) => typeof source._mask_breadcrumbs !== 'undefined' ? source._mask_breadcrumbs : null
                                                                       source.drop_breadcrumb = ( code ) => source._mask_breadcrumbs += code
-                                                                      source._update_statistics = ( data ) => {
+                                                                      source.update_statistics = ( data ) => {
                                                                           data.values.forEach( (item, index) => {
                                                                               /** round floats **/
                                                                               if ( typeof item == 'number' && ! Number.isInteger(item) ) {
@@ -1499,7 +1498,7 @@ class CubeMask:
                                                                               } } )
                                                                           stats_source.data = data
                                                                       }
-                                                                      if ( stats_source ) source._update_statistics( stats_source.data ) /*** round floats ***/
+                                                                      if ( stats_source ) source.update_statistics( stats_source.data ) /*** round pre-filled floats ***/
                                                                       if ( user_init_script ) { user_init_script.execute(this) }
                                                                    """ )
 
@@ -1959,7 +1958,7 @@ class CubeMask:
                                                                                 { action: 'use mask', value: masking_on },
                                                                                 (msg) => { cb_obj.origin.label = cb_obj.item
                                                                                            source.channel( source.cur_chan[1], source.cur_chan[0],
-                                                                                                           msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } ) } ) }
+                                                                                                           msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } ) } ) }
                                                          ''' ) )
 
         self._image.js_on_event( MouseEnter, CustomJS( args=dict( source=self._image_source,
@@ -2253,7 +2252,7 @@ class CubeMask:
                                                           /* if the src mask on disk has changed the maskmod region is no longer valid */
                                                           source._mask.clear( )
                                                       }
-                                                      source.refresh( msg => { if ( 'stats' in msg ) { source._update_statistics( msg.stats ) } } )
+                                                      source.refresh( msg => { if ( 'stats' in msg ) { source.update_statistics( msg.stats ) } } )
                                                   }
                                               }
                                               function mask_add_chan( ) {
@@ -2948,7 +2947,7 @@ class CubeMask:
                                               }''',
                      'slider_w_stats':  '''if ( casalib.hotkeys.getScope( ) !== isource._hotkeys.id ) {
                                                isource.channel( slider.value, isource.cur_chan[0],
-                                                               msg => { if ( 'stats' in msg ) { isource._update_statistics( msg.stats ) }
+                                                               msg => { if ( 'stats' in msg ) { isource.update_statistics( msg.stats ) }
                                                                         if ( 'hist' in msg ) {
                                                                             %s
                                                                             %s
@@ -2989,7 +2988,7 @@ class CubeMask:
                                              source.channel( source.cur_chan[1], %s,
                                                              msg => { stokes.label = cb_obj.item
                                                                       if ( goto_stokes ) { goto_stokes.label = `${cb_obj.item} Channel` }
-                                                                      if ( 'stats' in msg ) { source._update_statistics( msg.stats ) }
+                                                                      if ( 'stats' in msg ) { source.update_statistics( msg.stats ) }
                                                              } )
                                          }''',
                      ### function to return mask state for current channel, the 'source' (image_data_source) object
