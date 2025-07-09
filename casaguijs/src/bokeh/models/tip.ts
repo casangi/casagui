@@ -10,6 +10,9 @@ import {build_view, IterViews} from "@bokehjs/core/build_views"
 export class TipView extends LayoutDOMView {
   declare model: Tip
 
+  private isMouseInside: boolean = false;
+  private debouncedShow: { (): void; cancel(): void };
+
   protected tooltip: TooltipView
   protected hover_wait: number
   fieldset_el: HTMLFieldSetElement
@@ -18,7 +21,26 @@ export class TipView extends LayoutDOMView {
       return [...super.stylesheets(), "*, *:before, *:after { box-sizing: border-box;  } fieldset { border: 0px; margin: 0px; padding: 0px; }"]
   }
 
+  Show( ): void {
+    this.tooltip.model.setv( {
+      visible: true,
+      closable: false,
+    } )
+  }
+
+  unShow( ): void {
+    this.tooltip.model.setv( {
+      visible: false,
+      closable: false,
+    } )
+  }
+
   override async lazy_initialize(): Promise<void> {
+    const {hover_wait} = this.model
+    this.debouncedShow = casalib.debounce( ( ) => {
+        if (this.isMouseInside) this.Show( )
+    }, hover_wait  * 1000 );
+
     await super.lazy_initialize()
     await this.build_child_views()
     const {tooltip} = this.model
@@ -58,59 +80,30 @@ export class TipView extends LayoutDOMView {
   override render(): void {
     super.render()
 
-    let wait_function_set = false
-    let mouse_inside = false
-    let persistent = false
-
-    const toggle = (visible: boolean) => {
-        if ( visible && ! wait_function_set ) {
-            // display tooltip after hover_wait seconds if mouse is still inside button
-            const {hover_wait} = this.model
-            wait_function_set = true
-            setTimeout( ( ) => {
-                // setting `wait_function_set = false` here resulted in the wait function
-                // being triggered again while the tooltip was still deployed
-                if ( mouse_inside ) {
-                    this.tooltip.model.setv( {
-                        visible,
-                        closable: false,
-                    } )
-                }
-            }, hover_wait * 1000 )
-        } else {
-            wait_function_set = false
-            this.tooltip.model.setv( {
-                visible,
-                closable: persistent,
-            } )
-        }
-        //icon_el.style.visibility = visible && persistent ? "visible" : ""
-    }
-
-    this.on_change(this.tooltip.model.properties.visible, () => {
-      const {visible} = this.tooltip.model
-      toggle(visible)
-    })
+    //this.on_change(this.tooltip.model.properties.visible, () => {
+    //  const {visible} = this.tooltip.model
+    //  toggle(visible)
+    //})
 
     this.el.addEventListener("mouseenter", () => {
-      mouse_inside = true
-      toggle(true)
+      this.isMouseInside = true
+      this.debouncedShow( )
     })
 
     this.el.addEventListener("mouseleave", () => {
-      //js_event_callbacks.get(event_name, []))
-      mouse_inside = false
-      if (!persistent)
-        toggle(false)
+      this.isMouseInside = false
+      this.debouncedShow.cancel( )
+      this.unShow( )
     })
 
     window.addEventListener("blur", () => {
-      persistent = false
-      toggle(false)
+      this.debouncedShow.cancel( )
+      this.unShow( )
     })
 
     this.el.addEventListener("click", ( /*event*/ ) => {
-      toggle(false)
+      this.debouncedShow.cancel( )
+      this.unShow( )
     })
 
     const child_els = this.child_views.map((child) => child.el)
