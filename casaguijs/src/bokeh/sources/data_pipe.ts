@@ -4,16 +4,6 @@ import { serialize, deserialize } from "../util/conversions"
 import { CallbackLike0 } from "@bokehjs/core/util/callbacks";
 import {execute} from "@bokehjs/core/util/callbacks"
 
-// global object_id function supplied by casalib
-declare global { // CASALIB DECL
-    var casalib: {
-        object_id: ( obj: { [key: string]: any } ) => string
-        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
-        coordtxl: any,
-        d3: any
-    }
-}
-
 declare global {
     // extend document with our properties
     interface Document { shutdown_in_progress_: boolean }
