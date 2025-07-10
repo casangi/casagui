@@ -592,7 +592,6 @@ class InteractiveClean:
                 help_button = imdetails['gui']['cube'].help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
                                                                     '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orange) will return control to the GUI after the currently executing tclean run completes</td></tr>' ], position='right' )
 
-
             self._create_convergence_gui( imdetails, orient='horizontal', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
 
             imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % self._initial_clean_params['nmajor'], width=90 )
@@ -973,21 +972,28 @@ class InteractiveClean:
     def _setup( self ):
         self.__reset( )
 
-        def initialize_tclean( imid, gclean ):
-            imdetails = self._clean_targets[imid]
-            stopdesc, stopcode, majordone, majorleft, iterleft, converge = next(gclean)
+        def initialize_tclean( gclean ):
 
-            for key, value in converge.items( ):
-                self._clean_targets[key]['converge'] = value
+            stopdesc, stopcode, majordone, majorleft, iterleft, all_converge = next(gclean)
 
-            if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0 or \
-                imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
-                ###
-                ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
-                ### but currently gclean can be initialized with bad arguments and it is not known until
-                ### the initial calls to tclean/deconvolve
-                ###
-                raise RuntimeError(f'''gclean failure "%s" not returned: {imdetails["converge"]}''' % ('major' if imdetails['converge']['major'] is None else 'chan'))
+            for imid, converge  in all_converge.items( ):
+                #######################################################################################################
+                ### gclean seems to return its internal state making it succeptable to modification... so we'll at  ###
+                ### least start out with unique dictionaries.                                                       ###
+                #######################################################################################################
+                converge = copy.deepcopy(converge)
+
+                imdetails = self._clean_targets[imid]
+                imdetails['converge'] = converge
+
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0 or \
+                    imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
+                    ###
+                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
+                    ### but currently gclean can be initialized with bad arguments and it is not known until
+                    ### the initial calls to tclean/deconvolve
+                    ###
+                    raise RuntimeError(f'''gclean failure "%s" not returned: {imdetails["converge"]}''' % ('major' if imdetails['converge']['major'] is None else 'chan'))
 
             self._clean['cmds'].extend(self._clean['gclean'].cmds( ))
 
@@ -1006,8 +1012,8 @@ class InteractiveClean:
 
 
         self._clean['cmds'] = []
-        for imid,gclean in zip(self._clean['imid'],[self._clean['gclean'],*self._clean['gclean_rest']]):
-            stopdesc, stopcode, majordone, majorleft, iterleft = initialize_tclean(imid,gclean)
+
+        stopdesc, stopcode, majordone, majorleft, iterleft = initialize_tclean(self._clean['gclean'])
 
 
         self._clean['last-success'] = dict( result='converged' if stopcode[0] else 'update', stopcode=stopcode, cmd=self._clean['cmds'],
