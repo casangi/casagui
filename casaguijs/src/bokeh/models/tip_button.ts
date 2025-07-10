@@ -11,6 +11,9 @@ import {dict} from "@bokehjs/core/util/object"
 export class TipButtonView extends AbstractButtonView {
   declare model: TipButton
 
+  private isMouseInside: boolean = false;
+  private debouncedShow: { (): void; cancel(): void };
+
   protected tooltip: TooltipView
   protected hover_wait: number
 
@@ -24,7 +27,26 @@ export class TipButtonView extends AbstractButtonView {
     yield this.tooltip
   }
 
+  Show( ): void {
+    this.tooltip.model.setv( {
+      visible: true,
+      closable: false,
+    } )
+  }
+
+  unShow( ): void {
+    this.tooltip.model.setv( {
+      visible: false,
+      closable: false,
+    } )
+  }
+
   override async lazy_initialize(): Promise<void> {
+    const {hover_wait} = this.model
+    this.debouncedShow = casalib.debounce( ( ) => {
+        if (this.isMouseInside) this.Show( )
+    }, hover_wait  * 1000 );
+
     await super.lazy_initialize()
     const {tooltip} = this.model
     this.tooltip = await build_view(tooltip, {parent: this})
@@ -38,51 +60,14 @@ export class TipButtonView extends AbstractButtonView {
   override render(): void {
     super.render()
 
-    let wait_function_set = false
-    let mouse_inside = false
-    let persistent = false
-
-    const toggle = (visible: boolean) => {
-        if ( visible && ! wait_function_set ) {
-            // display tooltip after hover_wait seconds if mouse is still inside button
-            const {hover_wait} = this.model
-            wait_function_set = true
-            setTimeout( ( ) => {
-                // setting `wait_function_set = false` here resulted in the wait function
-                // being triggered again while the tooltip was still deployed
-                if ( mouse_inside ) {
-                    this.tooltip.model.setv( {
-                        visible,
-                        closable: persistent,
-                    } )
-                }
-            }, hover_wait * 1000 )
-        } else {
-            wait_function_set = false
-            this.tooltip.model.setv( {
-                visible,
-                closable: persistent,
-            } )
-        }
-        //icon_el.style.visibility = visible && persistent ? "visible" : ""
-    }
-
-    this.on_change(this.tooltip.model.properties.visible, () => {
-      const {visible} = this.tooltip.model
-      if (!visible) {
-        persistent = false
-      }
-      toggle(visible)
-    })
     this.el.addEventListener("mouseenter", () => {
-      mouse_inside = true
-      toggle(true)
+      this.isMouseInside = true
+      this.debouncedShow( )
     })
     this.el.addEventListener("mouseleave", () => {
-      //js_event_callbacks.get(event_name, []))
-      mouse_inside = false
-      if (!persistent)
-        toggle(false)
+      this.isMouseInside = false
+      this.debouncedShow.cancel( )
+      this.unShow( )
     })
     document.addEventListener("mousedown", (event) => {
       if ( typeof dict(this.model.js_event_callbacks).get(ButtonClick.prototype.event_name) == 'undefined' ) {
@@ -90,22 +75,20 @@ export class TipButtonView extends AbstractButtonView {
           const path = event.composedPath()
           if (path.includes(this.tooltip.el)) {
               return
-          } else if (path.includes(this.el)) {
-              persistent = !persistent
-              toggle(persistent)
           } else {
-              persistent = false
-              toggle(false)
+	      this.debouncedShow.cancel( )
+	      this.unShow( )
           }
       } else {
           // close any tooltip for invoking button click handler
-          toggle(false)
-          mouse_inside = false
+          this.isMouseInside = false
+	  this.debouncedShow.cancel( )
+	  this.unShow( )
       }
     })
     window.addEventListener("blur", () => {
-      persistent = false
-      toggle(false)
+      this.debouncedShow.cancel( )
+      this.unShow( )
     })
   }
 }

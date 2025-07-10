@@ -24,3 +24,31 @@ export function reduce<T,U>( func: ((acc: U, key: string, val: any, index:number
     else
         throw new Error( `casalib.reduce applied to ${typeof(container)}` )
 }
+
+export function debounce(func: () => void, delay: number) {
+  let timeoutId: number | null = null;
+
+  // The main debounced function
+  const debouncedFunction = function() {
+    // Cancel any pending execution
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+
+    // Schedule new execution
+    timeoutId = window.setTimeout(() => {
+      func();
+      timeoutId = null;
+    }, delay);
+  };
+
+  // Add a cancel method to the function
+  debouncedFunction.cancel = function() {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  return debouncedFunction;
+}

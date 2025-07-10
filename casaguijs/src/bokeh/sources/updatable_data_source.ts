@@ -4,15 +4,6 @@ import { DataPipe } from "./data_pipe"
 import { CallbackLike0, CallbackLike1 } from "@bokehjs/core/util/callbacks";
 import {execute} from "@bokehjs/core/util/callbacks"
 
-declare global { // CASALIB DECL
-    var casalib: {
-        object_id: ( obj: { [key: string]: any } ) => string
-        ReconnectState: ( ) => { timeout: number, retries: number, connected: boolean, backoff: ( ) => void }
-        coordtxl: any,
-        d3: any
-    }
-}
-
 // Data source where the data is defined column-wise, i.e. each key in the
 // the data attribute is a column name, and its value is an array of scalars.
 // Each column should be the same length.

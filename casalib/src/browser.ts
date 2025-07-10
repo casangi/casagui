@@ -4,7 +4,7 @@
  */
 import { object_id } from './object_id'
 //import { map, reduce } from "./functional"
-import { map, reduce } from "./functional"
+import { map, reduce, debounce } from "./functional"
 import { is_empty, minmax, sorted } from './array_funcs'
 import { strparse_intranges, intlist_to_rangestr } from './string_funcs'
 import { forexpr } from './loop_funcs'
@@ -66,6 +66,7 @@ var casalib = {
     intlist_to_rangestr,
     map,
     reduce,
+    debounce,
     zip,
     unzip,
     forexpr,

@@ -1,0 +1,4 @@
+imagename=try_multifield_1
+imsize=[80,80]
+cell=[8.0arcsec,8.0arcsec]
+phasecenter=J2000 19:58:41.095 +40.56.01.043

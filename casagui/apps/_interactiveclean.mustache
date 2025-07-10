@@ -54,19 +54,11 @@ from bokeh.models.dom import HTML
 
 from bokeh.models.ui.tooltips import Tooltip
 from ..bokeh.models import TipButton, Tip, EvTextInput
-from ..utils import resource_manager, reset_resource_manager, is_notebook
+from ..utils import resource_manager, reset_resource_manager, is_notebook, find_pkg, load_pkg
 from ..utils import ContextMgrChain as CMC
 
 # pylint: disable=no-name-in-module
 from casatasks.private.imagerhelpers.imager_return_dict import ImagingDict
-try:
-    from casatasks.private.imagerhelpers._gclean import gclean as _gclean
-except Exception as e:
-    import inspect as _insp
-    import os as _os
-    from casagui.private._gclean import gclean as _gclean
-    print( f'''>>>--caution--> Using cached gclean API from {_os.path.dirname(_os.path.abspath(_insp.getsourcefile(_gclean)))}''' )
-    print( f'''                {e}''' )
 
 from casatasks.private.imagerhelpers.input_parameters import ImagerParameters
 # pylint: enable=no-name-in-module
@@ -79,11 +71,13 @@ from ..utils import DocEnum
 
 from ._interactiveclean_wrappers import SharedWidgets
 
+USE_MULTIPLE_GCLEAN_HACK=False
+
 class InteractiveClean:
     '''InteractiveClean(...) implements interactive clean using Bokeh
     {{docstring}}
     '''
-    def __stop( self, _ ):
+    def __stop( self, _=None ):
         self.__result_future.set_result(self.__retrieve_result( ))
 
     def _abort_handler( self, err ):
@@ -142,7 +136,40 @@ class InteractiveClean:
         cmd += ' ' + str(hostname)
         return cmd
 
-    def __init__( self, vis, imagename{{# initParams}}, {{name}}={{default}}{{/ initParams}} ):
+    def _residual_path( self, gclean, imid ):
+        if self._clean['gclean_paths'] is None:
+            raise RuntimeError( f'''gclean paths are not available for {imid}''' )
+        for p in self._clean['gclean_paths']:
+            if p['name'] == imid:
+                return f"{p['imagepath']}/{p['residualname']}"
+        raise RuntimeError( f'''gclean residual path not found for {imid}''' )
+
+    def _mask_path( self, gclean, imid ):
+        if self._clean['gclean_paths'] is None:
+            raise RuntimeError( f'''gclean paths are not available for {imid}''' )
+        for p in self._clean['gclean_paths']:
+            if p['name'] == imid:
+                return f"{p['imagepath']}/{p['maskname']}"
+        raise RuntimeError( f'''gclean mask path not found for {imid}''' )
+
+    def __init__( self, vis, imagename{{# initParams}}, {{name}}={{default}}{{/ initParams}}, iclean_backend="PROD" ):
+
+        ###
+        ### iclean_backend can be used to select alternate backends for interactive clean. This could be used
+        ### to enable a backend with extended features or it could be used to select a stub backend designed
+        ### for testing
+        ###
+        mod_specs = None
+        self._gclean_module = None
+        if iclean_backend == 'PROD':
+            mod_specs = find_pkg( "casatasks.private.imagerhelpers._gclean" )
+        else:
+            mod_specs = find_pkg( f"_gclean_{iclean_backend}" )
+
+        if mod_specs:
+            self._gclean_module = load_pkg(mod_specs[0])
+        else:
+            raise ImportError(f"Could not locate {iclean_backend} kind of iclean backend")
 
         ###
         ### With Bokeh 3.2.2, the spectrum and convergence plots extend beyond the edge of the
@@ -210,12 +237,6 @@ class InteractiveClean:
         self._last_mask_breadcrumbs = ''
 
         ###
-        ### clean generator
-        ###
-        if _gclean is None:
-            raise RuntimeError('casatasks gclean interface is not available')
-
-        ###
         ### Set up dictionary of javascript code snippets
         ###
         self._initialize_javascript( )
@@ -232,9 +253,11 @@ class InteractiveClean:
         self._clean = { 'converge': { 'state': { } }, 'last-success': None }
 
         self._clean_targets = { imagename: { 'args': {{forwDict}} } }
+        self._initial_clean_params = { }
+
         self._parameters = ImagerParameters( **{ k:v for k,v in self._clean_targets[imagename]['args'].items( )
                                                  if k in ImagerParameters.__init__.__code__.co_varnames[1:] } )
-        self._clean_targets[imagename]['args']['outlierfile'] = ''		### >>HERE>> outlierfile TEMPORARILY handled in _interactiveclean.py
+
         ###
         ### For 6.6.5, outliers are not yet completely implemented so the
         ### 'outlierfile' parameter may not be present.
@@ -257,9 +280,17 @@ class InteractiveClean:
         ###
         ### create clean interface -- final version will have only one gclean object
         ###
-        convergence_state={ 'convergence': {}, 'cyclethreshold': {} }
+        self._init_values = { "deconvolver": deconvolver,                       ### used by _residual_path( )
+                              "cycleniter": cycleniter,                         ### used by _setup( )
+                              "threshold": threshold,                           ### used by _setup( )
+                              "cyclefactor": cyclefactor,                       ### used by _setup( )
+                              "gain": gain,                                     ### used by _setup( )
+                              "nsigma": nsigma,                                 ### used by _setup( )
+                              "convergence_state": { 'convergence': {},         ### shares state between
+                                                     'cyclethreshold': {} } }   ### __init__( ) and _setup( )
+
         self._clean['gclean'] = None
-        self._clean['masks'] = { }
+        self._clean['gclean_paths'] = None
         self._clean['imid'] = [ ]
         self._clean['gclean_rest'] = [ ]
         for imid, imdetails in self._clean_targets.items( ):
@@ -271,57 +302,16 @@ class InteractiveClean:
             if 'path' not in imdetails: imdetails['path'] = { }
             if self._clean['gclean'] is None:
 
-                self._clean['gclean'] = _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(self._clean['gclean'])
+                self._clean['gclean'] = self._gclean_module.gclean( **imdetails['args'] )
+                self._clean['gclean_paths'] = self._clean['gclean'].image_products( )
 
-                if imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
-                    ###
-                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
-                    ### but currently gclean can be initialized with bad arguments and it is not known until
-                    ### the initial calls to tclean/deconvolve
-                    ###
-                    raise RuntimeError('gclean failure "%s" not returned' % ('major' if imdetails['converge']['major'] is None else 'chan'))
-
-                clean_cmds = self._clean['gclean'].cmds( )
-
-                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
-                    raise RuntimeError(stopdesc)
-
-                convergence_state['convergence'][imid] = imdetails['converge']['chan']
-                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
-
-                self._clean['masks'][imid] = self._clean['gclean'].mask( )
-
-                if deconvolver == 'mtmfs':
-                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
-                else:
-                    imdetails['path']['residual'] = ("%s.residual" % imid) if self._clean['gclean'].has_next() else (self._clean['gclean'].finalize()['image'])
-
+                imdetails['path']['residual'] = self._residual_path(self._clean['gclean'],imid)
+                imdetails['path']['mask'] = self._mask_path(self._clean['gclean'],imid)
 
             else:
-                next_gclean =  _gclean( **imdetails['args'] )
-                stopdesc, stopcode, majordone, majorleft, iterleft, imdetails['converge'] = next(next_gclean)
-                clean_cmds = self._clean['gclean'].cmds( )
 
-                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0:
-                    raise RuntimeError(stopdesc)
-
-                convergence_state['convergence'][imid] = imdetails['converge']['chan']
-                convergence_state['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
-
-                self._clean['masks'][imid] = next_gclean.mask( )
-
-                if deconvolver == 'mtmfs':
-                    imdetails['path']['residual'] = ("%s.residual.tt0" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
-                else:
-                    imdetails['path']['residual'] = ("%s.residual" % imid) if next_gclean.has_next() else (next_gclean.finalize()['image'])
-
-                self._clean['gclean_rest'].append(next_gclean)
-
-        self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
-                                            convergence=convergence_state['convergence'],
-                                            iterdone=0, iterleft=iterleft,
-                                            majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
+                imdetails['path']['residual'] = self._residual_path(self._clean['gclean'],imid)
+                imdetails['path']['mask'] = self._mask_path(self._clean['gclean'],imid)
 
         for idx, (imid, imdetails) in enumerate(self._clean_targets.items( )):
             imdetails['gui'] = { }
@@ -333,27 +323,16 @@ class InteractiveClean:
             ###
             ### Only the first image should initialize the initial convergence state
             ###
-            imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=self._clean['masks'][imid], abort=self._abort_handler,
-                                                 init_script=CustomJS( args=dict( initial_convergence_state=convergence_state, name=imid ),
+            imdetails['gui']['cube'] = CubeMask( imdetails['path']['residual'], mask=imdetails['path']['mask'], abort=self._abort_handler,
+                                                 init_script=CustomJS( args=dict( initial_convergence_state=self._init_values["convergence_state"],
+                                                                                  name=imid ),
                                                                        code='''document._casa_convergence_data = initial_convergence_state''' )
                                                              if idx == 0 else None )
 
             ###
-            ### Iteration Parameters
-            ###
-            imdetails['params'] = { }
-            imdetails['params']['it'] = { }
-            imdetails['params']['it']['nmajor'] = majorleft
-            imdetails['params']['it']['niter'] = iterleft
-            imdetails['params']['it']['cycleniter'] = cycleniter
-            imdetails['params']['it']['threshold'] = threshold
-            imdetails['params']['it']['cyclefactor'] = cyclefactor
-            imdetails['params']['it']['gain'] = gain
-            imdetails['params']['it']['nsigma'] = nsigma
-
-            ###
             ### Auto Masking Parameters
             ###
+            imdetails['params'] = { }
             imdetails['params']['am'] = { }
             imdetails['params']['am']['usemask'] = usemask
             imdetails['params']['am']['noisethreshold'] = noisethreshold
@@ -499,33 +478,21 @@ class InteractiveClean:
 
                 clean_cmds = self._clean['gclean'].cmds( )
 
-                if len(self._convergence_data['chan']) == 0 or stopcode == -1:
-                    ### stopcode == -1 indicates an error condition within gclean
-                    return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
-                                 convergence=None, majordone=majordone,
-                                 majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
+                for key, value in self._convergence_data.items( ):
 
-                convergence_state['convergence'][self._clean['imid'][0]] = self._convergence_data['chan']
-                convergence_state['cyclethreshold'][self._clean['imid'][0]] = self._convergence_data['major']['cyclethreshold']
+                    if len(value['chan']) == 0 or stopcode[0] == -1:
+                        ### stopcode[0] == -1 indicates an error condition within gclean
+                        return dict( result='error', stopcode=stopcode, cmd=clean_cmds,
+                                     convergence=None, majordone=majordone,
+                                     majorleft=majorleft, iterleft=iterleft, stopdesc=stopdesc )
 
-                for g in zip(self._clean['imid'][1:],self._clean['gclean_rest']):
-                    e,em = g[1].update( dict( **msg['value']['iteration'],
-                                              **msg['value']['automask'] ) )
-                    sdesc, scode, majord, majorl, iterl, cvg = await g[1].__anext__( )
+                    convergence_state['convergence'][key] = value['chan']
+                    convergence_state['cyclethreshold'][key] = value['major']['cyclethreshold']
 
-                    clean_cmds = clean_cmds + g[1].cmds( )
-
-                    if len(cvg['chan']) == 0 or scode == -1:
-                        convergence_state['convergence'][g[0]] = { }
-                        convergence_state['cyclethreshold'][g[0]] = { }
-                    else:
-                        convergence_state['convergence'][g[0]] = cvg['chan']
-                        convergence_state['cyclethreshold'][g[0]] = cvg['major']['cyclethreshold']
-
-                ### stopcode != 0 indicates that some stopping criteria has been reached
+                ### stopcode[0] != 0 indicates that some stopping criteria has been reached
                 ###               this will also catch errors as well as convergence
                 ###               (so 'converged' isn't quite right...)
-                self._clean['last-success'] = dict( result='converged' if stopcode != 0 else 'update', stopcode=stopcode, cmd=clean_cmds,
+                self._clean['last-success'] = dict( result='converged' if stopcode[0] else 'update', stopcode=stopcode, cmd=clean_cmds,
                                                    convergence=convergence_state['convergence'],
                                                    iterdone=iteration_limit - iterleft, iterleft=iterleft,
                                                    majordone=majordone, majorleft=majorleft, cyclethreshold=convergence_state['cyclethreshold'], stopdesc=stopdesc )
@@ -585,6 +552,7 @@ class InteractiveClean:
         ###
         icw = SharedWidgets( )
         for imid, imdetails in self._clean_targets.items( ):
+            imdetails['gui']['stats'] = imdetails['gui']['cube'].statistics( )
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
 
             status_line = imdetails['gui']['stopcode'] = imdetails['gui']['cube'].status_text( "<p>initial residual image</p>" if imdetails['image-channels'] > 1 else "<p>initial <b>single-channel</b> residual image</p>", width=230, reuse=status_line )
@@ -624,16 +592,15 @@ class InteractiveClean:
                 help_button = imdetails['gui']['cube'].help( rows=[ '<tr><td><i><b>red</b> stop button</i></td><td>clicking the stop button (when red) will close the dialog and control to python</td></tr>',
                                                                     '<tr><td><i><b>orange</b> stop button</i></td><td>clicking the stop button (when orange) will return control to the GUI after the currently executing tclean run completes</td></tr>' ], position='right' )
 
-
             self._create_convergence_gui( imdetails, orient='horizontal', sizing_mode='stretch_height', width=self._conv_spect_plot_width )
 
-            imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % imdetails['params']['it']['nmajor'], width=90 )
-            imdetails['gui']['params']['iteration']['niter'] = icw.niter( title='niter', value="%s" % imdetails['params']['it']['niter'], width=90 )
-            imdetails['gui']['params']['iteration']['cycleniter'] = icw.cycleniter( title="cycleniter", value="%s" % imdetails['params']['it']['cycleniter'], width=90 )
-            imdetails['gui']['params']['iteration']['threshold'] = icw.threshold( title="threshold", value="%s" % imdetails['params']['it']['threshold'], width=90 )
-            imdetails['gui']['params']['iteration']['cyclefactor'] = icw.cyclefactor( value="%s" % imdetails['params']['it']['cyclefactor'], title="cyclefactor", width=90 )
-            imdetails['gui']['params']['iteration']['gain'] = icw.gain( title='gain', value="%s" % imdetails['params']['it']['gain'], width=90 )
-            imdetails['gui']['params']['iteration']['nsigma'] = icw.nsigma( title='nsigma', value="%s" % imdetails['params']['it']['nsigma'], width=90 )
+            imdetails['gui']['params']['iteration']['nmajor'] = icw.nmajor( title='nmajor', value="%s" % self._initial_clean_params['nmajor'], width=90 )
+            imdetails['gui']['params']['iteration']['niter'] = icw.niter( title='niter', value="%s" % self._initial_clean_params['niter'], width=90 )
+            imdetails['gui']['params']['iteration']['cycleniter'] = icw.cycleniter( title="cycleniter", value="%s" % self._initial_clean_params['cycleniter'], width=90 )
+            imdetails['gui']['params']['iteration']['threshold'] = icw.threshold( title="threshold", value="%s" % self._initial_clean_params['threshold'], width=90 )
+            imdetails['gui']['params']['iteration']['cyclefactor'] = icw.cyclefactor( value="%s" % self._initial_clean_params['cyclefactor'], title="cyclefactor", width=90 )
+            imdetails['gui']['params']['iteration']['gain'] = icw.gain( title='gain', value="%s" % self._initial_clean_params['gain'], width=90 )
+            imdetails['gui']['params']['iteration']['nsigma'] = icw.nsigma( title='nsigma', value="%s" % self._initial_clean_params['nsigma'], width=90 )
 
             if imdetails['params']['am']['usemask'] == 'auto-multithresh':
                 ###
@@ -718,6 +685,7 @@ class InteractiveClean:
                                                                                     'automask': v['gui']['params']['automask'],
                                                                                     'iteration': v['gui']['params']['iteration'],
                                                                                     'img': v['gui']['image']['fig'],
+                                                                                    'src': v['gui']['cube'].js_obj( ),
                                                                                     'spectrum': v['gui']['spectrum'],
                                                                                     'src': v['gui']['image']['src'],
                                                                                     'flux': v['converge-data']['flux'],
@@ -839,8 +807,6 @@ class InteractiveClean:
         ### browser tab that is running interactive clean
         ###
         initial_log = self._clean['gclean'].cmds( )
-        for g in self._clean['gclean_rest']:
-            initial_log = initial_log + g.cmds( )
 
         self._pipe['control'].init_script=CustomJS( args=dict( ctrl_pipe=self._pipe['control'],
                                                                ids=self._clean_ids,
@@ -933,7 +899,7 @@ class InteractiveClean:
                                         title='Spectrum' ) ] if imdetails['image-channels'] > 1 else [ ] ) +
                           [ TabPanel( child=self._create_colormap_adjust(imdetails),
                                       title='Colormap' ),
-                            TabPanel( child=imdetails['gui']['cube'].statistics( ),
+                            TabPanel( child=column( *imdetails['gui']['stats'] ),
                                       title='Statistics' ) ] + imdetails['gui']['auto-masking-panel'],
                      width=500, sizing_mode='stretch_height', tabs_location='below' )
 
@@ -978,7 +944,7 @@ class InteractiveClean:
                                interpolation='nearest', ... )( ) )
         '''
 
-        self.setup()
+        self._setup()
 
         # If Interactive Clean is being run remotely, print helper info for port tunneling
         if self._is_remote:
@@ -1003,8 +969,61 @@ class InteractiveClean:
             asyncio.run(_run_( ))
             return self.result( )
 
-    def setup( self ):
+    def _setup( self ):
         self.__reset( )
+
+        def initialize_tclean( gclean ):
+
+            stopdesc, stopcode, majordone, majorleft, iterleft, all_converge = next(gclean)
+
+            for imid, converge  in all_converge.items( ):
+                #######################################################################################################
+                ### gclean seems to return its internal state making it succeptable to modification... so we'll at  ###
+                ### least start out with unique dictionaries.                                                       ###
+                #######################################################################################################
+                converge = copy.deepcopy(converge)
+
+                imdetails = self._clean_targets[imid]
+                imdetails['converge'] = converge
+
+                if imdetails['converge'] is None or len(imdetails['converge'].keys()) == 0 or \
+                    imdetails['converge']['major'] is None or imdetails['converge']['chan'] is None:
+                    ###
+                    ### gclean should provide argument checking (https://github.com/casangi/casagui/issues/33)
+                    ### but currently gclean can be initialized with bad arguments and it is not known until
+                    ### the initial calls to tclean/deconvolve
+                    ###
+                    raise RuntimeError(f'''gclean failure "%s" not returned: {imdetails["converge"]}''' % ('major' if imdetails['converge']['major'] is None else 'chan'))
+
+            self._clean['cmds'].extend(self._clean['gclean'].cmds( ))
+
+            self._initial_clean_params['nmajor'] = majorleft
+            self._initial_clean_params['niter'] = iterleft
+            self._initial_clean_params['cycleniter'] = self._init_values["cycleniter"]
+            self._initial_clean_params['threshold'] = self._init_values["threshold"]
+            self._initial_clean_params['cyclefactor'] = self._init_values["cyclefactor"]
+            self._initial_clean_params['gain'] = self._init_values["gain"]
+            self._initial_clean_params['nsigma'] = self._init_values["nsigma"]
+
+            self._init_values["convergence_state"]['convergence'][imid] = imdetails['converge']['chan']
+            self._init_values["convergence_state"]['cyclethreshold'][imid] = imdetails['converge']['major']['cyclethreshold']
+
+            return (stopdesc, stopcode, majordone, majorleft, iterleft)
+
+
+        self._clean['cmds'] = []
+
+        stopdesc, stopcode, majordone, majorleft, iterleft = initialize_tclean(self._clean['gclean'])
+
+
+        self._clean['last-success'] = dict( result='converged' if stopcode[0] else 'update', stopcode=stopcode, cmd=self._clean['cmds'],
+                                            convergence=self._init_values["convergence_state"]['convergence'],
+                                            iterdone=0, iterleft=iterleft,
+                                            majordone=majordone, majorleft=majorleft,
+                                            cyclethreshold=self._init_values["convergence_state"]['cyclethreshold'],
+                                            stopdesc=stopdesc )
+
+        ### Must occur AFTER initial "next" call to gclean(s)
         self._init_pipes()
 
     @asynccontextmanager
@@ -1085,8 +1104,6 @@ class InteractiveClean:
             raise RuntimeError( 'no interactive clean result is available' )
 
         self._clean['gclean'].restore( )
-        for g in self._clean['gclean_rest']:
-            g.restore( )
 
         return self.__result_future.result( )
 
@@ -1188,10 +1205,6 @@ class InteractiveClean:
                                                const itobj = Object.entries(images_state)[0][1].iteration
                                                let stokes = 0    // later we will receive the polarity
                                                                  // from some widget mechanism...
-                                               //img_src.refresh( msg => { if ( 'stats' in msg ) { //  -- this should happen within CubeMask
-                                               //                              stat_src.data = msg.stats
-                                               //                          }
-                                               //                        } )
                                                if ( clean_msg !== undefined ) {
                                                    if ( 'iterleft' in clean_msg ) {
                                                        itobj.niter.value = '' + clean_msg['iterleft']
@@ -1215,9 +1228,12 @@ class InteractiveClean:
                                                                                            cyclethreshold: clean_msg.cyclethreshold }
                                                    }
                                                }
-                                               // >>HERE>> still needed?
-                                               // >>HERE>> img_src.refresh( (data) => { if ( 'stats' in data ) cube_obj.update_statistics( data.stats ) } )
 
+                                               // All images must be updated... without this no images are updated
+                                               casalib.map( (im,state) => state.src.refresh( msg => {
+                                                   if ( 'stats' in msg ) state.src.update_statistics( msg.stats )
+                                               } ), images_state )
+                                               // Update convergence plot...
                                                update_convergence( )
                                            }''',
 
@@ -1368,16 +1384,16 @@ class InteractiveClean:
                                                        update_log( msg.cmd )
                                                    }
                                                    refresh( msg )
-                                                   // stopcode == 1: iteration limit hit
-                                                   // stopcode == 9: major cycle limit hit
+                                                   // stopcode[0] == 1: iteration limit hit
+                                                   // stopcode[0] == 9: major cycle limit hit
                                                    // *******************************************************************************************
                                                    // ******** perhaps the user should not be locked into exiting after the limit is hit ********
                                                    // *******************************************************************************************
-                                                   //state.stopped = state.stopped || (msg.stopcode > 1 && msg.stopcode < 9) || msg.stopcode == 0
+                                                   //state.stopped = state.stopped || (msg.stopcode[0] > 1 && msg.stopcode[0] < 9) || msg.stopcode[0] == 0
                                                    state.stopped = false
                                                    if ( state.mode === 'interactive' && ! state.awaiting_stop ) {
                                                        clean_ctrl.stop.button_type = "danger"
-                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                       update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                        if ( ! state.stopped ) {
                                                            enable( false )
                                                        } else {
@@ -1407,7 +1423,7 @@ class InteractiveClean:
                                                            clean_ctrl.stop.button_type = "danger"
                                                            enable(false)
                                                            state.stopped = false
-                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode : -1 )
+                                                           update_status( msg.stopdesc ? msg.stopdesc : 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                        }
                                                    }
                                                } else if ( msg.result === 'error' ) {
@@ -1418,7 +1434,7 @@ class InteractiveClean:
                                                    state.mode = 'interactive'
                                                    clean_ctrl.stop.button_type = "danger"
                                                    state.stopped = false
-                                                   update_status( 'stopcode' in msg ? msg.stopcode : -1 )
+                                                   update_status( 'stopcode' in msg ? msg.stopcode[0] : -1 )
                                                    enable( false )
                                                }
                                            }''',

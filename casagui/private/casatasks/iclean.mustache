@@ -51,14 +51,14 @@ class _iclean:
     _info_group_ = """{{group}}"""
     _info_desc_ = """{{desc}}"""
 
-    def __call__( self, {{params}} ):
+    def __call__( self, {{params}}, iclean_backend="PROD" ):
         schema = { {{# paramListNKW}}'{{name}}': {{schema}}, {{/ paramListNKW}} }
         doc = { {{# paramListNKW}}'{{name}}': {{name}}, {{/ paramListNKW}} }
         assert _pc.validate(doc,schema), create_error_string(_pc.errors)
         _logging_state_ = _start_log( 'iclean', [ {{# paramListNKW}}'{{name}}=' + repr(_pc.document['{{name}}']), {{/ paramListNKW}} ] )
         task_result = None
         try:
-            task_result = _iclean_t( {{# paramListNKW}}{{name}}=_pc.document['{{name}}'], {{/ paramListNKW}} )
+            task_result = _iclean_t( iclean_backend=iclean_backend, {{# paramListNKW}}{{name}}=_pc.document['{{name}}'], {{/ paramListNKW}} )
         except Exception as exc:
             _except_log('iclean', exc)
             raise
