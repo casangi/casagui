@@ -704,7 +704,7 @@ class CubeMask:
                              TableColumn(field='values', title='Values') ]
 
             # using set_attributes allows the user to override defaults like 'width=400'
-            self._statistics = set_attributes( DataTable( source=self._statistics_source, columns=stats_column ), **kw )
+            self._statistics = set_attributes( DataTable( source=self._statistics_source, columns=stats_column, index_position=None ), **kw )
             #self._statistics = set_attributes( DataTable( source=self._statistics_source, columns=stats_column,
             #                                              height_policy='fit' ), **kw )
                                                           #height_policy='fit' ), **kw )
