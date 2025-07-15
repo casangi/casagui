@@ -810,7 +810,7 @@ class CubeMask:
         ### The Tooltip(...) works by creating an "i" in a circle with the label that can be clicked.
         ### With "prefix=..." and no label, no button is displayed.
         ###
-        self._cm_adjust['min input'] =  TextInput( value=repr(edges[0]), prefix="min" )
+        self._cm_adjust['min input'] =  TextInput( value=str(edges[0]), prefix="min" )
         self._cm_adjust['min input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
                                                                                     span2=self._cm_adjust['span two'] ),
                                                                          code=span_edited_funcs +
@@ -824,7 +824,7 @@ class CubeMask:
                                                                                      set_edited(span2)
                                                                                  }''' ) )
 
-        self._cm_adjust['max input'] = TextInput( value=repr(edges[-1]), prefix="max" )
+        self._cm_adjust['max input'] = TextInput( value=str(edges[-1]), prefix="max" )
         self._cm_adjust['max input'].js_on_event( ValueSubmit, CustomJS( args=dict( span1=self._cm_adjust['span one'],
                                                                                     span2=self._cm_adjust['span two'] ),
                                                                          code=span_edited_funcs +
