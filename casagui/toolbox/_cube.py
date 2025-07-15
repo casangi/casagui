@@ -47,7 +47,7 @@ from bokeh.models import PolyAnnotation
 from bokeh.models import CustomJS, CustomAction, Slider, Div, Span, HoverTool, TableColumn, \
                          DataTable, Select, ColorPicker, Spinner, Select, Button, PreText, Dropdown, \
                          LinearColorMapper, TextInput, Spacer, InlineStyleSheet, Quad
-from bokeh.models import WheelZoomTool, PanTool, ResetTool, PolySelectTool
+from bokeh.models import WheelZoomTool, PanTool, ResetTool, PolySelectTool, LassoSelectTool, BoxSelectTool, SaveTool, ResetTool
 from bokeh.models import BasicTickFormatter
 from bokeh.plotting import ColumnDataSource, figure
 from casagui.bokeh.sources import ImageDataSource, ImagePipe, DataPipe
@@ -199,11 +199,11 @@ class CubeMask:
                           cube=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'sub-cube.png' ) ) )
             self._mask_icons_ = dict( on=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm-selected.png' ) ),
                                       off=casaimage.as_mime(join( dirname(dirname(__file__)), "__icons__", 'new-layer-sm.png' ) ) )
-            self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'],
+            self._mask_add_sub = { 'add': CustomAction( icon=_add_['chan'], name="Mask Add",
                                                         description="add region to current channel's mask (hold Shift key then click to add to all channels)" ),
-                                   'sub': CustomAction( icon=_sub_['chan'],
+                                   'sub': CustomAction( icon=_sub_['chan'], name="Mask Sub",
                                                         description="subtract region from current channel's mask (hold Shift key then click to subtract from all channels)" ),
-                                   'mask': CustomAction( icon=self._mask_icons_['off'],
+                                   'mask': CustomAction( icon=self._mask_icons_['off'], name="Mask Select",
                                                          description="select the mask for the current channel" ),
                                    'img': dict( add=_add_, sub=_sub_ ) }
 
@@ -481,9 +481,13 @@ class CubeMask:
                                                   ###
                                                   #output_backend="webgl",
                                                   match_aspect=True,
-                                                  tools=[ 'lasso_select', 'box_select',
-                                                          'pan', 'wheel_zoom', 'save',
-                                                          'reset', 'poly_select' ] +
+                                                  ###
+                                                  ### it is required that each tool have a unique "name" to allow for synchronization
+                                                  ### of multi-field tool bars in response to changes to the selected tools for one field
+                                                  ###
+                                                  tools=[ LassoSelectTool(name="Lasso Mask"), BoxSelectTool(name="Box Mask"),
+                                                          PanTool(name="Pan"), WheelZoomTool(name="Wheel Zoom"), SaveTool(name="Save"),
+                                                          ResetTool(name="Reset"), PolySelectTool(name="Poly Mask") ] +
                                                         ( [ self._mask_add_sub['add'],
                                                             self._mask_add_sub['sub'],
                                                             self._mask_add_sub['mask'] ]  if self._mask_path else [ ] ),

@@ -2313,6 +2313,7 @@ class InteractiveClean:
         ### Manage the widgets which are shared between tabs...
         ###
         icw = SharedWidgets( )
+        toolbars = [ ]
         for imid, imdetails in self._clean_targets.items( ):
             imdetails['gui']['stats'] = imdetails['gui']['cube'].statistics( )
             imdetails['image-channels'] = imdetails['gui']['cube'].shape( )[3]
@@ -2391,6 +2392,11 @@ class InteractiveClean:
                                                                                                         '''update_convergence_single( img_state, document._casa_convergence_data.convergence[imid] )''' ) )
 
             ###
+            ### collect toolbars for syncing selection
+            ###
+            toolbars.append(imdetails['gui']['image']['fig'].toolbar)
+
+            ###
             ### spectrum plot must be disabled during iteration due to "tap to change channel" functionality
             ###
             if imdetails['image-channels'] > 1:
@@ -2433,6 +2439,49 @@ class InteractiveClean:
                                                                                    title='Automask' ) ]
             else:
                 imdetails['gui']['auto-masking-panel'] = [ ]
+
+
+        ###
+        ### synchronize toolbar selections among figures
+        ###
+        if toolbars:
+            for tb in toolbars:
+                tb.js_on_change( 'active_changed',
+                                 ###
+                                 ### toolbars must filter out 'tb' to avoid circular references
+                                 ###
+                                 CustomJS( args=dict(toolbars=[t for t in toolbars if t.id != tb.id]),
+                                           code='''casalib.map( (gest,tool) => {
+                                                                    if ( tool.active ) {
+                                                                        // a tool which belongs to the toolbar that signaled a change
+                                                                        // is active for this gesture...
+                                                                        toolbars.forEach( (other_tb) => {
+                                                                            let new_active = other_tb.gestures[gest].tools.find(
+                                                                                                 (t) => t.name == tool.active.name )
+                                                                            if ( ! other_tb.gestures[gest].active ) {
+                                                                                if ( new_active ) {
+                                                                                    other_tb.gestures[gest].active = new_active
+                                                                                    new_active.active = true
+                                                                                }
+                                                                            } else if ( other_tb.gestures[gest].active.name != tool.active.name ) {
+                                                                                if ( new_active ) {
+                                                                                    other_tb.gestures[gest].active.active = false
+                                                                                    new_active.active = true
+                                                                                    other_tb.gestures[gest].active = new_active
+                                                                                }
+                                                                            }
+                                                                        } )
+                                                                    } else {
+                                                                        // a tool which belongs to the toolbar that signaled a change
+                                                                        // is NOT active for this gesture...
+                                                                        toolbars.forEach( (other_tb) => {
+                                                                            if ( other_tb.gestures[gest] && other_tb.gestures[gest].active ) {
+                                                                                other_tb.gestures[gest].active.active = false
+                                                                                other_tb.gestures[gest].active = null
+                                                                            }
+                                                                        } )
+                                                                    }
+                                                                }, cb_obj.gestures )''' ) )
 
         ###
         ### button to display the tclean log -- in the final implmentation, outliers and other multifield imaging should be handled by gclean
