@@ -1,6 +1,17 @@
 casagui - visualization tools and applications for CASA
 =======================================================
 
+.. warning::
+
+   **casagui is no longer developed.** It has been replaced by
+   `cubevis <https://github.com/casangi/cubevis>`_,
+   which continues its applications, including interactive clean
+   (``iclean``).
+   Install it with ``pip install cubevis``; its documentation is at
+   https://casangi.github.io/cubevis/
+
+   This repository is kept, read-only, for reference.
+
 This is a **pre-alpha**, **prototype** package. It is *not* useful for external users, and all
 applications being built with it are currently in various phases of *prototyping*.
 

@@ -29,6 +29,11 @@
 used to build GUI applications for astronomy. It also contains some
 applications turn-key applications'''
 
+import warnings as __warnings
+__warnings.warn( 'casagui is no longer developed; use cubevis instead '
+                 '(pip install cubevis, https://casangi.github.io/cubevis/)',
+                 DeprecationWarning, stacklevel=2 )
+
 import os as __os
 
 try:

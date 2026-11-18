@@ -17,7 +17,13 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 readme = "readme.rst"
+classifiers = [ "Development Status :: 7 - Inactive" ]
 license = {text = "LGPL"}
+
+[project.urls]
+"Replaced by cubevis" = "https://github.com/casangi/cubevis"
+"cubevis documentation" = "https://casangi.github.io/cubevis/"
+"Source (archived)" = "https://github.com/casangi/casagui"
 
 [tool]
 [tool.pdm]

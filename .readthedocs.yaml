@@ -1,30 +1,14 @@
-# .readthedocs.yaml
-# Read the Docs configuration file
-# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
-
-# Required
+# Read the Docs configuration: https://docs.readthedocs.io/en/stable/config-file/v2.html
+#
+# casagui is no longer developed; cubevis replaces it.  Read the Docs no
+# longer builds the Sphinx documentation: docs/rtd_parked.py writes a page
+# saying so, with links to the cubevis documentation, for every page the old
+# documentation had (and for any other address, as 404.html).
 version: 2
 
-# Build documentation in the docs/ directory with Sphinx
-sphinx:
-   configuration: docs/source/conf.py
-
-# Optionally build your docs in additional formats such as PDF
-#formats:
-#   - pdf
-
-# Set the version of Python and other tools you might need
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
-    python: "3.8"
-  apt_packages:
-  - libgfortran5
-
-# Optionally declare the Python requirements required to build your docs
-python:
-   install:
-   - requirements: docs/requirements.txt
-
-submodules:
-  include: all
+    python: "3.12"
+  commands:
+    - python docs/rtd_parked.py "$READTHEDOCS_OUTPUT/html"
